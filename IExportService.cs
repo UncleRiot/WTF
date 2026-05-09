@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace WTF
 {
@@ -6,6 +6,8 @@ namespace WTF
     {
         string FileFilter { get; }
 
-        void Export(string filePath, IEnumerable<FileSystemEntry> entries);
+        void Export(string filePath, IEnumerable<FileSystemEntry> entries, AppSettings settings);
+
+        string ExportToString(IEnumerable<FileSystemEntry> entries, AppSettings settings);
     }
 }

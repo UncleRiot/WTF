@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text.Json;
 
@@ -27,6 +27,11 @@ namespace WTF
         public bool ShowPartitionPanel { get; set; } = true;
         public AppLayout Layout { get; set; } = AppLayout.Modern;
         public ViewMode SelectedViewMode { get; set; } = ViewMode.Table;
+
+        public bool ExportPath { get; set; } = true;
+        public bool ExportSizeGb { get; set; } = true;
+        public bool ExportSizeMb { get; set; } = true;
+        public int? ExportMaxDepth { get; set; }
 
         public bool HasMainWindowBounds { get; set; }
         public int MainWindowLeft { get; set; }

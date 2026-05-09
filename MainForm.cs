@@ -1,5 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,9 +34,15 @@ namespace WTF
         private ToolStripButton toolStripButtonTable;
         private ToolStripButton toolStripButtonPieChart;
         private ToolStripButton toolStripButtonBarChart;
+        private ToolStripButton toolStripButtonExportCsv;
         private SplitContainer splitContainerMain;
         private SplitContainer splitContainerLeft;
         private TreeView treeViewEntries;
+        private ContextMenuStrip contextMenuStripTreeEntries;
+        private ToolStripMenuItem contextMenuItemOpenInExplorer;
+        private ToolStripMenuItem contextMenuItemExport;
+        private ToolStripMenuItem contextMenuItemCopyToClipboard;
+        private FileSystemEntry _treeContextMenuEntry;
         private ImageList imageListEntries;
         private ListView listViewPartitions;
         private ImageList imageListPartitions;
@@ -345,18 +353,26 @@ namespace WTF
             toolStripButtonTable = new ToolStripButton("▦ Tabelle");
             toolStripButtonPieChart = new ToolStripButton("◔ Pie-Chart");
             toolStripButtonBarChart = new ToolStripButton("▥ Balkenchart");
+            toolStripButtonExportCsv = new ToolStripButton("Export");
 
             toolStripButtonTable.DisplayStyle = ToolStripItemDisplayStyle.Text;
             toolStripButtonPieChart.DisplayStyle = ToolStripItemDisplayStyle.Text;
             toolStripButtonBarChart.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            toolStripButtonExportCsv.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            toolStripButtonExportCsv.ToolTipText = "CSV exportieren";
+            toolStripButtonExportCsv.Enabled = false;
+            menuItemExportCsv.Enabled = false;
 
             toolStripButtonTable.Click += toolStripButtonTable_Click;
             toolStripButtonPieChart.Click += toolStripButtonPieChart_Click;
             toolStripButtonBarChart.Click += toolStripButtonBarChart_Click;
+            toolStripButtonExportCsv.Click += toolStripButtonExportCsv_Click;
 
             toolStripViewMode.Items.Add(toolStripButtonTable);
             toolStripViewMode.Items.Add(toolStripButtonPieChart);
             toolStripViewMode.Items.Add(toolStripButtonBarChart);
+            toolStripViewMode.Items.Add(new ToolStripSeparator());
+            toolStripViewMode.Items.Add(toolStripButtonExportCsv);
 
             toolStripPanelMain.Join(toolStripMain, 0, 0);
             toolStripPanelMain.Join(toolStripViewMode, 340, 0);
@@ -397,6 +413,18 @@ namespace WTF
             treeViewEntries.ImageList = imageListEntries;
             treeViewEntries.AfterSelect += treeViewEntries_AfterSelect;
             treeViewEntries.DrawNode += treeViewEntries_DrawNode;
+            treeViewEntries.NodeMouseClick += treeViewEntries_NodeMouseClick;
+
+            contextMenuStripTreeEntries = new ContextMenuStrip();
+            contextMenuItemOpenInExplorer = new ToolStripMenuItem("Im Explorer öffnen");
+            contextMenuItemExport = new ToolStripMenuItem("Export");
+            contextMenuItemCopyToClipboard = new ToolStripMenuItem("In Zwischenablage kopieren");
+            contextMenuItemOpenInExplorer.Click += contextMenuItemOpenInExplorer_Click;
+            contextMenuItemExport.Click += contextMenuItemExport_Click;
+            contextMenuItemCopyToClipboard.Click += contextMenuItemCopyToClipboard_Click;
+            contextMenuStripTreeEntries.Items.Add(contextMenuItemOpenInExplorer);
+            contextMenuStripTreeEntries.Items.Add(contextMenuItemExport);
+            contextMenuStripTreeEntries.Items.Add(contextMenuItemCopyToClipboard);
 
             imageListPartitions = new ImageList();
             imageListPartitions.ColorDepth = ColorDepth.Depth32Bit;
@@ -1092,6 +1120,7 @@ namespace WTF
             toolStripButtonScan.ToolTipText = scanning ? "Scan abbrechen" : "Scan starten";
             toolStripComboBoxDrives.Enabled = !scanning;
             menuItemExportCsv.Enabled = !scanning && _currentRootEntry != null;
+            toolStripButtonExportCsv.Enabled = !scanning && _currentRootEntry != null;
             splitContainerMain.IsSplitterFixed = scanning;
             splitContainerLeft.IsSplitterFixed = scanning;
         }
@@ -1268,22 +1297,103 @@ namespace WTF
             }
         }
 
+        private void toolStripButtonExportCsv_Click(object sender, EventArgs e)
+        {
+            ExportEntry(_currentRootEntry);
+        }
+
         private void menuItemExportCsv_Click(object sender, EventArgs e)
         {
-            if (_currentRootEntry == null)
+            ExportEntry(_currentRootEntry);
+        }
+
+        private void treeViewEntries_NodeMouseClick(object sender, TreeNodeMouseClickEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right)
+                return;
+
+            treeViewEntries.SelectedNode = e.Node;
+
+            if (e.Node != null && e.Node.Tag is FileSystemEntry entry && entry.IsDirectory)
+            {
+                _treeContextMenuEntry = entry;
+                contextMenuItemOpenInExplorer.Enabled = true;
+                contextMenuItemExport.Enabled = true;
+                contextMenuItemCopyToClipboard.Enabled = true;
+                contextMenuStripTreeEntries.Show(treeViewEntries, e.Location);
+                return;
+            }
+
+            _treeContextMenuEntry = null;
+        }
+
+        private void contextMenuItemOpenInExplorer_Click(object sender, EventArgs e)
+        {
+            if (_treeContextMenuEntry == null || string.IsNullOrWhiteSpace(_treeContextMenuEntry.FullPath))
+                return;
+
+            if (!Directory.Exists(_treeContextMenuEntry.FullPath))
+                return;
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = _treeContextMenuEntry.FullPath,
+                UseShellExecute = true
+            });
+        }
+
+        private void contextMenuItemExport_Click(object sender, EventArgs e)
+        {
+            ExportEntry(_treeContextMenuEntry);
+        }
+
+        private void contextMenuItemCopyToClipboard_Click(object sender, EventArgs e)
+        {
+            CopyEntryExportToClipboard(_treeContextMenuEntry);
+        }
+
+        private void CopyEntryExportToClipboard(FileSystemEntry rootEntry)
+        {
+            if (rootEntry == null)
+                return;
+
+            string csvText = _csvExportService.ExportToString(new[] { rootEntry }, _settings);
+
+            if (string.IsNullOrEmpty(csvText))
+                return;
+
+            Clipboard.SetText(csvText, TextDataFormat.UnicodeText);
+            toolStripStatusLabel.Text = "Export in Zwischenablage kopiert: " + rootEntry.FullPath;
+        }
+
+        private void ExportEntry(FileSystemEntry rootEntry)
+        {
+            if (rootEntry == null)
                 return;
 
             using SaveFileDialog saveFileDialog = new SaveFileDialog
             {
                 Filter = _csvExportService.FileFilter,
-                FileName = "wtf-scan.csv"
+                FileName = CreateExportFileName(rootEntry)
             };
 
             if (saveFileDialog.ShowDialog(this) != DialogResult.OK)
                 return;
 
-            _csvExportService.Export(saveFileDialog.FileName, new[] { _currentRootEntry });
+            _csvExportService.Export(saveFileDialog.FileName, new[] { rootEntry }, _settings);
             toolStripStatusLabel.Text = "Export gespeichert: " + saveFileDialog.FileName;
+        }
+
+        private string CreateExportFileName(FileSystemEntry entry)
+        {
+            string name = string.IsNullOrWhiteSpace(entry.Name) ? "wtf-scan" : entry.Name;
+
+            foreach (char invalidFileNameChar in Path.GetInvalidFileNameChars())
+            {
+                name = name.Replace(invalidFileNameChar, '_');
+            }
+
+            return name + ".csv";
         }
 
         private void menuItemSettings_Click(object sender, EventArgs e)
