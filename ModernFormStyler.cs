@@ -36,6 +36,8 @@ namespace WTF
 
         public static void Apply(Form form, AppLayout layout)
         {
+            form.Icon = AppResources.ApplicationIcon;
+
             if (layout == AppLayout.Modern)
             {
                 ApplyModern(form);
@@ -274,13 +276,23 @@ namespace WTF
                 BackColor = ModernTheme.TitleBarBackColor
             };
 
+            PictureBox pictureBoxModernTitleIcon = new PictureBox
+            {
+                Name = "pictureBoxModernTitleIcon",
+                Location = new Point(10, 8),
+                Size = new Size(16, 16),
+                SizeMode = PictureBoxSizeMode.StretchImage,
+                Image = AppResources.ApplicationImage,
+                BackColor = Color.Transparent
+            };
+
             Label labelModernTitle = new Label
             {
                 Name = "labelModernTitle",
                 Text = " " + form.Text,
                 AutoSize = false,
-                Location = new Point(ModernTheme.TitleBarTextLeft, 0),
-                Size = new Size(form.ClientSize.Width - 140, ModernTheme.TitleBarHeight),
+                Location = new Point(34, 0),
+                Size = new Size(form.ClientSize.Width - 174, ModernTheme.TitleBarHeight),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = ModernTheme.TextColor,
@@ -308,8 +320,10 @@ namespace WTF
             buttonModernMinimize.Click += (sender, e) => form.WindowState = FormWindowState.Minimized;
 
             panelModernTitleBar.MouseDown += (sender, e) => BeginWindowDrag(form, e);
+            pictureBoxModernTitleIcon.MouseDown += (sender, e) => BeginWindowDrag(form, e);
             labelModernTitle.MouseDown += (sender, e) => BeginWindowDrag(form, e);
 
+            panelModernTitleBar.Controls.Add(pictureBoxModernTitleIcon);
             panelModernTitleBar.Controls.Add(labelModernTitle);
             panelModernTitleBar.Controls.Add(buttonModernMinimize);
             panelModernTitleBar.Controls.Add(buttonModernClose);

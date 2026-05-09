@@ -82,10 +82,12 @@ namespace WTF
 
             InitializeComponent();
 
-            if (listViewPartitions != null)
-            {
-                listViewPartitions.SizeChanged += listViewPartitions_SizeChanged;
-            }
+            listViewPartitions.SizeChanged += listViewPartitions_SizeChanged;
+            treeViewEntries.BeforeExpand += treeViewEntries_BeforeExpand;
+
+            SetDoubleBuffered(treeViewEntries, true);
+            SetDoubleBuffered(dataGridViewEntries, true);
+            SetDoubleBuffered(listViewPartitions, true);
 
             ModernFormStyler.Apply(this, _settings.Layout);
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
@@ -270,8 +272,22 @@ namespace WTF
 
             statusStripMain = new StatusStrip();
             statusStripMain.SizingGrip = true;
-            toolStripStatusLabel = new ToolStripStatusLabel("Bereit");
+
+            toolStripStatusLabel = new ToolStripStatusLabel("Bereit")
+            {
+                Spring = true,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+
+            ToolStripStatusLabel toolStripProgressLabel = new ToolStripStatusLabel
+            {
+                Name = "toolStripProgressLabel",
+                Text = string.Empty,
+                TextAlign = System.Drawing.ContentAlignment.MiddleRight
+            };
+
             statusStripMain.Items.Add(toolStripStatusLabel);
+            statusStripMain.Items.Add(toolStripProgressLabel);
 
             TableLayoutPanel tableLayoutPanelMain = new TableLayoutPanel();
             tableLayoutPanelMain.Dock = DockStyle.Fill;
@@ -371,10 +387,12 @@ namespace WTF
             AdjustPartitionColumns();
             listViewPartitions.EndUpdate();
         }
+
         private void listViewPartitions_SizeChanged(object sender, EventArgs e)
         {
             AdjustPartitionColumns();
         }
+
         private void AdjustPartitionColumns()
         {
             if (listViewPartitions.Columns.Count != 4)
@@ -386,7 +404,6 @@ namespace WTF
                 listViewPartitions.Columns[2].Width;
 
             int remainingWidth = listViewPartitions.ClientSize.Width - fixedWidth - 1;
-
             listViewPartitions.Columns[3].Width = Math.Max(70, remainingWidth);
         }
 
@@ -409,12 +426,16 @@ namespace WTF
                     SizeFormatter.Format(driveInfo.AvailableFreeSpace),
                     SizeFormatter.Format(driveInfo.TotalSize),
                     clusterSize);
+
+                SetStatusProgressText(null);
             }
             catch
             {
                 toolStripStatusLabel.Text = "Bereit";
+                SetStatusProgressText(null);
             }
         }
+
         private long GetClusterSize(string rootPath)
         {
             bool success = GetDiskFreeSpace(
@@ -458,7 +479,22 @@ namespace WTF
                 e.Graphics.FillRectangle(backgroundBrush, rowBounds);
             }
 
-            long totalSizeBytes = _currentRootEntry == null ? entry.SizeBytes : _currentRootEntry.SizeBytes;
+            long totalSizeBytes = 0;
+
+            if (_currentRootEntry != null)
+            {
+                totalSizeBytes = _currentRootEntry.SizeBytes;
+            }
+            else if (treeViewEntries.Nodes.Count > 0 && treeViewEntries.Nodes[0].Tag is FileSystemEntry liveRootEntry)
+            {
+                totalSizeBytes = liveRootEntry.SizeBytes;
+            }
+
+            if (totalSizeBytes <= 0)
+            {
+                totalSizeBytes = entry.SizeBytes;
+            }
+
             double percent = totalSizeBytes <= 0 ? 0D : (double)entry.SizeBytes * 100D / totalSizeBytes;
 
             int maxBarWidth = Math.Max(0, treeViewEntries.ClientSize.Width - e.Bounds.Left - 6);
@@ -513,16 +549,25 @@ namespace WTF
             dataGridViewEntries.DataSource = null;
             _currentRootEntry = null;
 
+            long scanTargetBytes = GetUsedSpaceBytes(rootPath);
+            SetStatusProgressText(0D);
+
             _scanCancellationTokenSource = new CancellationTokenSource();
 
             Progress<ScanProgress> progress = new Progress<ScanProgress>(scanProgress =>
             {
+                double percent = scanTargetBytes <= 0 ? 0D : (double)scanProgress.ScannedBytes * 100D / scanTargetBytes;
+
+                ApplyScanProgressToLiveTree(scanProgress);
+
                 toolStripStatusLabel.Text = string.Format(
                     "Scan: {0} | {1} | Ordner: {2} | Dateien: {3}",
                     scanProgress.CurrentPath,
                     SizeFormatter.Format(scanProgress.ScannedBytes),
                     scanProgress.ScannedDirectories,
                     scanProgress.ScannedFiles);
+
+                SetStatusProgressText(percent);
             });
 
             try
@@ -532,10 +577,12 @@ namespace WTF
                 RenderScanResult(_currentRootEntry);
                 LoadPartitionList();
                 UpdateStatusStripForDrive(rootPath);
+                SetStatusProgressText(100D);
             }
             catch (OperationCanceledException)
             {
                 toolStripStatusLabel.Text = "Scan abgebrochen";
+                SetStatusProgressText(null);
             }
             finally
             {
@@ -543,6 +590,222 @@ namespace WTF
                 _scanCancellationTokenSource = null;
                 SetScanningState(false);
             }
+        }
+
+        private void SyncLiveTreeChildren(TreeNode parentNode, FileSystemEntry parentEntry)
+        {
+            HashSet<string> expectedChildPaths = new HashSet<string>(
+                parentEntry.Children
+                    .Where(child => child.IsDirectory || _settings.ShowFilesInTree)
+                    .Select(child => child.FullPath),
+                StringComparer.OrdinalIgnoreCase);
+
+            for (int index = parentNode.Nodes.Count - 1; index >= 0; index--)
+            {
+                TreeNode childNode = parentNode.Nodes[index];
+
+                if (childNode.Tag is not FileSystemEntry childEntry || !expectedChildPaths.Contains(childEntry.FullPath))
+                {
+                    parentNode.Nodes.RemoveAt(index);
+                }
+            }
+
+            int targetIndex = 0;
+
+            foreach (FileSystemEntry childEntry in parentEntry.Children.Where(child => child.IsDirectory || _settings.ShowFilesInTree))
+            {
+                TreeNode childNode = FindChildNodeByFullPath(parentNode, childEntry.FullPath);
+
+                if (childNode == null)
+                {
+                    childNode = CreateLiveTreeNode(childEntry);
+                    parentNode.Nodes.Insert(targetIndex, childNode);
+                }
+                else
+                {
+                    UpdateLiveTreeNode(childNode, childEntry);
+
+                    if (childNode.Index != targetIndex)
+                    {
+                        parentNode.Nodes.Remove(childNode);
+                        parentNode.Nodes.Insert(targetIndex, childNode);
+                    }
+                }
+
+                targetIndex++;
+            }
+        }
+
+        private TreeNode FindChildNodeByFullPath(TreeNode parentNode, string fullPath)
+        {
+            foreach (TreeNode childNode in parentNode.Nodes)
+            {
+                if (childNode.Tag is FileSystemEntry childEntry &&
+                    string.Equals(childEntry.FullPath, fullPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return childNode;
+                }
+            }
+
+            return null;
+        }
+
+        private void ApplyScanProgressToLiveTree(ScanProgress scanProgress)
+        {
+            if (scanProgress.LiveRootEntry == null)
+                return;
+
+            treeViewEntries.BeginUpdate();
+
+            try
+            {
+                if (treeViewEntries.Nodes.Count == 0)
+                {
+                    TreeNode rootNode = CreateLiveTreeNode(scanProgress.LiveRootEntry);
+                    treeViewEntries.Nodes.Add(rootNode);
+                    treeViewEntries.SelectedNode = rootNode;
+                    rootNode.Expand();
+                    SyncLiveTreeChildren(rootNode, scanProgress.LiveRootEntry);
+                    return;
+                }
+
+                TreeNode existingRootNode = treeViewEntries.Nodes[0];
+                UpdateLiveTreeNode(existingRootNode, scanProgress.LiveRootEntry);
+                SyncLiveTreeChildren(existingRootNode, scanProgress.LiveRootEntry);
+                existingRootNode.Expand();
+            }
+            finally
+            {
+                treeViewEntries.EndUpdate();
+            }
+        }
+
+        private Dictionary<string, TreeNode> GetLiveTreeNodesByPath()
+        {
+            if (treeViewEntries.Tag is Dictionary<string, TreeNode> liveTreeNodesByPath)
+            {
+                return liveTreeNodesByPath;
+            }
+
+            liveTreeNodesByPath = new Dictionary<string, TreeNode>(StringComparer.OrdinalIgnoreCase);
+            treeViewEntries.Tag = liveTreeNodesByPath;
+
+            return liveTreeNodesByPath;
+        }
+
+        private TreeNode CreateLiveTreeNode(FileSystemEntry entry)
+        {
+            TreeNode node = new TreeNode
+            {
+                Tag = entry,
+                Text = SizeFormatter.Format(entry.SizeBytes) + "  " + entry.Name,
+                ImageKey = entry.IsDirectory ? "Folder" : "File",
+                SelectedImageKey = entry.IsDirectory ? "Folder" : "File"
+            };
+
+            if (entry.FullPath != null && entry.FullPath.EndsWith(":\\", StringComparison.OrdinalIgnoreCase))
+            {
+                node.ImageKey = "Drive";
+                node.SelectedImageKey = "Drive";
+            }
+
+            return node;
+        }
+
+        private void UpdateLiveTreeNode(TreeNode node, FileSystemEntry entry)
+        {
+            node.Tag = entry;
+
+            string text = SizeFormatter.Format(entry.SizeBytes) + "  " + entry.Name;
+
+            if (node.Text != text)
+            {
+                node.Text = text;
+            }
+
+            node.ImageKey = entry.IsDirectory ? "Folder" : "File";
+            node.SelectedImageKey = entry.IsDirectory ? "Folder" : "File";
+
+            if (entry.FullPath != null && entry.FullPath.EndsWith(":\\", StringComparison.OrdinalIgnoreCase))
+            {
+                node.ImageKey = "Drive";
+                node.SelectedImageKey = "Drive";
+            }
+        }
+
+        private long GetUsedSpaceBytes(string rootPath)
+        {
+            try
+            {
+                System.IO.DriveInfo driveInfo = new System.IO.DriveInfo(rootPath);
+                return Math.Max(0, driveInfo.TotalSize - driveInfo.AvailableFreeSpace);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private void SetStatusProgressText(double? percent)
+        {
+            ToolStripItem[] items = statusStripMain.Items.Find("toolStripProgressLabel", false);
+
+            if (items.Length == 0)
+                return;
+
+            if (!percent.HasValue)
+            {
+                items[0].Text = string.Empty;
+                SetMainWindowTitle(null);
+                return;
+            }
+
+            double value = Math.Max(0D, Math.Min(100D, percent.Value));
+            items[0].Text = value.ToString("0.0") + " %";
+            SetMainWindowTitle(value);
+        }
+
+        private void SetMainWindowTitle(double? scanPercent)
+        {
+            string title = "WTF - Where’s The Filespace";
+
+            if (scanPercent.HasValue)
+            {
+                double value = Math.Max(0D, Math.Min(100D, scanPercent.Value));
+
+                if (value >= 100D)
+                {
+                    title += " - Scan: 100% / completed";
+                }
+                else
+                {
+                    title += " - Scan: " + value.ToString("0.0") + "%";
+                }
+            }
+
+            Text = title;
+
+            Control[] titleLabels = Controls.Find("labelModernTitle", true);
+
+            foreach (Control control in titleLabels)
+            {
+                control.Text = " " + title;
+            }
+        }
+
+        private void SetDoubleBuffered(Control control, bool enabled)
+        {
+            if (control == null)
+                return;
+
+            System.Reflection.PropertyInfo propertyInfo = typeof(Control).GetProperty(
+                "DoubleBuffered",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+            if (propertyInfo == null)
+                return;
+
+            propertyInfo.SetValue(control, enabled, null);
         }
 
         private void SetScanningState(bool scanning)
@@ -558,18 +821,67 @@ namespace WTF
         private void RenderScanResult(FileSystemEntry rootEntry)
         {
             TreeNode rootNode = CreateTreeNode(rootEntry);
+
             treeViewEntries.BeginUpdate();
-            treeViewEntries.Nodes.Clear();
-            treeViewEntries.Nodes.Add(rootNode);
-            rootNode.Expand();
-            treeViewEntries.SelectedNode = rootNode;
-            treeViewEntries.TopNode = rootNode;
-            rootNode.EnsureVisible();
-            treeViewEntries.EndUpdate();
+
+            try
+            {
+                treeViewEntries.Nodes.Clear();
+                treeViewEntries.Nodes.Add(rootNode);
+                PopulateTreeNodeChildren(rootNode);
+                rootNode.Expand();
+                treeViewEntries.SelectedNode = rootNode;
+                treeViewEntries.TopNode = rootNode;
+                rootNode.EnsureVisible();
+            }
+            finally
+            {
+                treeViewEntries.EndUpdate();
+            }
 
             BindGrid(rootEntry);
         }
+        private TreeNode CreateLazyPlaceholderNode()
+        {
+            return new TreeNode
+            {
+                Name = "__LAZY_PLACEHOLDER__",
+                Text = string.Empty
+            };
+        }
+        private bool IsLazyPlaceholderNode(TreeNode node)
+        {
+            return node != null && node.Name == "__LAZY_PLACEHOLDER__";
+        }
+        private void PopulateTreeNodeChildren(TreeNode parentNode)
+        {
+            if (parentNode.Tag is not FileSystemEntry parentEntry)
+                return;
 
+            if (parentNode.Nodes.Count == 1 && IsLazyPlaceholderNode(parentNode.Nodes[0]))
+            {
+                parentNode.Nodes.Clear();
+            }
+            else if (parentNode.Nodes.Count > 0)
+            {
+                return;
+            }
+
+            foreach (FileSystemEntry child in parentEntry.Children
+                         .Where(child => child.IsDirectory || _settings.ShowFilesInTree)
+                         .OrderByDescending(child => child.SizeBytes)
+                         .ThenBy(child => child.Name))
+            {
+                parentNode.Nodes.Add(CreateTreeNode(child));
+            }
+        }
+        private void treeViewEntries_BeforeExpand(object sender, TreeViewCancelEventArgs e)
+        {
+            if (e.Node == null)
+                return;
+
+            PopulateTreeNodeChildren(e.Node);
+        }
         private TreeNode CreateTreeNode(FileSystemEntry entry)
         {
             TreeNode node = new TreeNode(string.Format("{0} ({1})", entry.Name, SizeFormatter.Format(entry.SizeBytes)))
@@ -585,9 +897,9 @@ namespace WTF
                 node.SelectedImageKey = "Drive";
             }
 
-            foreach (FileSystemEntry child in entry.Children.Where(child => child.IsDirectory || _settings.ShowFilesInTree))
+            if (entry.IsDirectory && entry.Children.Any(child => child.IsDirectory || _settings.ShowFilesInTree))
             {
-                node.Nodes.Add(CreateTreeNode(child));
+                node.Nodes.Add(CreateLazyPlaceholderNode());
             }
 
             return node;

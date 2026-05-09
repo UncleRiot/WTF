@@ -6,5 +6,6 @@ namespace WTF
         public long ScannedBytes { get; set; }
         public int ScannedDirectories { get; set; }
         public int ScannedFiles { get; set; }
+        public FileSystemEntry LiveRootEntry { get; set; }
     }
 }

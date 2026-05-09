@@ -6,6 +6,7 @@
 		<UseWindowsForms>true</UseWindowsForms>
 		<Nullable>disable</Nullable>
 		<ImplicitUsings>disable</ImplicitUsings>
+		<ApplicationIcon>Ressources\wtf.ico</ApplicationIcon>
 		<SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
 
 		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -27,5 +28,18 @@
 		<InformationalVersion>0.2.1</InformationalVersion>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<Content Include="Ressources\wtf.ico">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Content>
+		<Content Include="Ressources\wtf.png">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Content>
+		<EmbeddedResource Include="Ressources\wtf.ico" />
+		<EmbeddedResource Include="Ressources\wtf.png" />
+		<EmbeddedResource Include="Ressources\ko-fi.png" />
+		<EmbeddedResource Include="Ressources\molotov.jpg" />
+	</ItemGroup>
 
 </Project>

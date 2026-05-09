@@ -1,13 +1,30 @@
+using System;
+using System.Drawing;
+using System.IO;
+using System.Net.Http;
+using System.Reflection;
+using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace WTF
 {
     public sealed class AboutForm : Form
     {
+        private const string GitHubRepositoryUrl = "https://github.com/UncleRiot/WTF";
+        private const string GitHubLatestReleaseApiUrl = "https://api.github.com/repos/UncleRiot/WTF/releases/latest";
+        private const string KoFiUrl = "https://ko-fi.com/uncleriot";
+
         private readonly AppSettings _settings;
 
+        private PictureBox pictureBoxMolotov;
         private Label labelTitle;
-        private Label labelInfo;
+        private Label labelCopyright;
+        private Label labelVersion;
+        private LinkLabel linkLabelUpdate;
+        private LinkLabel linkLabelGithub;
+        private Label labelKoFiText;
+        private PictureBox pictureBoxKoFi;
         private Button buttonOk;
 
         public AboutForm(AppSettings settings)
@@ -16,50 +33,356 @@ namespace WTF
 
             InitializeComponent();
             ModernFormStyler.Apply(this, _settings.Layout);
+            ApplyLinkLabelColors();
+            UpdateGitHubStatusAsync();
         }
 
         private void InitializeComponent()
         {
             Text = "Über WTF";
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new System.Drawing.Size(460, 220);
+            ClientSize = new Size(475, 285);
             MinimumSize = Size;
             MaximumSize = Size;
             MaximizeBox = false;
             MinimizeBox = false;
             ShowInTaskbar = false;
+            DoubleBuffered = true;
+
+            pictureBoxMolotov = new PictureBox
+            {
+                Name = "pictureBoxMolotov",
+                Image = CreateCircularMolotovImage(),
+                Size = new Size(82, 82),
+                Location = new Point(20, 24),
+                SizeMode = PictureBoxSizeMode.CenterImage,
+                BackColor = Color.Transparent
+            };
 
             labelTitle = new Label
             {
                 Name = "labelTitle",
                 Text = "WTF - Where’s The Filespace",
-                Location = new System.Drawing.Point(24, 28),
-                Size = new System.Drawing.Size(400, 28),
-                Font = new System.Drawing.Font(ModernTheme.FontFamilyName, 12F, System.Drawing.FontStyle.Bold)
+                Font = new Font(ModernTheme.FontFamilyName, 11F, FontStyle.Bold),
+                AutoSize = true,
+                Location = new Point(122, 26),
+                BackColor = Color.Transparent
             };
 
-            labelInfo = new Label
+            labelCopyright = new Label
             {
-                Name = "labelInfo",
-                Text = "Speicherplatzanalyse für Windows.",
-                Location = new System.Drawing.Point(24, 70),
-                Size = new System.Drawing.Size(400, 60)
+                Name = "labelCopyright",
+                Text = "(c) Daniel Capilla",
+                AutoSize = true,
+                Location = new Point(122, 58),
+                BackColor = Color.Transparent
             };
+
+            labelVersion = new Label
+            {
+                Name = "labelVersion",
+                Text = "Version: " + GetApplicationVersionText(),
+                AutoSize = true,
+                Location = new Point(122, 82),
+                BackColor = Color.Transparent
+            };
+
+            linkLabelUpdate = new LinkLabel
+            {
+                Name = "linkLabelUpdate",
+                Text = "Update wird geprüft...",
+                AutoSize = true,
+                Location = new Point(122, 106),
+                BackColor = Color.Transparent,
+                LinkBehavior = LinkBehavior.NeverUnderline
+            };
+
+            linkLabelUpdate.LinkClicked += linkLabelUpdate_LinkClicked;
+
+            linkLabelGithub = new LinkLabel
+            {
+                Name = "linkLabelGithub",
+                Text = GitHubRepositoryUrl,
+                AutoSize = true,
+                Location = new Point(122, 130),
+                BackColor = Color.Transparent,
+                LinkBehavior = LinkBehavior.HoverUnderline
+            };
+
+            linkLabelGithub.LinkClicked += linkLabelGithub_LinkClicked;
+
+            labelKoFiText = new Label
+            {
+                Name = "labelKoFiText",
+                Text = "WTF ist kostenlos nutzbar." + Environment.NewLine +
+                       "Wenn dir dieses Tool hilft, kannst du die Entwicklung hier unterstützen:",
+                AutoSize = false,
+                Location = new Point(20, 170),
+                Size = new Size(435, 38),
+                BackColor = Color.Transparent
+            };
+
+            pictureBoxKoFi = new PictureBox
+            {
+                Name = "pictureBoxKoFi",
+                Image = CreateKoFiImage(),
+                Size = new Size(179, 42),
+                Location = new Point(20, 220),
+                SizeMode = PictureBoxSizeMode.StretchImage,
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+
+            pictureBoxKoFi.Click += pictureBoxKoFi_Click;
 
             buttonOk = new Button
             {
                 Name = "buttonOk",
                 Text = "OK",
-                Location = new System.Drawing.Point(360, 160),
-                Size = new System.Drawing.Size(75, 30),
+                Size = new Size(90, 32),
+                Location = new Point(365, 230),
                 DialogResult = DialogResult.OK
             };
 
+            Controls.Add(pictureBoxMolotov);
             Controls.Add(labelTitle);
-            Controls.Add(labelInfo);
+            Controls.Add(labelCopyright);
+            Controls.Add(labelVersion);
+            Controls.Add(linkLabelUpdate);
+            Controls.Add(linkLabelGithub);
+            Controls.Add(labelKoFiText);
+            Controls.Add(pictureBoxKoFi);
             Controls.Add(buttonOk);
 
             AcceptButton = buttonOk;
+        }
+
+        private void ApplyLinkLabelColors()
+        {
+            linkLabelUpdate.LinkColor = ModernTheme.AccentColor;
+            linkLabelUpdate.ActiveLinkColor = ModernTheme.AccentColor;
+            linkLabelUpdate.VisitedLinkColor = ModernTheme.AccentColor;
+            linkLabelUpdate.ForeColor = ModernTheme.TextColor;
+
+            linkLabelGithub.LinkColor = ModernTheme.AccentColor;
+            linkLabelGithub.ActiveLinkColor = ModernTheme.AccentColor;
+            linkLabelGithub.VisitedLinkColor = ModernTheme.AccentColor;
+            linkLabelGithub.ForeColor = ModernTheme.TextColor;
+        }
+
+        private Bitmap CreateCircularMolotovImage()
+        {
+            Bitmap output = new Bitmap(82, 82);
+
+            using Graphics graphics = Graphics.FromImage(output);
+            graphics.Clear(Color.Transparent);
+            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            using Stream stream = typeof(AboutForm).Assembly.GetManifestResourceStream("WTF.Ressources.molotov.jpg");
+
+            if (stream == null)
+            {
+                using Pen fallbackPen = new Pen(ModernTheme.AccentColor, 2);
+                graphics.DrawEllipse(fallbackPen, 1, 1, 80, 80);
+                return output;
+            }
+
+            using Image sourceImage = Image.FromStream(stream);
+            using System.Drawing.Drawing2D.GraphicsPath path = new System.Drawing.Drawing2D.GraphicsPath();
+
+            path.AddEllipse(3, 3, 76, 76);
+            graphics.SetClip(path);
+
+            float scale = Math.Max(76f / sourceImage.Width, 76f / sourceImage.Height);
+            int scaledWidth = (int)(sourceImage.Width * scale);
+            int scaledHeight = (int)(sourceImage.Height * scale);
+            int x = 3 + (76 - scaledWidth) / 2;
+            int y = 3 + (76 - scaledHeight) / 2;
+
+            graphics.DrawImage(sourceImage, x, y, scaledWidth, scaledHeight);
+            graphics.ResetClip();
+
+            using Pen borderPen = new Pen(ModernTheme.AccentColor, 2);
+            graphics.DrawEllipse(borderPen, 3, 3, 76, 76);
+
+            return output;
+        }
+
+        private Image CreateKoFiImage()
+        {
+            using Stream stream = typeof(AboutForm).Assembly.GetManifestResourceStream("WTF.Ressources.ko-fi.png");
+
+            if (stream == null)
+            {
+                return new Bitmap(179, 42);
+            }
+
+            using Image sourceImage = Image.FromStream(stream);
+            return new Bitmap(sourceImage);
+        }
+
+        private string GetApplicationVersionText()
+        {
+            Assembly assembly = typeof(AboutForm).Assembly;
+
+            foreach (object attribute in assembly.GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false))
+            {
+                if (attribute is AssemblyInformationalVersionAttribute informationalVersionAttribute &&
+                    !string.IsNullOrWhiteSpace(informationalVersionAttribute.InformationalVersion))
+                {
+                    return informationalVersionAttribute.InformationalVersion.Split('+')[0];
+                }
+            }
+
+            Version version = assembly.GetName().Version;
+
+            if (version == null)
+            {
+                return "unknown";
+            }
+
+            return version.Major + "." + version.Minor + "." + version.Build;
+        }
+
+        private async void UpdateGitHubStatusAsync()
+        {
+            linkLabelUpdate.Text = "Update wird geprüft...";
+            linkLabelUpdate.Tag = string.Empty;
+            linkLabelUpdate.Links.Clear();
+
+            GitHubUpdateResult result = await CheckForUpdateAsync(GetApplicationVersionText());
+
+            if (IsDisposed)
+                return;
+
+            linkLabelUpdate.Tag = string.Empty;
+            linkLabelUpdate.Links.Clear();
+
+            if (!result.CanConnectToGitHub)
+            {
+                linkLabelUpdate.Text = "GitHub nicht erreichbar";
+                linkLabelUpdate.LinkBehavior = LinkBehavior.NeverUnderline;
+                return;
+            }
+
+            if (!result.UpdateAvailable)
+            {
+                linkLabelUpdate.Text = "Keine neue Version verfügbar";
+                linkLabelUpdate.LinkBehavior = LinkBehavior.NeverUnderline;
+                return;
+            }
+
+            linkLabelUpdate.Text = "Update verfügbar: " + result.LatestVersion;
+            linkLabelUpdate.Tag = result.DownloadUrl;
+            linkLabelUpdate.LinkBehavior = LinkBehavior.HoverUnderline;
+            linkLabelUpdate.Links.Add(0, linkLabelUpdate.Text.Length);
+        }
+
+        private async Task<GitHubUpdateResult> CheckForUpdateAsync(string currentVersionText)
+        {
+            try
+            {
+                using HttpClient httpClient = new HttpClient();
+                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("WTF-WhereIsTheFilespace");
+
+                string json = await httpClient.GetStringAsync(GitHubLatestReleaseApiUrl);
+
+                using JsonDocument jsonDocument = JsonDocument.Parse(json);
+                JsonElement root = jsonDocument.RootElement;
+
+                string latestVersionText = root.TryGetProperty("tag_name", out JsonElement tagNameElement)
+                    ? NormalizeVersionText(tagNameElement.GetString())
+                    : string.Empty;
+
+                string downloadUrl = root.TryGetProperty("html_url", out JsonElement htmlUrlElement)
+                    ? htmlUrlElement.GetString()
+                    : GitHubRepositoryUrl;
+
+                bool updateAvailable = IsNewerVersion(latestVersionText, currentVersionText);
+
+                return new GitHubUpdateResult
+                {
+                    CanConnectToGitHub = true,
+                    UpdateAvailable = updateAvailable,
+                    LatestVersion = latestVersionText,
+                    DownloadUrl = downloadUrl
+                };
+            }
+            catch
+            {
+                return new GitHubUpdateResult
+                {
+                    CanConnectToGitHub = false,
+                    UpdateAvailable = false,
+                    LatestVersion = string.Empty,
+                    DownloadUrl = string.Empty
+                };
+            }
+        }
+
+        private string NormalizeVersionText(string versionText)
+        {
+            if (string.IsNullOrWhiteSpace(versionText))
+            {
+                return string.Empty;
+            }
+
+            return versionText.Trim().TrimStart('v', 'V');
+        }
+
+        private bool IsNewerVersion(string latestVersionText, string currentVersionText)
+        {
+            if (!Version.TryParse(NormalizeVersionText(latestVersionText), out Version latestVersion))
+            {
+                return false;
+            }
+
+            if (!Version.TryParse(NormalizeVersionText(currentVersionText), out Version currentVersion))
+            {
+                return false;
+            }
+
+            return latestVersion > currentVersion;
+        }
+
+        private void linkLabelUpdate_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            string downloadUrl = linkLabelUpdate.Tag == null ? string.Empty : linkLabelUpdate.Tag.ToString();
+
+            if (string.IsNullOrWhiteSpace(downloadUrl))
+                return;
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = downloadUrl,
+                UseShellExecute = true
+            });
+        }
+
+        private void linkLabelGithub_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = GitHubRepositoryUrl,
+                UseShellExecute = true
+            });
+        }
+
+        private void pictureBoxKoFi_Click(object sender, EventArgs e)
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = KoFiUrl,
+                UseShellExecute = true
+            });
+        }
+
+        private sealed class GitHubUpdateResult
+        {
+            public bool CanConnectToGitHub { get; set; }
+            public bool UpdateAvailable { get; set; }
+            public string LatestVersion { get; set; }
+            public string DownloadUrl { get; set; }
         }
     }
 }
