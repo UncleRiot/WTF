@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net8.0-windows</TargetFramework>
+		<UseWindowsForms>true</UseWindowsForms>
+		<Nullable>disable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
+
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<SelfContained>false</SelfContained>
+		<PublishSingleFile>true</PublishSingleFile>
+
+		<AssemblyName>WTF</AssemblyName>
+		<RootNamespace>WTF</RootNamespace>
+		<StartupObject>WTF.Program</StartupObject>
+
+		<Authors>Daniel Capilla</Authors>
+		<Company>Daniel Capilla</Company>
+		<Product>WTF - Where’s The Filespace</Product>
+		<Copyright>Copyright © Daniel Capilla</Copyright>
+
+		<Version>0.2.1</Version>
+		<AssemblyVersion>0.2.1</AssemblyVersion>
+		<FileVersion>0.2.1</FileVersion>
+		<InformationalVersion>0.2.1</InformationalVersion>
+		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+	</PropertyGroup>
+
+</Project>
