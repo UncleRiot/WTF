@@ -32,14 +32,13 @@ namespace WTF
             _settings = settings;
 
             InitializeComponent();
-            ModernFormStyler.Apply(this, _settings.Layout);
-            ApplyLinkLabelColors();
             UpdateGitHubStatusAsync();
         }
 
         private void InitializeComponent()
         {
             Text = "Über WTF";
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             StartPosition = FormStartPosition.CenterParent;
             ClientSize = new Size(475, 285);
             MinimumSize = Size;
@@ -157,33 +156,24 @@ namespace WTF
             AcceptButton = buttonOk;
         }
 
-        private void ApplyLinkLabelColors()
-        {
-            linkLabelUpdate.LinkColor = ModernTheme.AccentColor;
-            linkLabelUpdate.ActiveLinkColor = ModernTheme.AccentColor;
-            linkLabelUpdate.VisitedLinkColor = ModernTheme.AccentColor;
-            linkLabelUpdate.ForeColor = ModernTheme.TextColor;
-
-            linkLabelGithub.LinkColor = ModernTheme.AccentColor;
-            linkLabelGithub.ActiveLinkColor = ModernTheme.AccentColor;
-            linkLabelGithub.VisitedLinkColor = ModernTheme.AccentColor;
-            linkLabelGithub.ForeColor = ModernTheme.TextColor;
-        }
-
         private Bitmap CreateCircularMolotovImage()
         {
-            Bitmap output = new Bitmap(82, 82);
+            Bitmap output = new Bitmap(82, 82, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
 
             using Graphics graphics = Graphics.FromImage(output);
             graphics.Clear(Color.Transparent);
             graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
+            graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+            graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
 
             using Stream stream = typeof(AboutForm).Assembly.GetManifestResourceStream("WTF.Ressources.molotov.jpg");
 
             if (stream == null)
             {
-                using Pen fallbackPen = new Pen(ModernTheme.AccentColor, 2);
-                graphics.DrawEllipse(fallbackPen, 1, 1, 80, 80);
+                using Pen fallbackPen = new Pen(Color.SteelBlue, 2);
+                graphics.DrawEllipse(fallbackPen, 3, 3, 76, 76);
                 return output;
             }
 
@@ -202,7 +192,7 @@ namespace WTF
             graphics.DrawImage(sourceImage, x, y, scaledWidth, scaledHeight);
             graphics.ResetClip();
 
-            using Pen borderPen = new Pen(ModernTheme.AccentColor, 2);
+            using Pen borderPen = new Pen(Color.SteelBlue, 2);
             graphics.DrawEllipse(borderPen, 3, 3, 76, 76);
 
             return output;
@@ -214,11 +204,19 @@ namespace WTF
 
             if (stream == null)
             {
-                return new Bitmap(179, 42);
+                return new Bitmap(179, 42, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             }
 
             using Image sourceImage = Image.FromStream(stream);
-            return new Bitmap(sourceImage);
+            Bitmap output = new Bitmap(sourceImage.Width, sourceImage.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+            using Graphics graphics = Graphics.FromImage(output);
+            graphics.Clear(Color.Transparent);
+            graphics.DrawImage(sourceImage, 0, 0, sourceImage.Width, sourceImage.Height);
+
+            output.MakeTransparent(Color.White);
+
+            return output;
         }
 
         private string GetApplicationVersionText()

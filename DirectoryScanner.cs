@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -12,6 +13,8 @@ namespace WTF
         private const int ProgressReportIntervalMilliseconds = 1000;
         private const int LiveSnapshotDepth = 1;
         private const int MaxLiveChildrenPerDirectory = 100;
+        private const int FIND_FIRST_EX_LARGE_FETCH = 2;
+        private static readonly IntPtr INVALID_HANDLE_VALUE = new IntPtr(-1);
 
         private readonly AppSettings _settings;
 
@@ -21,6 +24,70 @@ namespace WTF
         private long _lastProgressReportTickCount;
         private FileSystemEntry _liveRootEntry;
         private ScanCacheService _scanCacheService;
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr FindFirstFileEx(
+            string lpFileName,
+            FINDEX_INFO_LEVELS fInfoLevelId,
+            out WIN32_FIND_DATA lpFindFileData,
+            FINDEX_SEARCH_OPS fSearchOp,
+            IntPtr lpSearchFilter,
+            int dwAdditionalFlags);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool FindNextFile(
+            IntPtr hFindFile,
+            out WIN32_FIND_DATA lpFindFileData);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool FindClose(IntPtr hFindFile);
+
+        private enum FINDEX_INFO_LEVELS
+        {
+            FindExInfoStandard = 0,
+            FindExInfoBasic = 1
+        }
+
+        private enum FINDEX_SEARCH_OPS
+        {
+            FindExSearchNameMatch = 0
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct WIN32_FIND_DATA
+        {
+            public FileAttributes dwFileAttributes;
+            public FILETIME ftCreationTime;
+            public FILETIME ftLastAccessTime;
+            public FILETIME ftLastWriteTime;
+            public uint nFileSizeHigh;
+            public uint nFileSizeLow;
+            public uint dwReserved0;
+            public uint dwReserved1;
+
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+            public string cFileName;
+
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]
+            public string cAlternateFileName;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct FILETIME
+        {
+            public uint dwLowDateTime;
+            public uint dwHighDateTime;
+        }
+
+        private sealed class Win32FileSystemEntry
+        {
+            public string Name { get; set; }
+            public string FullPath { get; set; }
+            public FileAttributes Attributes { get; set; }
+            public bool IsDirectory { get; set; }
+            public long SizeBytes { get; set; }
+            public long LastWriteTimeUtcTicks { get; set; }
+        }
 
         public DirectoryScanner(AppSettings settings)
         {
@@ -42,8 +109,18 @@ namespace WTF
                 SortChildrenRecursive(rootEntry);
                 ReportProgress(rootPath, progress, true);
 
-                ReportProgress("Scan abgeschlossen, Cache wird gespeichert...", progress, true);
-                _scanCacheService.Save();
+                progress?.Report(new ScanProgress
+                {
+                    CurrentPath = "Scan abgeschlossen, Cache wird gespeichert...",
+                    ScannedBytes = _scannedBytes,
+                    ScannedDirectories = _scannedDirectories,
+                    ScannedFiles = _scannedFiles,
+                    LiveRootEntry = CreateLiveSnapshot(_liveRootEntry, LiveSnapshotDepth),
+                    IsCacheVerification = true,
+                    IsCacheSavePhase = true
+                });
+
+                _scanCacheService.Save(rootEntry);
 
                 return rootEntry;
             }, cancellationToken);
@@ -53,21 +130,22 @@ namespace WTF
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            foreach (string fileSystemEntryPath in EnumerateFileSystemEntriesSafe(entry.FullPath))
+            foreach (Win32FileSystemEntry fileSystemEntry in EnumerateFileSystemEntries(entry.FullPath))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (!TryGetAttributes(fileSystemEntryPath, out FileAttributes attributes))
-                    continue;
-
-                bool isDirectory = attributes.HasFlag(FileAttributes.Directory);
-
-                if (isDirectory)
+                if (fileSystemEntry.IsDirectory)
                 {
-                    if (_settings.SkipReparsePoints && attributes.HasFlag(FileAttributes.ReparsePoint))
+                    if (_settings.SkipReparsePoints && fileSystemEntry.Attributes.HasFlag(FileAttributes.ReparsePoint))
                         continue;
 
-                    FileSystemEntry childEntry = CreateDirectoryEntry(fileSystemEntryPath);
+                    FileSystemEntry childEntry = new FileSystemEntry
+                    {
+                        Name = fileSystemEntry.Name,
+                        FullPath = fileSystemEntry.FullPath,
+                        IsDirectory = true
+                    };
+
                     entry.Children.Add(childEntry);
                     _scannedDirectories++;
 
@@ -87,7 +165,11 @@ namespace WTF
                     continue;
                 }
 
-                long fileLength = _scanCacheService.GetLengthAndUpdate(new FileInfo(fileSystemEntryPath));
+                long fileLength = _scanCacheService.GetLengthAndUpdate(
+                    fileSystemEntry.FullPath,
+                    fileSystemEntry.SizeBytes,
+                    fileSystemEntry.LastWriteTimeUtcTicks,
+                    (int)fileSystemEntry.Attributes);
 
                 _scannedFiles++;
                 _scannedBytes += fileLength;
@@ -98,72 +180,81 @@ namespace WTF
                 {
                     entry.Children.Add(new FileSystemEntry
                     {
-                        Name = Path.GetFileName(fileSystemEntryPath),
-                        FullPath = fileSystemEntryPath,
+                        Name = fileSystemEntry.Name,
+                        FullPath = fileSystemEntry.FullPath,
                         SizeBytes = fileLength,
                         IsDirectory = false
                     });
                 }
 
-                ReportProgress(fileSystemEntryPath, progress, false);
+                ReportProgress(fileSystemEntry.FullPath, progress, false);
             }
         }
 
-        private IEnumerable<string> EnumerateFileSystemEntriesSafe(string directoryPath)
+        private IEnumerable<Win32FileSystemEntry> EnumerateFileSystemEntries(string directoryPath)
         {
-            EnumerationOptions enumerationOptions = new EnumerationOptions
-            {
-                IgnoreInaccessible = true,
-                ReturnSpecialDirectories = false,
-                RecurseSubdirectories = false
-            };
+            string searchPath = Path.Combine(directoryPath, "*");
 
-            IEnumerator<string> enumerator;
+            IntPtr findHandle = FindFirstFileEx(
+                searchPath,
+                FINDEX_INFO_LEVELS.FindExInfoBasic,
+                out WIN32_FIND_DATA findData,
+                FINDEX_SEARCH_OPS.FindExSearchNameMatch,
+                IntPtr.Zero,
+                FIND_FIRST_EX_LARGE_FETCH);
 
-            try
-            {
-                enumerator = Directory.EnumerateFileSystemEntries(directoryPath, "*", enumerationOptions).GetEnumerator();
-            }
-            catch
+            if (findHandle == INVALID_HANDLE_VALUE)
             {
                 yield break;
             }
 
-            using (enumerator)
+            try
             {
-                while (true)
+                do
                 {
-                    string currentPath;
+                    if (string.IsNullOrWhiteSpace(findData.cFileName))
+                        continue;
 
-                    try
+                    if (findData.cFileName == "." || findData.cFileName == "..")
+                        continue;
+
+                    string fullPath = Path.Combine(directoryPath, findData.cFileName);
+                    bool isDirectory = findData.dwFileAttributes.HasFlag(FileAttributes.Directory);
+
+                    yield return new Win32FileSystemEntry
                     {
-                        if (!enumerator.MoveNext())
-                            yield break;
-
-                        currentPath = enumerator.Current;
-                    }
-                    catch
-                    {
-                        yield break;
-                    }
-
-                    yield return currentPath;
+                        Name = findData.cFileName,
+                        FullPath = fullPath,
+                        Attributes = findData.dwFileAttributes,
+                        IsDirectory = isDirectory,
+                        SizeBytes = isDirectory ? 0 : CombineHighLow(findData.nFileSizeHigh, findData.nFileSizeLow),
+                        LastWriteTimeUtcTicks = FileTimeToUtcTicks(findData.ftLastWriteTime)
+                    };
                 }
+                while (FindNextFile(findHandle, out findData));
+            }
+            finally
+            {
+                FindClose(findHandle);
             }
         }
 
-        private bool TryGetAttributes(string path, out FileAttributes attributes)
+        private static long CombineHighLow(uint high, uint low)
         {
-            attributes = 0;
+            return ((long)high << 32) + low;
+        }
+
+        private static long FileTimeToUtcTicks(FILETIME fileTime)
+        {
+            long fileTimeValue = ((long)fileTime.dwHighDateTime << 32) + fileTime.dwLowDateTime;
 
             try
             {
-                attributes = File.GetAttributes(path);
-                return true;
+                return DateTime.FromFileTimeUtc(fileTimeValue).Ticks;
             }
             catch
             {
-                return false;
+                return 0;
             }
         }
 
@@ -190,7 +281,9 @@ namespace WTF
                 ScannedBytes = _scannedBytes,
                 ScannedDirectories = _scannedDirectories,
                 ScannedFiles = _scannedFiles,
-                LiveRootEntry = CreateLiveSnapshot(_liveRootEntry, LiveSnapshotDepth)
+                LiveRootEntry = CreateLiveSnapshot(_liveRootEntry, LiveSnapshotDepth),
+                IsCacheVerification = true,
+                IsCacheSavePhase = false
             });
         }
 

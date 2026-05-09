@@ -7,5 +7,7 @@ namespace WTF
         public int ScannedDirectories { get; set; }
         public int ScannedFiles { get; set; }
         public FileSystemEntry LiveRootEntry { get; set; }
+        public bool IsCacheVerification { get; set; }
+        public bool IsCacheSavePhase { get; set; }
     }
 }

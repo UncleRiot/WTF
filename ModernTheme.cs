@@ -45,6 +45,20 @@ namespace WTF
             button.MouseEnter += button_MouseEnter;
             button.MouseLeave += button_MouseLeave;
         }
+        public static readonly Color[] ChartColors =
+{
+    Color.FromArgb(102, 192, 244),
+    Color.FromArgb(244, 159, 67),
+    Color.FromArgb(120, 220, 140),
+    Color.FromArgb(190, 140, 255),
+    Color.FromArgb(255, 120, 120),
+    Color.FromArgb(120, 210, 210),
+    Color.FromArgb(255, 210, 90),
+    Color.FromArgb(170, 190, 255),
+    Color.FromArgb(210, 160, 120),
+    Color.FromArgb(150, 220, 180),
+    Color.FromArgb(220, 150, 210)
+};
 
         public static void ApplyTextBoxStyle(TextBox textBox)
         {

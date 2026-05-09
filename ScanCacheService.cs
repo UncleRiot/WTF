@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -9,8 +10,10 @@ namespace WTF
 {
     public sealed class ScanCacheService
     {
-        private const int CacheVersion = 1;
+        private const int CacheVersion = 2;
         private const int RetentionDays = 30;
+        private const int CachedTreeDepth = 2;
+        private const int MaxCachedChildrenPerDirectory = 300;
 
         private readonly string _cacheFilePath;
         private readonly Dictionary<string, ScanCacheFileEntry> _fileEntries;
@@ -25,16 +28,7 @@ namespace WTF
 
         public static ScanCacheService Load(string rootPath)
         {
-            string cacheDirectoryPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "WTF",
-                "ScanCache");
-
-            Directory.CreateDirectory(cacheDirectoryPath);
-
-            string cacheFilePath = Path.Combine(
-                cacheDirectoryPath,
-                CreateCacheFileName(rootPath));
+            string cacheFilePath = GetCacheFilePath(rootPath);
 
             if (!File.Exists(cacheFilePath))
             {
@@ -69,9 +63,36 @@ namespace WTF
             }
         }
 
-        public long GetLengthAndUpdate(FileInfo fileInfo)
+        public static FileSystemEntry TryLoadCachedTree(string rootPath)
         {
-            if (!TryReadFileMetadata(fileInfo, out string fullPath, out long length, out long lastWriteTimeUtcTicks, out int attributes))
+            string cacheFilePath = GetCacheFilePath(rootPath);
+
+            if (!File.Exists(cacheFilePath))
+            {
+                return null;
+            }
+
+            try
+            {
+                string json = File.ReadAllText(cacheFilePath);
+                ScanCacheDatabase database = JsonSerializer.Deserialize<ScanCacheDatabase>(json);
+
+                if (database == null || database.Version != CacheVersion || database.RootEntry == null)
+                {
+                    return null;
+                }
+
+                return ConvertToFileSystemEntry(database.RootEntry);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public long GetLengthAndUpdate(string fullPath, long length, long lastWriteTimeUtcTicks, int attributes)
+        {
+            if (string.IsNullOrWhiteSpace(fullPath))
             {
                 return 0;
             }
@@ -101,7 +122,7 @@ namespace WTF
             return length;
         }
 
-        public void Save()
+        public void Save(FileSystemEntry rootEntry)
         {
             DateTime retentionLimitUtc = DateTime.UtcNow.AddDays(-RetentionDays);
 
@@ -122,7 +143,8 @@ namespace WTF
             {
                 Version = CacheVersion,
                 CreatedUtcTicks = DateTime.UtcNow.Ticks,
-                Files = fileEntries
+                Files = fileEntries,
+                RootEntry = ConvertToCacheTreeEntry(rootEntry, CachedTreeDepth)
             };
 
             Directory.CreateDirectory(Path.GetDirectoryName(_cacheFilePath));
@@ -145,30 +167,16 @@ namespace WTF
             File.Move(temporaryFilePath, _cacheFilePath);
         }
 
-        private static bool TryReadFileMetadata(
-            FileInfo fileInfo,
-            out string fullPath,
-            out long length,
-            out long lastWriteTimeUtcTicks,
-            out int attributes)
+        private static string GetCacheFilePath(string rootPath)
         {
-            fullPath = string.Empty;
-            length = 0;
-            lastWriteTimeUtcTicks = 0;
-            attributes = 0;
+            string cacheDirectoryPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "WTF",
+                "ScanCache");
 
-            try
-            {
-                fullPath = fileInfo.FullName;
-                length = fileInfo.Length;
-                lastWriteTimeUtcTicks = fileInfo.LastWriteTimeUtc.Ticks;
-                attributes = (int)fileInfo.Attributes;
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            Directory.CreateDirectory(cacheDirectoryPath);
+
+            return Path.Combine(cacheDirectoryPath, CreateCacheFileName(rootPath));
         }
 
         private static string CreateCacheFileName(string rootPath)
@@ -181,11 +189,76 @@ namespace WTF
             return Convert.ToHexString(hashBytes) + ".json";
         }
 
+        private static ScanCacheTreeEntry ConvertToCacheTreeEntry(FileSystemEntry entry, int remainingDepth)
+        {
+            if (entry == null)
+            {
+                return null;
+            }
+
+            ScanCacheTreeEntry cacheEntry = new ScanCacheTreeEntry
+            {
+                Name = entry.Name,
+                FullPath = entry.FullPath,
+                SizeBytes = entry.SizeBytes,
+                IsDirectory = entry.IsDirectory,
+                Children = new List<ScanCacheTreeEntry>()
+            };
+
+            if (remainingDepth <= 0)
+            {
+                return cacheEntry;
+            }
+
+            foreach (FileSystemEntry child in entry.Children
+                         .Where(child => child.IsDirectory)
+                         .OrderByDescending(child => child.SizeBytes)
+                         .ThenBy(child => child.Name)
+                         .Take(MaxCachedChildrenPerDirectory))
+            {
+                cacheEntry.Children.Add(ConvertToCacheTreeEntry(child, remainingDepth - 1));
+            }
+
+            return cacheEntry;
+        }
+
+        private static FileSystemEntry ConvertToFileSystemEntry(ScanCacheTreeEntry cacheEntry)
+        {
+            if (cacheEntry == null)
+            {
+                return null;
+            }
+
+            FileSystemEntry entry = new FileSystemEntry
+            {
+                Name = cacheEntry.Name,
+                FullPath = cacheEntry.FullPath,
+                SizeBytes = cacheEntry.SizeBytes,
+                IsDirectory = cacheEntry.IsDirectory
+            };
+
+            if (cacheEntry.Children != null)
+            {
+                foreach (ScanCacheTreeEntry child in cacheEntry.Children)
+                {
+                    FileSystemEntry childEntry = ConvertToFileSystemEntry(child);
+
+                    if (childEntry != null)
+                    {
+                        entry.Children.Add(childEntry);
+                    }
+                }
+            }
+
+            return entry;
+        }
+
         private sealed class ScanCacheDatabase
         {
             public int Version { get; set; }
             public long CreatedUtcTicks { get; set; }
             public List<ScanCacheFileEntry> Files { get; set; }
+            public ScanCacheTreeEntry RootEntry { get; set; }
         }
 
         private sealed class ScanCacheFileEntry
@@ -195,6 +268,15 @@ namespace WTF
             public long LastWriteTimeUtcTicks { get; set; }
             public int Attributes { get; set; }
             public long LastSeenUtcTicks { get; set; }
+        }
+
+        private sealed class ScanCacheTreeEntry
+        {
+            public string Name { get; set; }
+            public string FullPath { get; set; }
+            public long SizeBytes { get; set; }
+            public bool IsDirectory { get; set; }
+            public List<ScanCacheTreeEntry> Children { get; set; }
         }
     }
 }

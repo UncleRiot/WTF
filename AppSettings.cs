@@ -26,6 +26,24 @@ namespace WTF
         public bool SkipReparsePoints { get; set; } = true;
         public bool ShowPartitionPanel { get; set; } = true;
         public AppLayout Layout { get; set; } = AppLayout.Modern;
+        public ViewMode SelectedViewMode { get; set; } = ViewMode.Table;
+
+        public bool HasMainWindowBounds { get; set; }
+        public int MainWindowLeft { get; set; }
+        public int MainWindowTop { get; set; }
+        public int MainWindowWidth { get; set; }
+        public int MainWindowHeight { get; set; }
+        public bool MainWindowMaximized { get; set; }
+
+        public bool HasToolStripLayout { get; set; }
+        public int ToolStripMainLeft { get; set; }
+        public int ToolStripMainTop { get; set; }
+        public int ToolStripViewModeLeft { get; set; }
+        public int ToolStripViewModeTop { get; set; }
+
+        public bool HasSplitterLayout { get; set; }
+        public int SplitContainerMainDistance { get; set; }
+        public int SplitContainerLeftDistance { get; set; }
 
         public static AppSettings Load()
         {

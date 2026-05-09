@@ -28,6 +28,10 @@ namespace WTF
         private ToolStripLabel toolStripLabelDrive;
         private ToolStripComboBox toolStripComboBoxDrives;
         private ToolStripButton toolStripButtonScan;
+        private ToolStrip toolStripViewMode;
+        private ToolStripButton toolStripButtonTable;
+        private ToolStripButton toolStripButtonPieChart;
+        private ToolStripButton toolStripButtonBarChart;
         private SplitContainer splitContainerMain;
         private SplitContainer splitContainerLeft;
         private TreeView treeViewEntries;
@@ -35,6 +39,11 @@ namespace WTF
         private ListView listViewPartitions;
         private ImageList imageListPartitions;
         private DataGridView dataGridViewEntries;
+        private Panel panelRightViewHost;
+        private PieChartView pieChartView;
+        private BarChartView barChartView;
+        private ViewMode _viewMode;
+        private FileSystemEntry _selectedEntry;
         private StatusStrip statusStripMain;
         private ToolStripStatusLabel toolStripStatusLabel;
 
@@ -73,29 +82,196 @@ namespace WTF
             [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 80)]
             public string szTypeName;
         }
-
+        private void MainForm_SizeChanged(object sender, EventArgs e)
+        {
+            UpdateRightViewBounds();
+        }
+        private void splitContainerMainPanel2_SizeChanged(object sender, EventArgs e)
+        {
+            UpdateRightViewBounds();
+        }
         public MainForm()
         {
             _settings = AppSettings.Load();
             _driveService = new DriveService();
             _csvExportService = new CsvExportService();
+            _viewMode = _settings.SelectedViewMode;
 
             InitializeComponent();
+            ApplyMainWindowSettings();
+            ApplyToolStripLayout();
+            ApplySplitterLayout();
 
+            SizeChanged += MainForm_SizeChanged;
             listViewPartitions.SizeChanged += listViewPartitions_SizeChanged;
             treeViewEntries.BeforeExpand += treeViewEntries_BeforeExpand;
+            panelRightViewHost.SizeChanged += panelRightViewHost_SizeChanged;
+            splitContainerMain.SplitterMoved += splitContainerMain_SplitterMoved;
+            splitContainerMain.Panel2.SizeChanged += splitContainerMainPanel2_SizeChanged;
 
             SetDoubleBuffered(treeViewEntries, true);
             SetDoubleBuffered(dataGridViewEntries, true);
             SetDoubleBuffered(listViewPartitions, true);
+            SetDoubleBuffered(pieChartView, true);
+            SetDoubleBuffered(barChartView, true);
 
             ModernFormStyler.Apply(this, _settings.Layout);
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
+            toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
             LoadDrives();
             LoadPartitionList();
             UpdatePartitionPanelVisibility();
+            SetViewMode(_settings.SelectedViewMode);
+            UpdateRightViewBounds();
         }
+        private void panelRightViewHost_SizeChanged(object sender, EventArgs e)
+        {
+            UpdateRightViewBounds();
+        }
+        private void splitContainerMain_SplitterMoved(object sender, SplitterEventArgs e)
+        {
+            UpdateRightViewBounds();
+        }
+        private void UpdateRightViewBounds()
+        {
+            if (panelRightViewHost == null)
+                return;
 
+            System.Drawing.Rectangle bounds = panelRightViewHost.ClientRectangle;
+
+            panelRightViewHost.SuspendLayout();
+
+            try
+            {
+                if (dataGridViewEntries != null)
+                {
+                    dataGridViewEntries.Dock = DockStyle.None;
+                    dataGridViewEntries.Bounds = bounds;
+                }
+
+                if (pieChartView != null)
+                {
+                    pieChartView.Dock = DockStyle.None;
+                    pieChartView.Bounds = bounds;
+                    pieChartView.Invalidate();
+                }
+
+                if (barChartView != null)
+                {
+                    barChartView.Dock = DockStyle.None;
+                    barChartView.Bounds = bounds;
+                    barChartView.Invalidate();
+                }
+            }
+            finally
+            {
+                panelRightViewHost.ResumeLayout(true);
+            }
+
+            panelRightViewHost.Invalidate(true);
+        }
+        private void ApplyMainWindowSettings()
+        {
+            if (!_settings.HasMainWindowBounds)
+                return;
+
+            if (_settings.MainWindowWidth < MinimumSize.Width || _settings.MainWindowHeight < MinimumSize.Height)
+                return;
+
+            System.Drawing.Rectangle savedBounds = new System.Drawing.Rectangle(
+                _settings.MainWindowLeft,
+                _settings.MainWindowTop,
+                _settings.MainWindowWidth,
+                _settings.MainWindowHeight);
+
+            if (!IsVisibleOnAnyScreen(savedBounds))
+                return;
+
+            StartPosition = FormStartPosition.Manual;
+            Bounds = savedBounds;
+
+            if (_settings.MainWindowMaximized)
+            {
+                WindowState = FormWindowState.Maximized;
+            }
+        }
+        private bool IsVisibleOnAnyScreen(System.Drawing.Rectangle bounds)
+        {
+            foreach (Screen screen in Screen.AllScreens)
+            {
+                if (screen.WorkingArea.IntersectsWith(bounds))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        private void SaveSplitterLayout()
+        {
+            _settings.HasSplitterLayout = true;
+            _settings.SplitContainerMainDistance = splitContainerMain.SplitterDistance;
+            _settings.SplitContainerLeftDistance = splitContainerLeft.SplitterDistance;
+        }
+        private void SaveViewSettings()
+        {
+            _settings.SelectedViewMode = _viewMode;
+        }
+        private void ApplySplitterLayout()
+        {
+            if (!_settings.HasSplitterLayout)
+                return;
+
+            if (_settings.SplitContainerMainDistance >= splitContainerMain.Panel1MinSize &&
+                _settings.SplitContainerMainDistance <= splitContainerMain.Width - splitContainerMain.Panel2MinSize)
+            {
+                splitContainerMain.SplitterDistance = _settings.SplitContainerMainDistance;
+            }
+
+            if (_settings.SplitContainerLeftDistance >= splitContainerLeft.Panel1MinSize &&
+                _settings.SplitContainerLeftDistance <= splitContainerLeft.Height - splitContainerLeft.Panel2MinSize)
+            {
+                splitContainerLeft.SplitterDistance = _settings.SplitContainerLeftDistance;
+            }
+        }
+        private void ApplyToolStripLayout()
+        {
+            if (!_settings.HasToolStripLayout)
+                return;
+
+            toolStripPanelMain.Join(
+                toolStripMain,
+                Math.Max(0, _settings.ToolStripMainLeft),
+                Math.Max(0, _settings.ToolStripMainTop));
+
+            toolStripPanelMain.Join(
+                toolStripViewMode,
+                Math.Max(0, _settings.ToolStripViewModeLeft),
+                Math.Max(0, _settings.ToolStripViewModeTop));
+        }
+        private void SaveToolStripLayout()
+        {
+            _settings.HasToolStripLayout = true;
+
+            _settings.ToolStripMainLeft = toolStripMain.Left;
+            _settings.ToolStripMainTop = toolStripMain.Top;
+
+            _settings.ToolStripViewModeLeft = toolStripViewMode.Left;
+            _settings.ToolStripViewModeTop = toolStripViewMode.Top;
+        }
+        private void SaveMainWindowSettings()
+        {
+            System.Drawing.Rectangle bounds = WindowState == FormWindowState.Normal
+                ? Bounds
+                : RestoreBounds;
+
+            _settings.HasMainWindowBounds = true;
+            _settings.MainWindowLeft = bounds.Left;
+            _settings.MainWindowTop = bounds.Top;
+            _settings.MainWindowWidth = bounds.Width;
+            _settings.MainWindowHeight = bounds.Height;
+            _settings.MainWindowMaximized = WindowState == FormWindowState.Maximized;
+        }
         private void InitializeComponent()
         {
             Text = "WTF - Where’s The Filespace";
@@ -158,7 +334,32 @@ namespace WTF
             toolStripMain.Items.Add(toolStripLabelDrive);
             toolStripMain.Items.Add(toolStripComboBoxDrives);
             toolStripMain.Items.Add(toolStripButtonScan);
+
+            toolStripViewMode = new ToolStrip();
+            toolStripViewMode.Dock = DockStyle.None;
+            toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
+            toolStripViewMode.AllowItemReorder = true;
+            toolStripViewMode.Padding = new Padding(0);
+            toolStripViewMode.Margin = new Padding(0);
+
+            toolStripButtonTable = new ToolStripButton("▦ Tabelle");
+            toolStripButtonPieChart = new ToolStripButton("◔ Pie-Chart");
+            toolStripButtonBarChart = new ToolStripButton("▥ Balkenchart");
+
+            toolStripButtonTable.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            toolStripButtonPieChart.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            toolStripButtonBarChart.DisplayStyle = ToolStripItemDisplayStyle.Text;
+
+            toolStripButtonTable.Click += toolStripButtonTable_Click;
+            toolStripButtonPieChart.Click += toolStripButtonPieChart_Click;
+            toolStripButtonBarChart.Click += toolStripButtonBarChart_Click;
+
+            toolStripViewMode.Items.Add(toolStripButtonTable);
+            toolStripViewMode.Items.Add(toolStripButtonPieChart);
+            toolStripViewMode.Items.Add(toolStripButtonBarChart);
+
             toolStripPanelMain.Join(toolStripMain, 0, 0);
+            toolStripPanelMain.Join(toolStripViewMode, 340, 0);
 
             splitContainerMain = new SplitContainer();
             splitContainerMain.Dock = DockStyle.Fill;
@@ -264,11 +465,35 @@ namespace WTF
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
             });
 
+            pieChartView = new PieChartView
+            {
+                Name = "pieChartView",
+                Dock = DockStyle.Fill,
+                Visible = false
+            };
+
+            barChartView = new BarChartView
+            {
+                Name = "barChartView",
+                Dock = DockStyle.Fill,
+                Visible = false
+            };
+
+            panelRightViewHost = new Panel
+            {
+                Name = "panelRightViewHost",
+                Dock = DockStyle.Fill
+            };
+
+            panelRightViewHost.Controls.Add(dataGridViewEntries);
+            panelRightViewHost.Controls.Add(pieChartView);
+            panelRightViewHost.Controls.Add(barChartView);
+
             splitContainerLeft.Panel1.Controls.Add(treeViewEntries);
             splitContainerLeft.Panel2.Controls.Add(listViewPartitions);
 
             splitContainerMain.Panel1.Controls.Add(splitContainerLeft);
-            splitContainerMain.Panel2.Controls.Add(dataGridViewEntries);
+            splitContainerMain.Panel2.Controls.Add(panelRightViewHost);
 
             statusStripMain = new StatusStrip();
             statusStripMain.SizingGrip = true;
@@ -545,9 +770,23 @@ namespace WTF
         private async Task StartScanAsync(string rootPath)
         {
             SetScanningState(true);
-            treeViewEntries.Nodes.Clear();
             dataGridViewEntries.DataSource = null;
             _currentRootEntry = null;
+
+            FileSystemEntry cachedRootEntry = ScanCacheService.TryLoadCachedTree(rootPath);
+            bool cachePreviewLoaded = cachedRootEntry != null;
+
+            if (cachePreviewLoaded)
+            {
+                _currentRootEntry = cachedRootEntry;
+                RenderScanResult(cachedRootEntry);
+                toolStripStatusLabel.Text = "Cache geladen - überprüfe Änderungen...";
+                SetMainWindowTitleForCacheVerification();
+            }
+            else
+            {
+                treeViewEntries.Nodes.Clear();
+            }
 
             long scanTargetBytes = GetUsedSpaceBytes(rootPath);
             SetStatusProgressText(0D);
@@ -560,12 +799,33 @@ namespace WTF
 
                 ApplyScanProgressToLiveTree(scanProgress);
 
-                toolStripStatusLabel.Text = string.Format(
-                    "Scan: {0} | {1} | Ordner: {2} | Dateien: {3}",
-                    scanProgress.CurrentPath,
-                    SizeFormatter.Format(scanProgress.ScannedBytes),
-                    scanProgress.ScannedDirectories,
-                    scanProgress.ScannedFiles);
+                if (scanProgress.IsCacheSavePhase)
+                {
+                    toolStripStatusLabel.Text = string.Format(
+                        "{0} | {1} | Ordner: {2} | Dateien: {3}",
+                        scanProgress.CurrentPath,
+                        SizeFormatter.Format(scanProgress.ScannedBytes),
+                        scanProgress.ScannedDirectories,
+                        scanProgress.ScannedFiles);
+                }
+                else if (cachePreviewLoaded || scanProgress.IsCacheVerification)
+                {
+                    toolStripStatusLabel.Text = string.Format(
+                        "Cache geladen - überprüfe Änderungen: {0} | {1} | Ordner: {2} | Dateien: {3}",
+                        scanProgress.CurrentPath,
+                        SizeFormatter.Format(scanProgress.ScannedBytes),
+                        scanProgress.ScannedDirectories,
+                        scanProgress.ScannedFiles);
+                }
+                else
+                {
+                    toolStripStatusLabel.Text = string.Format(
+                        "Scan: {0} | {1} | Ordner: {2} | Dateien: {3}",
+                        scanProgress.CurrentPath,
+                        SizeFormatter.Format(scanProgress.ScannedBytes),
+                        scanProgress.ScannedDirectories,
+                        scanProgress.ScannedFiles);
+                }
 
                 SetStatusProgressText(percent);
             });
@@ -573,7 +833,26 @@ namespace WTF
             try
             {
                 DirectoryScanner directoryScanner = new DirectoryScanner(_settings);
-                _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
+
+                if (NtfsMftScanner.IsSupported(rootPath))
+                {
+                    try
+                    {
+                        toolStripStatusLabel.Text = "NTFS-MFT-Schnellscan läuft...";
+                        NtfsMftScanner ntfsMftScanner = new NtfsMftScanner(_settings);
+                        _currentRootEntry = await ntfsMftScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
+                    }
+                    catch
+                    {
+                        toolStripStatusLabel.Text = "MFT-Schnellscan nicht verfügbar - normaler Scan läuft...";
+                        _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
+                    }
+                }
+                else
+                {
+                    _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
+                }
+
                 RenderScanResult(_currentRootEntry);
                 LoadPartitionList();
                 UpdateStatusStripForDrive(rootPath);
@@ -589,6 +868,48 @@ namespace WTF
                 _scanCancellationTokenSource.Dispose();
                 _scanCancellationTokenSource = null;
                 SetScanningState(false);
+            }
+        }
+        private void SetMainWindowTitleForCacheVerification()
+        {
+            string title = "WTF - Where’s The Filespace - Cache geladen / überprüfe Änderungen";
+
+            Text = title;
+
+            Control[] titleLabels = Controls.Find("labelModernTitle", true);
+
+            foreach (Control control in titleLabels)
+            {
+                control.Text = " " + title;
+            }
+        }
+        private void ApplyScanProgressToLiveTree(ScanProgress scanProgress)
+        {
+            if (scanProgress.LiveRootEntry == null)
+                return;
+
+            treeViewEntries.BeginUpdate();
+
+            try
+            {
+                if (treeViewEntries.Nodes.Count == 0)
+                {
+                    TreeNode rootNode = CreateLiveTreeNode(scanProgress.LiveRootEntry);
+                    treeViewEntries.Nodes.Add(rootNode);
+                    treeViewEntries.SelectedNode = rootNode;
+                    rootNode.Expand();
+                    SyncLiveTreeChildren(rootNode, scanProgress.LiveRootEntry);
+                    return;
+                }
+
+                TreeNode existingRootNode = treeViewEntries.Nodes[0];
+                UpdateLiveTreeNode(existingRootNode, scanProgress.LiveRootEntry);
+                SyncLiveTreeChildren(existingRootNode, scanProgress.LiveRootEntry);
+                existingRootNode.Expand();
+            }
+            finally
+            {
+                treeViewEntries.EndUpdate();
             }
         }
 
@@ -648,49 +969,6 @@ namespace WTF
             }
 
             return null;
-        }
-
-        private void ApplyScanProgressToLiveTree(ScanProgress scanProgress)
-        {
-            if (scanProgress.LiveRootEntry == null)
-                return;
-
-            treeViewEntries.BeginUpdate();
-
-            try
-            {
-                if (treeViewEntries.Nodes.Count == 0)
-                {
-                    TreeNode rootNode = CreateLiveTreeNode(scanProgress.LiveRootEntry);
-                    treeViewEntries.Nodes.Add(rootNode);
-                    treeViewEntries.SelectedNode = rootNode;
-                    rootNode.Expand();
-                    SyncLiveTreeChildren(rootNode, scanProgress.LiveRootEntry);
-                    return;
-                }
-
-                TreeNode existingRootNode = treeViewEntries.Nodes[0];
-                UpdateLiveTreeNode(existingRootNode, scanProgress.LiveRootEntry);
-                SyncLiveTreeChildren(existingRootNode, scanProgress.LiveRootEntry);
-                existingRootNode.Expand();
-            }
-            finally
-            {
-                treeViewEntries.EndUpdate();
-            }
-        }
-
-        private Dictionary<string, TreeNode> GetLiveTreeNodesByPath()
-        {
-            if (treeViewEntries.Tag is Dictionary<string, TreeNode> liveTreeNodesByPath)
-            {
-                return liveTreeNodesByPath;
-            }
-
-            liveTreeNodesByPath = new Dictionary<string, TreeNode>(StringComparer.OrdinalIgnoreCase);
-            treeViewEntries.Tag = liveTreeNodesByPath;
-
-            return liveTreeNodesByPath;
         }
 
         private TreeNode CreateLiveTreeNode(FileSystemEntry entry)
@@ -841,47 +1119,7 @@ namespace WTF
 
             BindGrid(rootEntry);
         }
-        private TreeNode CreateLazyPlaceholderNode()
-        {
-            return new TreeNode
-            {
-                Name = "__LAZY_PLACEHOLDER__",
-                Text = string.Empty
-            };
-        }
-        private bool IsLazyPlaceholderNode(TreeNode node)
-        {
-            return node != null && node.Name == "__LAZY_PLACEHOLDER__";
-        }
-        private void PopulateTreeNodeChildren(TreeNode parentNode)
-        {
-            if (parentNode.Tag is not FileSystemEntry parentEntry)
-                return;
 
-            if (parentNode.Nodes.Count == 1 && IsLazyPlaceholderNode(parentNode.Nodes[0]))
-            {
-                parentNode.Nodes.Clear();
-            }
-            else if (parentNode.Nodes.Count > 0)
-            {
-                return;
-            }
-
-            foreach (FileSystemEntry child in parentEntry.Children
-                         .Where(child => child.IsDirectory || _settings.ShowFilesInTree)
-                         .OrderByDescending(child => child.SizeBytes)
-                         .ThenBy(child => child.Name))
-            {
-                parentNode.Nodes.Add(CreateTreeNode(child));
-            }
-        }
-        private void treeViewEntries_BeforeExpand(object sender, TreeViewCancelEventArgs e)
-        {
-            if (e.Node == null)
-                return;
-
-            PopulateTreeNodeChildren(e.Node);
-        }
         private TreeNode CreateTreeNode(FileSystemEntry entry)
         {
             TreeNode node = new TreeNode(string.Format("{0} ({1})", entry.Name, SizeFormatter.Format(entry.SizeBytes)))
@@ -905,8 +1143,55 @@ namespace WTF
             return node;
         }
 
+        private TreeNode CreateLazyPlaceholderNode()
+        {
+            return new TreeNode
+            {
+                Name = "__LAZY_PLACEHOLDER__",
+                Text = string.Empty
+            };
+        }
+
+        private bool IsLazyPlaceholderNode(TreeNode node)
+        {
+            return node != null && node.Name == "__LAZY_PLACEHOLDER__";
+        }
+
+        private void treeViewEntries_BeforeExpand(object sender, TreeViewCancelEventArgs e)
+        {
+            if (e.Node == null)
+                return;
+
+            PopulateTreeNodeChildren(e.Node);
+        }
+
+        private void PopulateTreeNodeChildren(TreeNode parentNode)
+        {
+            if (parentNode.Tag is not FileSystemEntry parentEntry)
+                return;
+
+            if (parentNode.Nodes.Count == 1 && IsLazyPlaceholderNode(parentNode.Nodes[0]))
+            {
+                parentNode.Nodes.Clear();
+            }
+            else if (parentNode.Nodes.Count > 0)
+            {
+                return;
+            }
+
+            foreach (FileSystemEntry child in parentEntry.Children
+                         .Where(child => child.IsDirectory || _settings.ShowFilesInTree)
+                         .OrderByDescending(child => child.SizeBytes)
+                         .ThenBy(child => child.Name))
+            {
+                parentNode.Nodes.Add(CreateTreeNode(child));
+            }
+        }
+
         private void BindGrid(FileSystemEntry entry)
         {
+            _selectedEntry = entry;
+
             long totalSize = entry.Children.Sum(child => child.SizeBytes);
 
             var rows = entry.Children
@@ -922,6 +1207,57 @@ namespace WTF
                 .ToList();
 
             dataGridViewEntries.DataSource = rows;
+            pieChartView.SetEntry(entry);
+            barChartView.SetEntry(entry);
+            UpdateRightView();
+        }
+        private void toolStripButtonTable_Click(object sender, EventArgs e)
+        {
+            SetViewMode(ViewMode.Table);
+        }
+        private void toolStripButtonPieChart_Click(object sender, EventArgs e)
+        {
+            SetViewMode(ViewMode.PieChart);
+        }
+        private void toolStripButtonBarChart_Click(object sender, EventArgs e)
+        {
+            SetViewMode(ViewMode.BarChart);
+        }
+        private void SetViewMode(ViewMode viewMode)
+        {
+            _viewMode = viewMode;
+            _settings.SelectedViewMode = viewMode;
+            UpdateViewModeButtons();
+            UpdateRightView();
+        }
+        private void UpdateViewModeButtons()
+        {
+            toolStripButtonTable.Checked = _viewMode == ViewMode.Table;
+            toolStripButtonPieChart.Checked = _viewMode == ViewMode.PieChart;
+            toolStripButtonBarChart.Checked = _viewMode == ViewMode.BarChart;
+        }
+        private void UpdateRightView()
+        {
+            UpdateRightViewBounds();
+
+            dataGridViewEntries.Visible = _viewMode == ViewMode.Table;
+            pieChartView.Visible = _viewMode == ViewMode.PieChart;
+            barChartView.Visible = _viewMode == ViewMode.BarChart;
+
+            if (dataGridViewEntries.Visible)
+            {
+                dataGridViewEntries.BringToFront();
+            }
+            else if (pieChartView.Visible)
+            {
+                pieChartView.BringToFront();
+                pieChartView.Invalidate();
+            }
+            else if (barChartView.Visible)
+            {
+                barChartView.BringToFront();
+                barChartView.Invalidate();
+            }
         }
 
         private void treeViewEntries_AfterSelect(object sender, TreeViewEventArgs e)
@@ -960,7 +1296,9 @@ namespace WTF
             _settings.Save();
             ModernFormStyler.Apply(this, _settings.Layout);
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
+            toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
             UpdatePartitionPanelVisibility();
+            UpdateRightView();
 
             if (_currentRootEntry != null)
             {
@@ -985,6 +1323,12 @@ namespace WTF
             {
                 _scanCancellationTokenSource.Cancel();
             }
+
+            SaveMainWindowSettings();
+            SaveToolStripLayout();
+            SaveSplitterLayout();
+            SaveViewSettings();
+            _settings.Save();
 
             base.OnFormClosing(e);
         }

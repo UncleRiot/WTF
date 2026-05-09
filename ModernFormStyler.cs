@@ -411,6 +411,13 @@ namespace WTF
             {
                 ModernTheme.ApplyListViewStyle(listView);
             }
+            else if (control is PieChartView || control is BarChartView)
+            {
+                control.BackColor = ModernTheme.ControlBackColor;
+                control.ForeColor = ModernTheme.TextColor;
+                control.Font = ModernTheme.DefaultFont;
+                control.Invalidate();
+            }
             else if (control is Panel panel)
             {
                 if (panel.Name != "panelModernTitleBar")
@@ -563,6 +570,13 @@ namespace WTF
                         textColor,
                         SystemFonts.MessageBoxFont);
                 }
+            }
+            else if (control is PieChartView || control is BarChartView)
+            {
+                control.BackColor = windowBackColor;
+                control.ForeColor = textColor;
+                control.Font = SystemFonts.MessageBoxFont;
+                control.Invalidate();
             }
             else if (control is SplitContainer splitContainer)
             {
