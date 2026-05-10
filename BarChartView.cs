@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -8,11 +9,16 @@ namespace WTF
 {
     public sealed class BarChartView : Control
     {
+        private readonly ToolTip _toolTip;
+        private readonly List<ChartHitArea> _hitAreas;
         private FileSystemEntry _entry;
+        private string _currentToolTipText;
 
         public BarChartView()
         {
             DoubleBuffered = true;
+            _toolTip = new ToolTip();
+            _hitAreas = new List<ChartHitArea>();
 
             SetStyle(
                 ControlStyles.AllPaintingInWmPaint |
@@ -27,12 +33,46 @@ namespace WTF
         public void SetEntry(FileSystemEntry entry)
         {
             _entry = entry;
+            _currentToolTipText = null;
+            _toolTip.SetToolTip(this, string.Empty);
             Invalidate();
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+
+            string toolTipText = string.Empty;
+
+            foreach (ChartHitArea hitArea in _hitAreas)
+            {
+                if (hitArea.Bounds.Contains(e.Location))
+                {
+                    toolTipText = FormatFileSystemDateToolTip(hitArea.Entry);
+                    break;
+                }
+            }
+
+            if (_currentToolTipText == toolTipText)
+                return;
+
+            _currentToolTipText = toolTipText;
+            _toolTip.SetToolTip(this, toolTipText);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+
+            _currentToolTipText = null;
+            _toolTip.SetToolTip(this, string.Empty);
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
+
+            _hitAreas.Clear();
 
             Rectangle visibleBounds = GetVisibleClientRectangle();
 
@@ -116,11 +156,14 @@ namespace WTF
 
                 string sizeText = SizeFormatter.Format(item.SizeBytes);
 
+                Rectangle labelBounds = new Rectangle(contentLeft, y, labelWidth, rowHeight);
+                _hitAreas.Add(new ChartHitArea(labelBounds, item));
+
                 TextRenderer.DrawText(
                     e.Graphics,
                     item.Name,
                     Font,
-                    new Rectangle(contentLeft, y, labelWidth, rowHeight),
+                    labelBounds,
                     ForeColor,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
@@ -132,6 +175,8 @@ namespace WTF
                     y + (rowHeight - barHeight) / 2,
                     barWidth,
                     barHeight);
+
+                _hitAreas.Add(new ChartHitArea(barBounds, item));
 
                 using SolidBrush barBrush = new SolidBrush(ModernTheme.ChartColors[index % ModernTheme.ChartColors.Length]);
                 e.Graphics.FillRectangle(barBrush, barBounds);
@@ -158,6 +203,8 @@ namespace WTF
                         rowHeight);
                 }
 
+                _hitAreas.Add(new ChartHitArea(textBounds, item));
+
                 TextRenderer.DrawText(
                     e.Graphics,
                     sizeText,
@@ -167,6 +214,7 @@ namespace WTF
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             }
         }
+
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
@@ -178,10 +226,12 @@ namespace WTF
                 Parent.Invalidate(true);
             }
         }
+
         private void Parent_SizeChanged(object sender, EventArgs e)
         {
             Invalidate();
         }
+
         private Rectangle GetVisibleClientRectangle()
         {
             Rectangle visibleScreenRectangle = RectangleToScreen(ClientRectangle);
@@ -210,6 +260,7 @@ namespace WTF
                 visibleScreenRectangle.Width,
                 visibleScreenRectangle.Height);
         }
+
         protected override void OnParentChanged(EventArgs e)
         {
             base.OnParentChanged(e);
@@ -222,6 +273,7 @@ namespace WTF
 
             Invalidate();
         }
+
         private void DrawEmptyText(Graphics graphics)
         {
             TextRenderer.DrawText(
@@ -231,6 +283,64 @@ namespace WTF
                 ClientRectangle,
                 ForeColor,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        }
+
+        private string FormatFileSystemDateToolTip(FileSystemEntry entry)
+        {
+            if (entry == null)
+                return string.Empty;
+
+            if (string.IsNullOrWhiteSpace(entry.FullPath))
+                return string.Empty;
+
+            try
+            {
+                DateTime creationTime;
+                DateTime lastWriteTime;
+                DateTime lastAccessTime;
+
+                if (entry.IsDirectory)
+                {
+                    if (!System.IO.Directory.Exists(entry.FullPath))
+                        return string.Empty;
+
+                    creationTime = System.IO.Directory.GetCreationTime(entry.FullPath);
+                    lastWriteTime = System.IO.Directory.GetLastWriteTime(entry.FullPath);
+                    lastAccessTime = System.IO.Directory.GetLastAccessTime(entry.FullPath);
+                }
+                else
+                {
+                    if (!System.IO.File.Exists(entry.FullPath))
+                        return string.Empty;
+
+                    creationTime = System.IO.File.GetCreationTime(entry.FullPath);
+                    lastWriteTime = System.IO.File.GetLastWriteTime(entry.FullPath);
+                    lastAccessTime = System.IO.File.GetLastAccessTime(entry.FullPath);
+                }
+
+                return string.Format(
+                    "Erstellt: {0}{1}Geändert: {2}{1}Letzter Zugriff: {3}",
+                    creationTime,
+                    Environment.NewLine,
+                    lastWriteTime,
+                    lastAccessTime);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private sealed class ChartHitArea
+        {
+            public ChartHitArea(Rectangle bounds, FileSystemEntry entry)
+            {
+                Bounds = bounds;
+                Entry = entry;
+            }
+
+            public Rectangle Bounds { get; }
+            public FileSystemEntry Entry { get; }
         }
     }
 }

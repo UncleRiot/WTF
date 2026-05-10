@@ -13,6 +13,8 @@ namespace WTF
         private CheckBox checkBoxShowFilesInTree;
         private CheckBox checkBoxSkipReparsePoints;
         private CheckBox checkBoxShowPartitionPanel;
+        private CheckBox checkBoxStartElevatedOnStartup;
+        private CheckBox checkBoxShowElevationPromptOnStartup;
         private Label labelLayout;
         private ComboBox comboBoxLayout;
         private CheckBox checkBoxExportPath;
@@ -36,7 +38,7 @@ namespace WTF
         {
             Text = "Einstellungen";
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new System.Drawing.Size(460, 310);
+            ClientSize = new System.Drawing.Size(460, 350);
             MinimumSize = Size;
             MaximumSize = Size;
             MaximizeBox = false;
@@ -47,7 +49,7 @@ namespace WTF
             {
                 Name = "tabControlSettings",
                 Location = new System.Drawing.Point(12, 12),
-                Size = new System.Drawing.Size(436, 238)
+                Size = new System.Drawing.Size(436, 278)
             };
 
             tabPageGeneral = new TabPage
@@ -86,11 +88,27 @@ namespace WTF
                 AutoSize = true
             };
 
+            checkBoxStartElevatedOnStartup = new CheckBox
+            {
+                Name = "checkBoxStartElevatedOnStartup",
+                Text = "Starten mit erhöhten Rechten",
+                Location = new System.Drawing.Point(12, 114),
+                AutoSize = true
+            };
+
+            checkBoxShowElevationPromptOnStartup = new CheckBox
+            {
+                Name = "checkBoxShowElevationPromptOnStartup",
+                Text = "Admin-Hinweis beim Start anzeigen",
+                Location = new System.Drawing.Point(12, 146),
+                AutoSize = true
+            };
+
             labelLayout = new Label
             {
                 Name = "labelLayout",
                 Text = "Layout:",
-                Location = new System.Drawing.Point(12, 122),
+                Location = new System.Drawing.Point(12, 186),
                 Size = new System.Drawing.Size(120, 23),
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
@@ -98,7 +116,7 @@ namespace WTF
             comboBoxLayout = new ComboBox
             {
                 Name = "comboBoxLayout",
-                Location = new System.Drawing.Point(138, 122),
+                Location = new System.Drawing.Point(138, 186),
                 Size = new System.Drawing.Size(205, 23),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
@@ -151,6 +169,8 @@ namespace WTF
             tabPageGeneral.Controls.Add(checkBoxShowFilesInTree);
             tabPageGeneral.Controls.Add(checkBoxSkipReparsePoints);
             tabPageGeneral.Controls.Add(checkBoxShowPartitionPanel);
+            tabPageGeneral.Controls.Add(checkBoxStartElevatedOnStartup);
+            tabPageGeneral.Controls.Add(checkBoxShowElevationPromptOnStartup);
             tabPageGeneral.Controls.Add(labelLayout);
             tabPageGeneral.Controls.Add(comboBoxLayout);
 
@@ -167,7 +187,7 @@ namespace WTF
             {
                 Name = "buttonOk",
                 Text = "OK",
-                Location = new System.Drawing.Point(280, 266),
+                Location = new System.Drawing.Point(280, 306),
                 Size = new System.Drawing.Size(75, 30),
                 DialogResult = DialogResult.OK
             };
@@ -176,7 +196,7 @@ namespace WTF
             {
                 Name = "buttonCancel",
                 Text = "Abbrechen",
-                Location = new System.Drawing.Point(365, 266),
+                Location = new System.Drawing.Point(365, 306),
                 Size = new System.Drawing.Size(75, 30),
                 DialogResult = DialogResult.Cancel
             };
@@ -196,6 +216,8 @@ namespace WTF
             checkBoxShowFilesInTree.Checked = _settings.ShowFilesInTree;
             checkBoxSkipReparsePoints.Checked = _settings.SkipReparsePoints;
             checkBoxShowPartitionPanel.Checked = _settings.ShowPartitionPanel;
+            checkBoxStartElevatedOnStartup.Checked = _settings.StartElevatedOnStartup;
+            checkBoxShowElevationPromptOnStartup.Checked = _settings.ShowElevationPromptOnStartup;
             checkBoxExportPath.Checked = _settings.ExportPath;
             checkBoxExportSizeGb.Checked = _settings.ExportSizeGb;
             checkBoxExportSizeMb.Checked = _settings.ExportSizeMb;
@@ -241,6 +263,8 @@ namespace WTF
             _settings.ShowFilesInTree = checkBoxShowFilesInTree.Checked;
             _settings.SkipReparsePoints = checkBoxSkipReparsePoints.Checked;
             _settings.ShowPartitionPanel = checkBoxShowPartitionPanel.Checked;
+            _settings.StartElevatedOnStartup = checkBoxStartElevatedOnStartup.Checked;
+            _settings.ShowElevationPromptOnStartup = checkBoxShowElevationPromptOnStartup.Checked;
             _settings.ExportPath = checkBoxExportPath.Checked;
             _settings.ExportSizeGb = checkBoxExportSizeGb.Checked;
             _settings.ExportSizeMb = checkBoxExportSizeMb.Checked;

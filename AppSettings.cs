@@ -25,6 +25,8 @@ namespace WTF
         public bool ShowFilesInTree { get; set; }
         public bool SkipReparsePoints { get; set; } = true;
         public bool ShowPartitionPanel { get; set; } = true;
+        public bool ShowElevationPromptOnStartup { get; set; } = true;
+        public bool StartElevatedOnStartup { get; set; }
         public AppLayout Layout { get; set; } = AppLayout.Modern;
         public ViewMode SelectedViewMode { get; set; } = ViewMode.Table;
 
@@ -49,6 +51,17 @@ namespace WTF
         public bool HasSplitterLayout { get; set; }
         public int SplitContainerMainDistance { get; set; }
         public int SplitContainerLeftDistance { get; set; }
+
+        public bool HasColumnLayout { get; set; }
+        public int PartitionColumnNameWidth { get; set; }
+        public int PartitionColumnSizeWidth { get; set; }
+        public int PartitionColumnFreeWidth { get; set; }
+        public int PartitionColumnFreePercentWidth { get; set; }
+        public int EntryColumnNameWidth { get; set; }
+        public int EntryColumnSizeWidth { get; set; }
+        public int EntryColumnSizeBytesWidth { get; set; }
+        public int EntryColumnPercentWidth { get; set; }
+        public int EntryColumnPathWidth { get; set; }
 
         public static AppSettings Load()
         {

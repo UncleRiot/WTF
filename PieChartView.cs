@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -9,22 +10,61 @@ namespace WTF
 {
     public sealed class PieChartView : Control
     {
+        private readonly ToolTip _toolTip;
+        private readonly List<ChartHitArea> _hitAreas;
         private FileSystemEntry _entry;
+        private string _currentToolTipText;
 
         public PieChartView()
         {
             DoubleBuffered = true;
+            _toolTip = new ToolTip();
+            _hitAreas = new List<ChartHitArea>();
         }
 
         public void SetEntry(FileSystemEntry entry)
         {
             _entry = entry;
+            _currentToolTipText = null;
+            _toolTip.SetToolTip(this, string.Empty);
             Invalidate();
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+
+            string toolTipText = string.Empty;
+
+            foreach (ChartHitArea hitArea in _hitAreas)
+            {
+                if (hitArea.Contains(e.Location))
+                {
+                    toolTipText = FormatFileSystemDateToolTip(hitArea.Entry);
+                    break;
+                }
+            }
+
+            if (_currentToolTipText == toolTipText)
+                return;
+
+            _currentToolTipText = toolTipText;
+            _toolTip.SetToolTip(this, toolTipText);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+
+            _currentToolTipText = null;
+            _toolTip.SetToolTip(this, string.Empty);
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
+
+            _hitAreas.Clear();
 
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             e.Graphics.Clear(BackColor);
@@ -65,6 +105,11 @@ namespace WTF
                 using SolidBrush brush = new SolidBrush(ModernTheme.ChartColors[index % ModernTheme.ChartColors.Length]);
                 e.Graphics.FillPie(brush, chartBounds, startAngle, sweepAngle);
 
+                if (item.Entry != null)
+                {
+                    _hitAreas.Add(new ChartHitArea(chartBounds, startAngle, sweepAngle, item.Entry));
+                }
+
                 startAngle += sweepAngle;
             }
 
@@ -91,7 +136,7 @@ namespace WTF
                 .Where(child => child.SizeBytes > 0)
                 .OrderByDescending(child => child.SizeBytes)
                 .Take(10)
-                .Select(child => new ChartItem(child.Name, child.SizeBytes))
+                .Select(child => new ChartItem(child.Name, child.SizeBytes, child))
                 .ToList();
 
             long topSize = items.Sum(item => item.SizeBytes);
@@ -100,7 +145,7 @@ namespace WTF
 
             if (otherSize > 0)
             {
-                items.Add(new ChartItem("Sonstige", otherSize));
+                items.Add(new ChartItem("Sonstige", otherSize, null));
             }
 
             return items;
@@ -123,6 +168,13 @@ namespace WTF
                     SizeFormatter.Format(item.SizeBytes),
                     (double)item.SizeBytes * 100D / totalSize);
 
+                Rectangle legendBounds = new Rectangle(left, y, Math.Max(0, Width - left - 8), 22);
+
+                if (item.Entry != null)
+                {
+                    _hitAreas.Add(new ChartHitArea(legendBounds, item.Entry));
+                }
+
                 TextRenderer.DrawText(
                     graphics,
                     text,
@@ -135,16 +187,140 @@ namespace WTF
             }
         }
 
+        private string FormatFileSystemDateToolTip(FileSystemEntry entry)
+        {
+            if (entry == null)
+                return string.Empty;
+
+            if (string.IsNullOrWhiteSpace(entry.FullPath))
+                return string.Empty;
+
+            try
+            {
+                DateTime creationTime;
+                DateTime lastWriteTime;
+                DateTime lastAccessTime;
+
+                if (entry.IsDirectory)
+                {
+                    if (!Directory.Exists(entry.FullPath))
+                        return string.Empty;
+
+                    creationTime = Directory.GetCreationTime(entry.FullPath);
+                    lastWriteTime = Directory.GetLastWriteTime(entry.FullPath);
+                    lastAccessTime = Directory.GetLastAccessTime(entry.FullPath);
+                }
+                else
+                {
+                    if (!File.Exists(entry.FullPath))
+                        return string.Empty;
+
+                    creationTime = File.GetCreationTime(entry.FullPath);
+                    lastWriteTime = File.GetLastWriteTime(entry.FullPath);
+                    lastAccessTime = File.GetLastAccessTime(entry.FullPath);
+                }
+
+                return string.Format(
+                    "Erstellt: {0}{1}Geändert: {2}{1}Letzter Zugriff: {3}",
+                    creationTime,
+                    Environment.NewLine,
+                    lastWriteTime,
+                    lastAccessTime);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
         private sealed class ChartItem
         {
-            public ChartItem(string name, long sizeBytes)
+            public ChartItem(string name, long sizeBytes, FileSystemEntry entry)
             {
                 Name = name;
                 SizeBytes = sizeBytes;
+                Entry = entry;
             }
 
             public string Name { get; }
             public long SizeBytes { get; }
+            public FileSystemEntry Entry { get; }
+        }
+
+        private sealed class ChartHitArea
+        {
+            private readonly Rectangle _bounds;
+            private readonly float _startAngle;
+            private readonly float _sweepAngle;
+            private readonly bool _isPieSlice;
+
+            public ChartHitArea(Rectangle bounds, FileSystemEntry entry)
+            {
+                _bounds = bounds;
+                Entry = entry;
+            }
+
+            public ChartHitArea(Rectangle bounds, float startAngle, float sweepAngle, FileSystemEntry entry)
+            {
+                _bounds = bounds;
+                _startAngle = NormalizeAngle(startAngle);
+                _sweepAngle = sweepAngle;
+                _isPieSlice = true;
+                Entry = entry;
+            }
+
+            public FileSystemEntry Entry { get; }
+
+            public bool Contains(Point point)
+            {
+                if (!_bounds.Contains(point))
+                    return false;
+
+                if (!_isPieSlice)
+                    return true;
+
+                double radiusX = _bounds.Width / 2D;
+                double radiusY = _bounds.Height / 2D;
+
+                if (radiusX <= 0D || radiusY <= 0D)
+                    return false;
+
+                double centerX = _bounds.Left + radiusX;
+                double centerY = _bounds.Top + radiusY;
+                double normalizedX = (point.X - centerX) / radiusX;
+                double normalizedY = (point.Y - centerY) / radiusY;
+
+                if ((normalizedX * normalizedX) + (normalizedY * normalizedY) > 1D)
+                    return false;
+
+                double angle = Math.Atan2(point.Y - centerY, point.X - centerX) * 180D / Math.PI;
+                angle = NormalizeAngle((float)angle);
+
+                double endAngle = NormalizeAngle(_startAngle + _sweepAngle);
+
+                if (_sweepAngle >= 360F)
+                    return true;
+
+                if (_startAngle <= endAngle)
+                    return angle >= _startAngle && angle <= endAngle;
+
+                return angle >= _startAngle || angle <= endAngle;
+            }
+
+            private static float NormalizeAngle(float angle)
+            {
+                while (angle < 0F)
+                {
+                    angle += 360F;
+                }
+
+                while (angle >= 360F)
+                {
+                    angle -= 360F;
+                }
+
+                return angle;
+            }
         }
     }
 }

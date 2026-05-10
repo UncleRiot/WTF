@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -30,6 +31,7 @@ namespace WTF
         private ToolStripLabel toolStripLabelDrive;
         private ToolStripComboBox toolStripComboBoxDrives;
         private ToolStripButton toolStripButtonScan;
+        private ToolStripButton toolStripButtonOpenFolder;
         private ToolStrip toolStripViewMode;
         private ToolStripButton toolStripButtonTable;
         private ToolStripButton toolStripButtonPieChart;
@@ -44,7 +46,7 @@ namespace WTF
         private ToolStripMenuItem contextMenuItemCopyToClipboard;
         private FileSystemEntry _treeContextMenuEntry;
         private ImageList imageListEntries;
-        private ListView listViewPartitions;
+        private DataGridView listViewPartitions;
         private ImageList imageListPartitions;
         private DataGridView dataGridViewEntries;
         private Panel panelRightViewHost;
@@ -106,6 +108,8 @@ namespace WTF
             _viewMode = _settings.SelectedViewMode;
 
             InitializeComponent();
+            ConfigureDriveComboBoxDrawing();
+            ConfigureOpenFolderButtonImage();
             ApplyMainWindowSettings();
             ApplyToolStripLayout();
             ApplySplitterLayout();
@@ -114,6 +118,7 @@ namespace WTF
             listViewPartitions.SizeChanged += listViewPartitions_SizeChanged;
             treeViewEntries.BeforeExpand += treeViewEntries_BeforeExpand;
             panelRightViewHost.SizeChanged += panelRightViewHost_SizeChanged;
+            dataGridViewEntries.SizeChanged += dataGridViewEntries_SizeChanged;
             splitContainerMain.SplitterMoved += splitContainerMain_SplitterMoved;
             splitContainerMain.Panel2.SizeChanged += splitContainerMainPanel2_SizeChanged;
 
@@ -128,13 +133,219 @@ namespace WTF
             toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
             LoadDrives();
             LoadPartitionList();
+            ApplyColumnLayout();
+            ConfigureEntryGridColumns();
             UpdatePartitionPanelVisibility();
             SetViewMode(_settings.SelectedViewMode);
             UpdateRightViewBounds();
         }
+        private void ConfigureDriveComboBoxDrawing()
+        {
+            toolStripComboBoxDrives.DropDownStyle = ComboBoxStyle.DropDownList;
+            toolStripComboBoxDrives.ComboBox.DrawMode = DrawMode.OwnerDrawFixed;
+            toolStripComboBoxDrives.ComboBox.ItemHeight = Math.Max(20, toolStripComboBoxDrives.ComboBox.ItemHeight);
+            toolStripComboBoxDrives.ComboBox.DrawItem -= toolStripComboBoxDrives_DrawItem;
+            toolStripComboBoxDrives.ComboBox.DrawItem += toolStripComboBoxDrives_DrawItem;
+        }
+        private void ConfigureOpenFolderButtonImage()
+        {
+            toolStripButtonOpenFolder.Image = GetSmallStockIcon(SHSTOCKICONID.SIID_FOLDEROPEN);
+            toolStripButtonOpenFolder.DisplayStyle = ToolStripItemDisplayStyle.Image;
+            toolStripButtonOpenFolder.Text = string.Empty;
+
+            toolStripButtonScan.Image = CreateScanButtonImage();
+            toolStripButtonScan.DisplayStyle = ToolStripItemDisplayStyle.Image;
+            toolStripButtonScan.Text = string.Empty;
+        }
+        private System.Drawing.Bitmap CreateScanButtonImage()
+        {
+            System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(16, 16, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+            using (System.Drawing.Graphics graphics = System.Drawing.Graphics.FromImage(bitmap))
+            {
+                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                graphics.Clear(System.Drawing.Color.Transparent);
+
+                System.Drawing.Point[] points =
+                {
+            new System.Drawing.Point(4, 2),
+            new System.Drawing.Point(13, 8),
+            new System.Drawing.Point(4, 14)
+        };
+
+                using System.Drawing.SolidBrush brush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(0, 120, 215));
+                graphics.FillPolygon(brush, points);
+
+                using System.Drawing.Pen pen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0, 84, 153));
+                graphics.DrawPolygon(pen, points);
+            }
+
+            return bitmap;
+        }
+        private void toolStripComboBoxDrives_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            e.DrawBackground();
+
+            if (e.Index < 0)
+                return;
+
+            ComboBox comboBox = (ComboBox)sender;
+            object item = comboBox.Items[e.Index];
+
+            string text = item == null
+                ? string.Empty
+                : item.ToString();
+
+            string iconPath = GetDriveComboBoxItemIconPath(item);
+
+            System.Drawing.Color textColor = (e.State & DrawItemState.Selected) == DrawItemState.Selected
+                ? System.Drawing.SystemColors.HighlightText
+                : comboBox.ForeColor;
+
+            int iconLeft = e.Bounds.Left + 3;
+            int iconTop = e.Bounds.Top + Math.Max(0, (e.Bounds.Height - 16) / 2);
+
+            if (!string.IsNullOrWhiteSpace(iconPath))
+            {
+                using System.Drawing.Bitmap icon = GetSmallSystemIcon(iconPath);
+                e.Graphics.DrawImage(icon, iconLeft, iconTop, 16, 16);
+            }
+
+            System.Drawing.Rectangle textBounds = new System.Drawing.Rectangle(
+                e.Bounds.Left + 24,
+                e.Bounds.Top,
+                Math.Max(0, e.Bounds.Width - 26),
+                e.Bounds.Height);
+
+            TextRenderer.DrawText(
+                e.Graphics,
+                text,
+                comboBox.Font,
+                textBounds,
+                textColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+            e.DrawFocusRectangle();
+        }
+        private string GetDriveComboBoxItemIconPath(object item)
+        {
+            if (item is DriveItem driveItem)
+                return driveItem.RootPath;
+
+            if (item is string path)
+            {
+                if (Directory.Exists(path))
+                    return path;
+
+                if (File.Exists(path))
+                    return path;
+            }
+
+            return Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        }
         private void panelRightViewHost_SizeChanged(object sender, EventArgs e)
         {
             UpdateRightViewBounds();
+        }
+        private void ConfigureEntryGridColumns()
+        {
+            dataGridViewEntries.Dock = DockStyle.Fill;
+            dataGridViewEntries.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+            dataGridViewEntries.ScrollBars = ScrollBars.Vertical;
+
+            if (dataGridViewEntries.Columns.Contains("ColumnSizeBytes"))
+            {
+                dataGridViewEntries.Columns["ColumnSizeBytes"].Visible = false;
+                dataGridViewEntries.Columns["ColumnSizeBytes"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+                dataGridViewEntries.Columns["ColumnSizeBytes"].MinimumWidth = 2;
+            }
+
+            if (dataGridViewEntries.Columns.Contains("ColumnName"))
+            {
+                dataGridViewEntries.Columns["ColumnName"].Visible = true;
+                dataGridViewEntries.Columns["ColumnName"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+                dataGridViewEntries.Columns["ColumnName"].MinimumWidth = 20;
+            }
+
+            if (dataGridViewEntries.Columns.Contains("ColumnSize"))
+            {
+                dataGridViewEntries.Columns["ColumnSize"].Visible = true;
+                dataGridViewEntries.Columns["ColumnSize"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+                dataGridViewEntries.Columns["ColumnSize"].MinimumWidth = 20;
+            }
+
+            if (dataGridViewEntries.Columns.Contains("ColumnPercent"))
+            {
+                dataGridViewEntries.Columns["ColumnPercent"].Visible = true;
+                dataGridViewEntries.Columns["ColumnPercent"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+                dataGridViewEntries.Columns["ColumnPercent"].MinimumWidth = 20;
+            }
+
+            if (dataGridViewEntries.Columns.Contains("ColumnPath"))
+            {
+                dataGridViewEntries.Columns["ColumnPath"].Visible = true;
+                dataGridViewEntries.Columns["ColumnPath"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+                dataGridViewEntries.Columns["ColumnPath"].MinimumWidth = 20;
+            }
+
+            ApplyEntryGridColumnWidths();
+        }
+        private void ApplyEntryGridColumnWidths()
+        {
+            if (dataGridViewEntries == null)
+                return;
+
+            if (!dataGridViewEntries.Columns.Contains("ColumnName"))
+                return;
+
+            if (!dataGridViewEntries.Columns.Contains("ColumnSize"))
+                return;
+
+            if (!dataGridViewEntries.Columns.Contains("ColumnPercent"))
+                return;
+
+            if (!dataGridViewEntries.Columns.Contains("ColumnPath"))
+                return;
+
+            int availableWidth = dataGridViewEntries.ClientSize.Width - 2;
+
+            if (availableWidth <= 0)
+                return;
+
+            if (dataGridViewEntries.RowCount > 0 &&
+                dataGridViewEntries.DisplayedRowCount(false) < dataGridViewEntries.RowCount)
+            {
+                availableWidth -= SystemInformation.VerticalScrollBarWidth;
+            }
+
+            availableWidth = Math.Max(availableWidth, 80);
+
+            int nameWidth = Math.Max(20, (int)Math.Round(availableWidth * 0.34D));
+            int sizeWidth = Math.Max(20, (int)Math.Round(availableWidth * 0.14D));
+            int percentWidth = Math.Max(20, (int)Math.Round(availableWidth * 0.18D));
+            int pathWidth = Math.Max(20, availableWidth - nameWidth - sizeWidth - percentWidth);
+
+            int usedWidth = nameWidth + sizeWidth + percentWidth + pathWidth;
+
+            if (usedWidth > availableWidth)
+            {
+                int overflow = usedWidth - availableWidth;
+                pathWidth = Math.Max(20, pathWidth - overflow);
+            }
+
+            dataGridViewEntries.SuspendLayout();
+
+            try
+            {
+                dataGridViewEntries.Columns["ColumnName"].Width = nameWidth;
+                dataGridViewEntries.Columns["ColumnSize"].Width = sizeWidth;
+                dataGridViewEntries.Columns["ColumnPercent"].Width = percentWidth;
+                dataGridViewEntries.Columns["ColumnPath"].Width = pathWidth;
+            }
+            finally
+            {
+                dataGridViewEntries.ResumeLayout();
+            }
         }
         private void splitContainerMain_SplitterMoved(object sender, SplitterEventArgs e)
         {
@@ -145,29 +356,25 @@ namespace WTF
             if (panelRightViewHost == null)
                 return;
 
-            System.Drawing.Rectangle bounds = panelRightViewHost.ClientRectangle;
-
             panelRightViewHost.SuspendLayout();
 
             try
             {
                 if (dataGridViewEntries != null)
                 {
-                    dataGridViewEntries.Dock = DockStyle.None;
-                    dataGridViewEntries.Bounds = bounds;
+                    dataGridViewEntries.Dock = DockStyle.Fill;
+                    ApplyEntryGridColumnWidths();
                 }
 
                 if (pieChartView != null)
                 {
-                    pieChartView.Dock = DockStyle.None;
-                    pieChartView.Bounds = bounds;
+                    pieChartView.Dock = DockStyle.Fill;
                     pieChartView.Invalidate();
                 }
 
                 if (barChartView != null)
                 {
-                    barChartView.Dock = DockStyle.None;
-                    barChartView.Bounds = bounds;
+                    barChartView.Dock = DockStyle.Fill;
                     barChartView.Invalidate();
                 }
             }
@@ -177,6 +384,10 @@ namespace WTF
             }
 
             panelRightViewHost.Invalidate(true);
+        }
+        private void dataGridViewEntries_SizeChanged(object sender, EventArgs e)
+        {
+            ApplyEntryGridColumnWidths();
         }
         private void ApplyMainWindowSettings()
         {
@@ -219,7 +430,7 @@ namespace WTF
         {
             _settings.HasSplitterLayout = true;
             _settings.SplitContainerMainDistance = splitContainerMain.SplitterDistance;
-            _settings.SplitContainerLeftDistance = splitContainerLeft.SplitterDistance;
+            _settings.SplitContainerLeftDistance = splitContainerLeft.Height - splitContainerLeft.SplitterDistance - splitContainerLeft.SplitterWidth;
         }
         private void SaveViewSettings()
         {
@@ -236,10 +447,12 @@ namespace WTF
                 splitContainerMain.SplitterDistance = _settings.SplitContainerMainDistance;
             }
 
-            if (_settings.SplitContainerLeftDistance >= splitContainerLeft.Panel1MinSize &&
-                _settings.SplitContainerLeftDistance <= splitContainerLeft.Height - splitContainerLeft.Panel2MinSize)
+            int splitContainerLeftDistance = splitContainerLeft.Height - _settings.SplitContainerLeftDistance - splitContainerLeft.SplitterWidth;
+
+            if (splitContainerLeftDistance >= splitContainerLeft.Panel1MinSize &&
+                splitContainerLeftDistance <= splitContainerLeft.Height - splitContainerLeft.Panel2MinSize)
             {
-                splitContainerLeft.SplitterDistance = _settings.SplitContainerLeftDistance;
+                splitContainerLeft.SplitterDistance = splitContainerLeftDistance;
             }
         }
         private void ApplyToolStripLayout()
@@ -330,6 +543,7 @@ namespace WTF
             toolStripLabelDrive = new ToolStripLabel("Laufwerk:");
             toolStripComboBoxDrives = new ToolStripComboBox();
             toolStripButtonScan = new ToolStripButton("▶");
+            toolStripButtonOpenFolder = new ToolStripButton("Öffnen");
 
             toolStripLabelDrive.Margin = new Padding(0, 1, 0, 2);
             toolStripComboBoxDrives.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -338,10 +552,14 @@ namespace WTF
             toolStripButtonScan.DisplayStyle = ToolStripItemDisplayStyle.Text;
             toolStripButtonScan.ToolTipText = "Scan starten";
             toolStripButtonScan.Click += toolStripButtonScan_Click;
+            toolStripButtonOpenFolder.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            toolStripButtonOpenFolder.ToolTipText = "Ordner auswählen und scannen";
+            toolStripButtonOpenFolder.Click += toolStripButtonOpenFolder_Click;
 
             toolStripMain.Items.Add(toolStripLabelDrive);
             toolStripMain.Items.Add(toolStripComboBoxDrives);
             toolStripMain.Items.Add(toolStripButtonScan);
+            toolStripMain.Items.Add(toolStripButtonOpenFolder);
 
             toolStripViewMode = new ToolStrip();
             toolStripViewMode.Dock = DockStyle.None;
@@ -430,17 +648,69 @@ namespace WTF
             imageListPartitions.ColorDepth = ColorDepth.Depth32Bit;
             imageListPartitions.ImageSize = new System.Drawing.Size(16, 16);
 
-            listViewPartitions = new ListView();
+            listViewPartitions = new DataGridView();
             listViewPartitions.Dock = DockStyle.Fill;
-            listViewPartitions.View = View.Details;
-            listViewPartitions.FullRowSelect = true;
-            listViewPartitions.GridLines = false;
-            listViewPartitions.HeaderStyle = ColumnHeaderStyle.Clickable;
-            listViewPartitions.SmallImageList = imageListPartitions;
-            listViewPartitions.Columns.Add("Name", 120);
-            listViewPartitions.Columns.Add("Größe", 80, HorizontalAlignment.Right);
-            listViewPartitions.Columns.Add("Frei", 80, HorizontalAlignment.Right);
-            listViewPartitions.Columns.Add("% Frei", 70, HorizontalAlignment.Right);
+            listViewPartitions.AllowUserToAddRows = false;
+            listViewPartitions.AllowUserToDeleteRows = false;
+            listViewPartitions.AllowUserToResizeRows = false;
+            listViewPartitions.AutoGenerateColumns = false;
+            listViewPartitions.BackgroundColor = System.Drawing.SystemColors.Window;
+            listViewPartitions.BorderStyle = BorderStyle.FixedSingle;
+            listViewPartitions.CellBorderStyle = DataGridViewCellBorderStyle.None;
+            listViewPartitions.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
+            listViewPartitions.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            listViewPartitions.ColumnHeadersHeight = 24;
+            listViewPartitions.RowTemplate.Height = 19;
+            listViewPartitions.EnableHeadersVisualStyles = true;
+            listViewPartitions.MultiSelect = false;
+            listViewPartitions.ReadOnly = true;
+            listViewPartitions.RowHeadersVisible = false;
+            listViewPartitions.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            listViewPartitions.CellPainting += listViewPartitions_CellPainting;
+
+            listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "PartitionColumnName",
+                HeaderText = "Name",
+                Width = 120,
+                SortMode = DataGridViewColumnSortMode.NotSortable
+            });
+
+            listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "PartitionColumnSize",
+                HeaderText = "Größe",
+                Width = 80,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Alignment = DataGridViewContentAlignment.MiddleRight
+                }
+            });
+
+            listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "PartitionColumnFree",
+                HeaderText = "Frei",
+                Width = 80,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Alignment = DataGridViewContentAlignment.MiddleRight
+                }
+            });
+
+            listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "PartitionColumnFreePercent",
+                HeaderText = "% Frei",
+                Width = 70,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Alignment = DataGridViewContentAlignment.MiddleRight
+                }
+            });
 
             dataGridViewEntries = new DataGridView();
             dataGridViewEntries.Dock = DockStyle.Fill;
@@ -565,7 +835,24 @@ namespace WTF
 
             MainMenuStrip = menuStripMain;
         }
+        private async void toolStripButtonOpenFolder_Click(object sender, EventArgs e)
+        {
+            using FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog
+            {
+                Description = "Ordner zum Scannen auswählen",
+                ShowNewFolderButton = false
+            };
 
+            if (folderBrowserDialog.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            if (string.IsNullOrWhiteSpace(folderBrowserDialog.SelectedPath))
+                return;
+
+            AddOrSelectPathInDriveComboBox(folderBrowserDialog.SelectedPath);
+
+            await StartScanAsync(folderBrowserDialog.SelectedPath);
+        }
         private System.Drawing.Bitmap GetSmallSystemIcon(string path)
         {
             SHFILEINFO shellFileInfo = new SHFILEINFO();
@@ -597,6 +884,7 @@ namespace WTF
         {
             List<DriveItem> drives = _driveService.GetReadyDrives();
 
+            toolStripComboBoxDrives.DropDownStyle = ComboBoxStyle.DropDownList;
             toolStripComboBoxDrives.Items.Clear();
 
             foreach (DriveItem driveItem in drives)
@@ -610,11 +898,164 @@ namespace WTF
                 UpdateStatusStripForDrive(((DriveItem)toolStripComboBoxDrives.SelectedItem).RootPath);
             }
         }
+        private const uint SHGSI_ICON = 0x000000100;
+        private const uint SHGSI_SMALLICON = 0x000000001;
 
+        [System.Runtime.InteropServices.DllImport("shell32.dll", SetLastError = false)]
+        private static extern int SHGetStockIconInfo(
+            SHSTOCKICONID siid,
+            uint uFlags,
+            ref SHSTOCKICONINFO psii);
+
+        private enum SHSTOCKICONID : uint
+        {
+            SIID_FOLDEROPEN = 4,
+            SIID_FIND = 22
+        }
+        private System.Drawing.Bitmap GetSmallStockIcon(SHSTOCKICONID stockIconId)
+        {
+            SHSTOCKICONINFO stockIconInfo = new SHSTOCKICONINFO();
+            stockIconInfo.cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(SHSTOCKICONINFO));
+
+            int result = SHGetStockIconInfo(
+                stockIconId,
+                SHGSI_ICON | SHGSI_SMALLICON,
+                ref stockIconInfo);
+
+            if (result != 0 || stockIconInfo.hIcon == IntPtr.Zero)
+            {
+                return System.Drawing.SystemIcons.Application.ToBitmap();
+            }
+
+            try
+            {
+                using System.Drawing.Icon icon = (System.Drawing.Icon)System.Drawing.Icon.FromHandle(stockIconInfo.hIcon).Clone();
+                return icon.ToBitmap();
+            }
+            finally
+            {
+                DestroyIcon(stockIconInfo.hIcon);
+            }
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private struct SHSTOCKICONINFO
+        {
+            public uint cbSize;
+            public IntPtr hIcon;
+            public int iSysImageIndex;
+            public int iIcon;
+
+            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 260)]
+            public string szPath;
+        }
+        private void listViewPartitions_DrawColumnHeader(object sender, DrawListViewColumnHeaderEventArgs e)
+        {
+            e.DrawDefault = true;
+        }
+        private void listViewPartitions_DrawItem(object sender, DrawListViewItemEventArgs e)
+        {
+        }
+        private void listViewPartitions_DrawSubItem(object sender, DrawListViewSubItemEventArgs e)
+        {
+        }
+        private void listViewPartitions_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
+        {
+            if (e.RowIndex < 0)
+                return;
+
+            if (e.ColumnIndex < 0)
+                return;
+
+            if (e.ColumnIndex != 0 && e.ColumnIndex != 3)
+                return;
+
+            e.Handled = true;
+
+            bool selected = (e.State & DataGridViewElementStates.Selected) == DataGridViewElementStates.Selected;
+
+            System.Drawing.Color backColor = selected
+                ? System.Drawing.SystemColors.Highlight
+                : listViewPartitions.BackgroundColor;
+
+            System.Drawing.Color textColor = selected
+                ? System.Drawing.SystemColors.HighlightText
+                : listViewPartitions.ForeColor;
+
+            using (System.Drawing.SolidBrush backBrush = new System.Drawing.SolidBrush(backColor))
+            {
+                e.Graphics.FillRectangle(backBrush, e.CellBounds);
+            }
+
+            if (e.ColumnIndex == 0)
+            {
+                string text = Convert.ToString(e.FormattedValue);
+                string rootPath = Convert.ToString(listViewPartitions.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag);
+
+                int iconLeft = e.CellBounds.Left + 4;
+                int iconTop = e.CellBounds.Top + Math.Max(0, (e.CellBounds.Height - 16) / 2);
+
+                if (!string.IsNullOrWhiteSpace(rootPath) && imageListPartitions.Images.ContainsKey(rootPath))
+                {
+                    e.Graphics.DrawImage(imageListPartitions.Images[rootPath], iconLeft, iconTop, 16, 16);
+                }
+
+                System.Drawing.Rectangle textBounds = new System.Drawing.Rectangle(
+                    e.CellBounds.Left + 24,
+                    e.CellBounds.Top,
+                    Math.Max(0, e.CellBounds.Width - 28),
+                    e.CellBounds.Height);
+
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    text,
+                    e.CellStyle.Font,
+                    textBounds,
+                    textColor,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+                return;
+            }
+
+            int freePercent = listViewPartitions.Rows[e.RowIndex].Tag is int value ? value : 0;
+            freePercent = Math.Max(0, Math.Min(100, freePercent));
+
+            System.Drawing.Rectangle barBounds = new System.Drawing.Rectangle(
+                e.CellBounds.Left + 4,
+                e.CellBounds.Top + 3,
+                Math.Max(0, e.CellBounds.Width - 8),
+                Math.Max(0, e.CellBounds.Height - 6));
+
+            int barWidth = (int)Math.Round(barBounds.Width * freePercent / 100D);
+
+            using (System.Drawing.SolidBrush emptyBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(230, 230, 230)))
+            using (System.Drawing.SolidBrush fillBrush = new System.Drawing.SolidBrush(System.Drawing.Color.Lime))
+            using (System.Drawing.Pen borderPen = new System.Drawing.Pen(System.Drawing.Color.Silver))
+            {
+                e.Graphics.FillRectangle(emptyBrush, barBounds);
+
+                if (barWidth > 0)
+                {
+                    e.Graphics.FillRectangle(
+                        fillBrush,
+                        new System.Drawing.Rectangle(barBounds.Left, barBounds.Top, barWidth, barBounds.Height));
+                }
+
+                e.Graphics.DrawRectangle(borderPen, barBounds);
+            }
+
+            TextRenderer.DrawText(
+                e.Graphics,
+                Convert.ToString(e.FormattedValue),
+                e.CellStyle.Font,
+                barBounds,
+                System.Drawing.Color.Black,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
         private void LoadPartitionList()
         {
-            listViewPartitions.BeginUpdate();
-            listViewPartitions.Items.Clear();
+            listViewPartitions.SuspendLayout();
+            listViewPartitions.Rows.Clear();
             imageListPartitions.Images.Clear();
 
             foreach (System.IO.DriveInfo driveInfo in System.IO.DriveInfo.GetDrives())
@@ -629,25 +1070,63 @@ namespace WTF
                 long freeSpace = driveInfo.AvailableFreeSpace;
                 int freePercent = totalSize <= 0 ? 0 : (int)Math.Round((double)freeSpace * 100D / totalSize);
 
-                ListViewItem item = new ListViewItem(rootPath, rootPath);
-                item.SubItems.Add(SizeFormatter.Format(totalSize));
-                item.SubItems.Add(SizeFormatter.Format(freeSpace));
-                item.SubItems.Add(freePercent + " %");
+                int rowIndex = listViewPartitions.Rows.Add(
+                    rootPath,
+                    SizeFormatter.Format(totalSize),
+                    SizeFormatter.Format(freeSpace),
+                    freePercent + " %");
 
-                listViewPartitions.Items.Add(item);
+                DataGridViewRow row = listViewPartitions.Rows[rowIndex];
+                row.Tag = freePercent;
+                row.Cells[0].Tag = rootPath;
             }
 
             AdjustPartitionColumns();
-            listViewPartitions.EndUpdate();
+            listViewPartitions.ResumeLayout();
+            listViewPartitions.Invalidate();
         }
 
         private void listViewPartitions_SizeChanged(object sender, EventArgs e)
         {
             AdjustPartitionColumns();
         }
+        private void SaveColumnLayout()
+        {
+            _settings.HasColumnLayout = true;
 
+            if (listViewPartitions.Columns.Count == 4)
+            {
+                _settings.PartitionColumnNameWidth = listViewPartitions.Columns[0].Width;
+                _settings.PartitionColumnSizeWidth = listViewPartitions.Columns[1].Width;
+                _settings.PartitionColumnFreeWidth = listViewPartitions.Columns[2].Width;
+                _settings.PartitionColumnFreePercentWidth = listViewPartitions.Columns[3].Width;
+            }
+        }
+        private void ApplyColumnLayout()
+        {
+            if (!_settings.HasColumnLayout)
+                return;
+
+            if (listViewPartitions.Columns.Count == 4)
+            {
+                if (_settings.PartitionColumnNameWidth > 0)
+                    listViewPartitions.Columns[0].Width = _settings.PartitionColumnNameWidth;
+
+                if (_settings.PartitionColumnSizeWidth > 0)
+                    listViewPartitions.Columns[1].Width = _settings.PartitionColumnSizeWidth;
+
+                if (_settings.PartitionColumnFreeWidth > 0)
+                    listViewPartitions.Columns[2].Width = _settings.PartitionColumnFreeWidth;
+
+                if (_settings.PartitionColumnFreePercentWidth > 0)
+                    listViewPartitions.Columns[3].Width = _settings.PartitionColumnFreePercentWidth;
+            }
+        }
         private void AdjustPartitionColumns()
         {
+            if (_settings.HasColumnLayout)
+                return;
+
             if (listViewPartitions.Columns.Count != 4)
                 return;
 
@@ -669,8 +1148,17 @@ namespace WTF
         {
             try
             {
-                System.IO.DriveInfo driveInfo = new System.IO.DriveInfo(rootPath);
-                long clusterSize = GetClusterSize(rootPath);
+                string driveRootPath = Path.GetPathRoot(rootPath);
+
+                if (string.IsNullOrWhiteSpace(driveRootPath))
+                {
+                    toolStripStatusLabel.Text = "Bereit";
+                    SetStatusProgressText(null);
+                    return;
+                }
+
+                System.IO.DriveInfo driveInfo = new System.IO.DriveInfo(driveRootPath);
+                long clusterSize = GetClusterSize(driveRootPath);
                 string driveName = driveInfo.Name.TrimEnd('\\');
 
                 toolStripStatusLabel.Text = string.Format(
@@ -777,7 +1265,42 @@ namespace WTF
                 selected ? System.Drawing.SystemColors.HighlightText : treeViewEntries.ForeColor,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         }
+        private string GetSelectedScanPath()
+        {
+            if (toolStripComboBoxDrives.SelectedItem is DriveItem driveItem)
+                return driveItem.RootPath;
 
+            return toolStripComboBoxDrives.Text == null
+                ? string.Empty
+                : toolStripComboBoxDrives.Text.Trim();
+        }
+        private void AddOrSelectPathInDriveComboBox(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            string fullPath = Path.GetFullPath(path);
+
+            foreach (object item in toolStripComboBoxDrives.Items)
+            {
+                if (item is DriveItem driveItem &&
+                    string.Equals(driveItem.RootPath, fullPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    toolStripComboBoxDrives.SelectedItem = item;
+                    return;
+                }
+
+                if (item is string itemPath &&
+                    string.Equals(itemPath, fullPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    toolStripComboBoxDrives.SelectedItem = item;
+                    return;
+                }
+            }
+
+            toolStripComboBoxDrives.Items.Add(fullPath);
+            toolStripComboBoxDrives.SelectedItem = fullPath;
+        }
         private async void toolStripButtonScan_Click(object sender, EventArgs e)
         {
             if (_scanCancellationTokenSource != null)
@@ -786,13 +1309,23 @@ namespace WTF
                 return;
             }
 
-            if (toolStripComboBoxDrives.SelectedItem is not DriveItem driveItem)
+            string rootPath = GetSelectedScanPath();
+
+            if (string.IsNullOrWhiteSpace(rootPath))
             {
-                MessageBox.Show(this, "Kein Laufwerk ausgewählt.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "Kein Pfad ausgewählt.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            await StartScanAsync(driveItem.RootPath);
+            if (!Directory.Exists(rootPath))
+            {
+                MessageBox.Show(this, "Pfad nicht gefunden: " + rootPath, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            AddOrSelectPathInDriveComboBox(rootPath);
+
+            await StartScanAsync(rootPath);
         }
 
         private async Task StartScanAsync(string rootPath)
@@ -800,21 +1333,7 @@ namespace WTF
             SetScanningState(true);
             dataGridViewEntries.DataSource = null;
             _currentRootEntry = null;
-
-            FileSystemEntry cachedRootEntry = ScanCacheService.TryLoadCachedTree(rootPath);
-            bool cachePreviewLoaded = cachedRootEntry != null;
-
-            if (cachePreviewLoaded)
-            {
-                _currentRootEntry = cachedRootEntry;
-                RenderScanResult(cachedRootEntry);
-                toolStripStatusLabel.Text = "Cache geladen - überprüfe Änderungen...";
-                SetMainWindowTitleForCacheVerification();
-            }
-            else
-            {
-                treeViewEntries.Nodes.Clear();
-            }
+            treeViewEntries.Nodes.Clear();
 
             long scanTargetBytes = GetUsedSpaceBytes(rootPath);
             SetStatusProgressText(0D);
@@ -825,7 +1344,10 @@ namespace WTF
             {
                 double percent = scanTargetBytes <= 0 ? 0D : (double)scanProgress.ScannedBytes * 100D / scanTargetBytes;
 
-                ApplyScanProgressToLiveTree(scanProgress);
+                if (scanProgress.LiveRootEntry != null)
+                {
+                    ApplyScanProgressToLiveTree(scanProgress);
+                }
 
                 if (scanProgress.IsCacheSavePhase)
                 {
@@ -836,7 +1358,7 @@ namespace WTF
                         scanProgress.ScannedDirectories,
                         scanProgress.ScannedFiles);
                 }
-                else if (cachePreviewLoaded || scanProgress.IsCacheVerification)
+                else if (scanProgress.IsCacheVerification)
                 {
                     toolStripStatusLabel.Text = string.Format(
                         "Cache geladen - überprüfe Änderungen: {0} | {1} | Ordner: {2} | Dateien: {3}",
@@ -848,7 +1370,7 @@ namespace WTF
                 else
                 {
                     toolStripStatusLabel.Text = string.Format(
-                        "Scan: {0} | {1} | Ordner: {2} | Dateien: {3}",
+                        "Schnellscan: {0} | {1} | Ordner: {2} | Dateien: {3}",
                         scanProgress.CurrentPath,
                         SizeFormatter.Format(scanProgress.ScannedBytes),
                         scanProgress.ScannedDirectories,
@@ -861,8 +1383,16 @@ namespace WTF
             try
             {
                 DirectoryScanner directoryScanner = new DirectoryScanner(_settings);
+                NtQueryDirectoryScanner ntQueryDirectoryScanner = new NtQueryDirectoryScanner(_settings);
 
-                if (NtfsMftScanner.IsSupported(rootPath))
+                string pathRoot = Path.GetPathRoot(rootPath);
+                bool scanRootDrive = !string.IsNullOrWhiteSpace(pathRoot) &&
+                    string.Equals(
+                        Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                        pathRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                        StringComparison.OrdinalIgnoreCase);
+
+                if (scanRootDrive && NtfsMftScanner.IsSupported(rootPath))
                 {
                     try
                     {
@@ -870,15 +1400,44 @@ namespace WTF
                         NtfsMftScanner ntfsMftScanner = new NtfsMftScanner(_settings);
                         _currentRootEntry = await ntfsMftScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
                     }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
                     catch
                     {
-                        toolStripStatusLabel.Text = "MFT-Schnellscan nicht verfügbar - normaler Scan läuft...";
-                        _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
+                        try
+                        {
+                            toolStripStatusLabel.Text = "MFT-Schnellscan nicht verfügbar - NT-API-Schnellscan läuft...";
+                            _currentRootEntry = await ntQueryDirectoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch
+                        {
+                            toolStripStatusLabel.Text = "NT-API-Schnellscan nicht verfügbar - normaler Scan läuft...";
+                            _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
+                        }
                     }
                 }
                 else
                 {
-                    _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
+                    try
+                    {
+                        toolStripStatusLabel.Text = "NT-API-Schnellscan läuft...";
+                        _currentRootEntry = await ntQueryDirectoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                        toolStripStatusLabel.Text = "NT-API-Schnellscan nicht verfügbar - normaler Scan läuft...";
+                        _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
+                    }
                 }
 
                 RenderScanResult(_currentRootEntry);
@@ -945,7 +1504,6 @@ namespace WTF
         {
             HashSet<string> expectedChildPaths = new HashSet<string>(
                 parentEntry.Children
-                    .Where(child => child.IsDirectory || _settings.ShowFilesInTree)
                     .Select(child => child.FullPath),
                 StringComparer.OrdinalIgnoreCase);
 
@@ -961,7 +1519,7 @@ namespace WTF
 
             int targetIndex = 0;
 
-            foreach (FileSystemEntry childEntry in parentEntry.Children.Where(child => child.IsDirectory || _settings.ShowFilesInTree))
+            foreach (FileSystemEntry childEntry in parentEntry.Children)
             {
                 TreeNode childNode = FindChildNodeByFullPath(parentNode, childEntry.FullPath);
 
@@ -1011,8 +1569,9 @@ namespace WTF
 
             if (entry.FullPath != null && entry.FullPath.EndsWith(":\\", StringComparison.OrdinalIgnoreCase))
             {
-                node.ImageKey = "Drive";
-                node.SelectedImageKey = "Drive";
+                string driveImageKey = EnsureTreeDriveIcon(entry.FullPath);
+                node.ImageKey = driveImageKey;
+                node.SelectedImageKey = driveImageKey;
             }
 
             return node;
@@ -1119,6 +1678,7 @@ namespace WTF
             toolStripButtonScan.Text = scanning ? "■" : "▶";
             toolStripButtonScan.ToolTipText = scanning ? "Scan abbrechen" : "Scan starten";
             toolStripComboBoxDrives.Enabled = !scanning;
+            toolStripButtonOpenFolder.Enabled = !scanning;
             menuItemExportCsv.Enabled = !scanning && _currentRootEntry != null;
             toolStripButtonExportCsv.Enabled = !scanning && _currentRootEntry != null;
             splitContainerMain.IsSplitterFixed = scanning;
@@ -1148,6 +1708,17 @@ namespace WTF
 
             BindGrid(rootEntry);
         }
+        private string EnsureTreeDriveIcon(string rootPath)
+        {
+            string imageKey = "Drive:" + rootPath;
+
+            if (!imageListEntries.Images.ContainsKey(imageKey))
+            {
+                imageListEntries.Images.Add(imageKey, GetSmallSystemIcon(rootPath));
+            }
+
+            return imageKey;
+        }
 
         private TreeNode CreateTreeNode(FileSystemEntry entry)
         {
@@ -1160,11 +1731,12 @@ namespace WTF
 
             if (entry.FullPath != null && entry.FullPath.EndsWith(":\\", StringComparison.OrdinalIgnoreCase))
             {
-                node.ImageKey = "Drive";
-                node.SelectedImageKey = "Drive";
+                string driveImageKey = EnsureTreeDriveIcon(entry.FullPath);
+                node.ImageKey = driveImageKey;
+                node.SelectedImageKey = driveImageKey;
             }
 
-            if (entry.IsDirectory && entry.Children.Any(child => child.IsDirectory || _settings.ShowFilesInTree))
+            if (entry.IsDirectory && entry.Children.Any())
             {
                 node.Nodes.Add(CreateLazyPlaceholderNode());
             }
@@ -1209,33 +1781,86 @@ namespace WTF
             }
 
             foreach (FileSystemEntry child in parentEntry.Children
-                         .Where(child => child.IsDirectory || _settings.ShowFilesInTree)
-                         .OrderByDescending(child => child.SizeBytes)
+                         .OrderByDescending(child => child.IsDirectory)
+                         .ThenByDescending(child => child.SizeBytes)
                          .ThenBy(child => child.Name))
             {
                 parentNode.Nodes.Add(CreateTreeNode(child));
             }
         }
+        private string FormatFileSystemDateToolTip(string fullPath)
+        {
+            if (string.IsNullOrWhiteSpace(fullPath))
+                return string.Empty;
 
+            try
+            {
+                DateTime creationTime;
+                DateTime lastWriteTime;
+                DateTime lastAccessTime;
+
+                if (Directory.Exists(fullPath))
+                {
+                    creationTime = Directory.GetCreationTime(fullPath);
+                    lastWriteTime = Directory.GetLastWriteTime(fullPath);
+                    lastAccessTime = Directory.GetLastAccessTime(fullPath);
+                }
+                else if (File.Exists(fullPath))
+                {
+                    creationTime = File.GetCreationTime(fullPath);
+                    lastWriteTime = File.GetLastWriteTime(fullPath);
+                    lastAccessTime = File.GetLastAccessTime(fullPath);
+                }
+                else
+                {
+                    return string.Empty;
+                }
+
+                return string.Format(
+                    "Erstellt: {0}{1}Geändert: {2}{1}Letzter Zugriff: {3}",
+                    creationTime,
+                    Environment.NewLine,
+                    lastWriteTime,
+                    lastAccessTime);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+        private void dataGridViewEntries_CellToolTipTextNeeded(object sender, DataGridViewCellToolTipTextNeededEventArgs e)
+        {
+            if (e.RowIndex < 0)
+                return;
+
+            if (e.RowIndex >= dataGridViewEntries.Rows.Count)
+                return;
+
+            if (dataGridViewEntries.Rows[e.RowIndex].DataBoundItem is not EntryChartItem entryChartItem)
+                return;
+
+            e.ToolTipText = FormatFileSystemDateToolTip(entryChartItem.FullPath);
+        }
         private void BindGrid(FileSystemEntry entry)
         {
             _selectedEntry = entry;
 
             long totalSize = entry.Children.Sum(child => child.SizeBytes);
 
-            var rows = entry.Children
+            List<EntryChartItem> rows = entry.Children
                 .OrderByDescending(child => child.SizeBytes)
-                .Select(child => new
+                .Select(child => new EntryChartItem
                 {
-                    child.Name,
-                    child.FullPath,
-                    child.SizeBytes,
+                    Name = child.Name,
+                    FullPath = child.FullPath,
+                    SizeBytes = child.SizeBytes,
                     FormattedSize = SizeFormatter.Format(child.SizeBytes),
                     Percent = totalSize <= 0 ? 0 : (double)child.SizeBytes * 100D / totalSize
                 })
                 .ToList();
 
             dataGridViewEntries.DataSource = rows;
+            ApplyEntryGridColumnWidths();
             pieChartView.SetEntry(entry);
             barChartView.SetEntry(entry);
             UpdateRightView();
@@ -1437,6 +2062,7 @@ namespace WTF
             SaveMainWindowSettings();
             SaveToolStripLayout();
             SaveSplitterLayout();
+            SaveColumnLayout();
             SaveViewSettings();
             _settings.Save();
 
