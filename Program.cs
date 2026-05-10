@@ -1,21 +1,25 @@
 using System;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace WTF
 {
     internal static class Program
     {
+
+       
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
             AppSettings settings = AppSettings.Load();
+            ShellContextMenuService.Apply(settings.ShellContextMenuEnabled);
 
             if (settings.StartElevatedOnStartup && !IsRunningAsAdministrator())
             {
-                if (TryRestartAsAdministrator())
+                if (TryRestartAsAdministrator(args))
                 {
                     return;
                 }
@@ -31,13 +35,34 @@ namespace WTF
                     settings.Save();
                 }
 
-                if (elevationPromptResult.ShouldRestartElevated && TryRestartAsAdministrator())
+                if (elevationPromptResult.ShouldRestartElevated && TryRestartAsAdministrator(args))
                 {
                     return;
                 }
             }
 
-            Application.Run(new MainForm());
+            Application.Run(new MainForm(GetStartupScanPath(args)));
+        }
+
+        private static string GetStartupScanPath(string[] args)
+        {
+            if (args == null || args.Length == 0)
+                return null;
+
+            string path = args[0];
+
+            if (string.IsNullOrWhiteSpace(path))
+                return null;
+
+            path = path.Trim().Trim('"');
+
+            if (path.Length == 2 && path[1] == ':')
+                path += "\\";
+
+            if (!System.IO.Directory.Exists(path))
+                return null;
+
+            return path;
         }
 
         private static bool ShouldShowElevationPrompt(AppSettings settings)
@@ -61,8 +86,51 @@ namespace WTF
             System.Security.Principal.WindowsPrincipal windowsPrincipal = new System.Security.Principal.WindowsPrincipal(windowsIdentity);
             return windowsPrincipal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
         }
+        private static string CreateProcessArguments(string[] args)
+        {
+            if (args == null || args.Length == 0)
+                return string.Empty;
 
-        private static bool TryRestartAsAdministrator()
+            return string.Join(" ", args.Select(QuoteProcessArgument));
+        }
+        private static string QuoteProcessArgument(string argument)
+        {
+            if (argument == null)
+                return "\"\"";
+
+            System.Text.StringBuilder quotedArgument = new System.Text.StringBuilder();
+            quotedArgument.Append('"');
+
+            int backslashCount = 0;
+
+            foreach (char character in argument)
+            {
+                if (character == '\\')
+                {
+                    backslashCount++;
+                    continue;
+                }
+
+                if (character == '"')
+                {
+                    quotedArgument.Append('\\', backslashCount * 2 + 1);
+                    quotedArgument.Append('"');
+                    backslashCount = 0;
+                    continue;
+                }
+
+                quotedArgument.Append('\\', backslashCount);
+                backslashCount = 0;
+                quotedArgument.Append(character);
+            }
+
+            quotedArgument.Append('\\', backslashCount * 2);
+            quotedArgument.Append('"');
+
+            return quotedArgument.ToString();
+        }
+
+        private static bool TryRestartAsAdministrator(string[] args)
         {
             try
             {
@@ -71,7 +139,8 @@ namespace WTF
                     FileName = Application.ExecutablePath,
                     UseShellExecute = true,
                     Verb = "runas",
-                    WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
+                    WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
+                    Arguments = CreateProcessArguments(args)
                 };
 
                 System.Diagnostics.Process.Start(processStartInfo);

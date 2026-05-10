@@ -27,6 +27,7 @@ namespace WTF
         public bool ShowPartitionPanel { get; set; } = true;
         public bool ShowElevationPromptOnStartup { get; set; } = true;
         public bool StartElevatedOnStartup { get; set; }
+        public bool ShellContextMenuEnabled { get; set; }
         public AppLayout Layout { get; set; } = AppLayout.Modern;
         public ViewMode SelectedViewMode { get; set; } = ViewMode.Table;
 
@@ -43,6 +44,7 @@ namespace WTF
         public bool MainWindowMaximized { get; set; }
 
         public bool HasToolStripLayout { get; set; }
+        public int ToolStripLayoutVersion { get; set; }
         public int ToolStripMainLeft { get; set; }
         public int ToolStripMainTop { get; set; }
         public int ToolStripViewModeLeft { get; set; }

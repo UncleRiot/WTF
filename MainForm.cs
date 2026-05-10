@@ -18,6 +18,7 @@ namespace WTF
 
         private CancellationTokenSource _scanCancellationTokenSource;
         private FileSystemEntry _currentRootEntry;
+        private readonly string _startupScanPath;
 
         private MenuStrip menuStripMain;
         private ToolStripMenuItem menuItemFile;
@@ -113,6 +114,10 @@ namespace WTF
             UpdateRightViewBounds();
         }
         public MainForm()
+    : this(null)
+        {
+        }
+        public MainForm(string startupScanPath)
         {
             _suspendPersistentSettingsSave = true;
 
@@ -120,6 +125,7 @@ namespace WTF
             _driveService = new DriveService();
             _csvExportService = new CsvExportService();
             _viewMode = _settings.SelectedViewMode;
+            _startupScanPath = startupScanPath;
 
             InitializeComponent();
             ConfigureTreeViewFlickerReduction();
@@ -127,19 +133,18 @@ namespace WTF
             ConfigureDriveComboBoxDrawing();
             ConfigureOpenFolderButtonImage();
             ApplyMainWindowSettings();
+            ApplyDefaultToolStripLayout();
             ApplyToolStripLayout();
             ApplySplitterLayout();
 
             SizeChanged += MainForm_SizeChanged;
+            Shown += MainForm_Shown;
             listViewPartitions.SizeChanged += listViewPartitions_SizeChanged;
             treeViewEntries.BeforeExpand += treeViewEntries_BeforeExpand;
             panelRightViewHost.SizeChanged += panelRightViewHost_SizeChanged;
             dataGridViewEntries.SizeChanged += dataGridViewEntries_SizeChanged;
             splitContainerMain.SplitterMoved += splitContainerMain_SplitterMoved;
             splitContainerMain.Panel2.SizeChanged += splitContainerMainPanel2_SizeChanged;
-            toolStripMain.LocationChanged += toolStripLayout_LocationChanged;
-            toolStripViewMode.LocationChanged += toolStripLayout_LocationChanged;
-            toolStripExport.LocationChanged += toolStripLayout_LocationChanged;
 
             SetDoubleBuffered(treeViewEntries, true);
             SetDoubleBuffered(dataGridViewEntries, true);
@@ -161,12 +166,33 @@ namespace WTF
 
             _suspendPersistentSettingsSave = false;
         }
+        private void MainForm_Shown(object sender, EventArgs e)
+        {
+            Shown -= MainForm_Shown;
+            StartStartupScanIfRequested();
+        }
+        private void StartStartupScanIfRequested()
+        {
+            if (string.IsNullOrWhiteSpace(_startupScanPath))
+                return;
+
+            BeginInvoke(new Action(async () =>
+            {
+                if (!Directory.Exists(_startupScanPath))
+                    return;
+
+                if (_scanCancellationTokenSource != null)
+                    return;
+
+                AddOrSelectPathInDriveComboBox(_startupScanPath);
+                await StartScanAsync(_startupScanPath);
+            }));
+        }
         private void SavePersistentSettings()
         {
             if (_suspendPersistentSettingsSave)
                 return;
 
-            SaveToolStripLayout();
             SaveViewSettings();
             _settings.Save();
         }
@@ -578,9 +604,18 @@ namespace WTF
                 splitContainerLeft.SplitterDistance = splitContainerLeftDistance;
             }
         }
+        private void ApplyDefaultToolStripLayout()
+        {
+            toolStripPanelMain.Join(toolStripMain, 0, 0);
+            toolStripPanelMain.Join(toolStripViewMode, 390, 0);
+            toolStripPanelMain.Join(toolStripExport, 610, 0);
+        }
         private void ApplyToolStripLayout()
         {
             if (!_settings.HasToolStripLayout)
+                return;
+
+            if (_settings.ToolStripLayoutVersion != 1)
                 return;
 
             toolStripPanelMain.Join(
@@ -601,6 +636,7 @@ namespace WTF
         private void SaveToolStripLayout()
         {
             _settings.HasToolStripLayout = true;
+            _settings.ToolStripLayoutVersion = 1;
 
             _settings.ToolStripMainLeft = toolStripMain.Left;
             _settings.ToolStripMainTop = toolStripMain.Top;

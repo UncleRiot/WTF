@@ -15,6 +15,7 @@ namespace WTF
         private CheckBox checkBoxShowPartitionPanel;
         private CheckBox checkBoxStartElevatedOnStartup;
         private CheckBox checkBoxShowElevationPromptOnStartup;
+        private CheckBox checkBoxShellContextMenuEnabled;
         private Label labelLayout;
         private ComboBox comboBoxLayout;
         private CheckBox checkBoxExportPath;
@@ -38,7 +39,7 @@ namespace WTF
         {
             Text = "Einstellungen";
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new System.Drawing.Size(460, 350);
+            ClientSize = new System.Drawing.Size(460, 382);
             MinimumSize = Size;
             MaximumSize = Size;
             MaximizeBox = false;
@@ -49,7 +50,7 @@ namespace WTF
             {
                 Name = "tabControlSettings",
                 Location = new System.Drawing.Point(12, 12),
-                Size = new System.Drawing.Size(436, 278)
+                Size = new System.Drawing.Size(436, 310)
             };
 
             tabPageGeneral = new TabPage
@@ -104,11 +105,19 @@ namespace WTF
                 AutoSize = true
             };
 
+            checkBoxShellContextMenuEnabled = new CheckBox
+            {
+                Name = "checkBoxShellContextMenuEnabled",
+                Text = "Explorer-Kontextmenüeintrag für Ordner und Laufwerke anzeigen",
+                Location = new System.Drawing.Point(12, 178),
+                AutoSize = true
+            };
+
             labelLayout = new Label
             {
                 Name = "labelLayout",
                 Text = "Layout:",
-                Location = new System.Drawing.Point(12, 186),
+                Location = new System.Drawing.Point(12, 218),
                 Size = new System.Drawing.Size(120, 23),
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
@@ -116,7 +125,7 @@ namespace WTF
             comboBoxLayout = new ComboBox
             {
                 Name = "comboBoxLayout",
-                Location = new System.Drawing.Point(138, 186),
+                Location = new System.Drawing.Point(138, 218),
                 Size = new System.Drawing.Size(205, 23),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
@@ -171,6 +180,7 @@ namespace WTF
             tabPageGeneral.Controls.Add(checkBoxShowPartitionPanel);
             tabPageGeneral.Controls.Add(checkBoxStartElevatedOnStartup);
             tabPageGeneral.Controls.Add(checkBoxShowElevationPromptOnStartup);
+            tabPageGeneral.Controls.Add(checkBoxShellContextMenuEnabled);
             tabPageGeneral.Controls.Add(labelLayout);
             tabPageGeneral.Controls.Add(comboBoxLayout);
 
@@ -187,7 +197,7 @@ namespace WTF
             {
                 Name = "buttonOk",
                 Text = "OK",
-                Location = new System.Drawing.Point(280, 306),
+                Location = new System.Drawing.Point(280, 338),
                 Size = new System.Drawing.Size(75, 30),
                 DialogResult = DialogResult.OK
             };
@@ -196,7 +206,7 @@ namespace WTF
             {
                 Name = "buttonCancel",
                 Text = "Abbrechen",
-                Location = new System.Drawing.Point(365, 306),
+                Location = new System.Drawing.Point(365, 338),
                 Size = new System.Drawing.Size(75, 30),
                 DialogResult = DialogResult.Cancel
             };
@@ -218,6 +228,7 @@ namespace WTF
             checkBoxShowPartitionPanel.Checked = _settings.ShowPartitionPanel;
             checkBoxStartElevatedOnStartup.Checked = _settings.StartElevatedOnStartup;
             checkBoxShowElevationPromptOnStartup.Checked = _settings.ShowElevationPromptOnStartup;
+            checkBoxShellContextMenuEnabled.Checked = _settings.ShellContextMenuEnabled;
             checkBoxExportPath.Checked = _settings.ExportPath;
             checkBoxExportSizeGb.Checked = _settings.ExportSizeGb;
             checkBoxExportSizeMb.Checked = _settings.ExportSizeMb;
@@ -265,6 +276,7 @@ namespace WTF
             _settings.ShowPartitionPanel = checkBoxShowPartitionPanel.Checked;
             _settings.StartElevatedOnStartup = checkBoxStartElevatedOnStartup.Checked;
             _settings.ShowElevationPromptOnStartup = checkBoxShowElevationPromptOnStartup.Checked;
+            _settings.ShellContextMenuEnabled = checkBoxShellContextMenuEnabled.Checked;
             _settings.ExportPath = checkBoxExportPath.Checked;
             _settings.ExportSizeGb = checkBoxExportSizeGb.Checked;
             _settings.ExportSizeMb = checkBoxExportSizeMb.Checked;
@@ -273,6 +285,16 @@ namespace WTF
             if (comboBoxLayout.SelectedItem is LayoutItem layoutItem)
             {
                 _settings.Layout = layoutItem.Layout;
+            }
+
+            try
+            {
+                ShellContextMenuService.Apply(_settings.ShellContextMenuEnabled);
+            }
+            catch
+            {
+                MessageBox.Show(this, "Der Explorer-Kontextmenüeintrag konnte nicht aktualisiert werden.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
             }
 
             return true;
