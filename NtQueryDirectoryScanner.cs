@@ -1,16 +1,20 @@
-﻿using Microsoft.Win32.SafeHandles;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32.SafeHandles;
 
 namespace WTF
 {
     public sealed class NtQueryDirectoryScanner
     {
-        private const int ProgressReportIntervalMilliseconds = 1000;
+        private const int ProgressReportIntervalMilliseconds = 250;
+        private const int LiveSnapshotDepth = 2;
+        private const int MaxLiveChildrenPerDirectory = 80;
         private const int DirectoryQueryBufferSize = 4 * 1024 * 1024;
         private const int FileFullDirectoryInformationClass = 2;
         private const int FileFullDirectoryInformationFileNameOffset = 68;
@@ -18,11 +22,14 @@ namespace WTF
         private const int FileIdFullDirectoryInformationFileNameOffset = 80;
 
         private const uint FILE_LIST_DIRECTORY = 0x0001;
+        private const uint SYNCHRONIZE = 0x00100000;
         private const uint FILE_SHARE_READ = 0x00000001;
         private const uint FILE_SHARE_WRITE = 0x00000002;
         private const uint FILE_SHARE_DELETE = 0x00000004;
-        private const uint OPEN_EXISTING = 3;
-        private const uint FILE_FLAG_BACKUP_SEMANTICS = 0x02000000;
+        private const uint FILE_DIRECTORY_FILE = 0x00000001;
+        private const uint FILE_SYNCHRONOUS_IO_NONALERT = 0x00000020;
+        private const uint FILE_OPEN_FOR_BACKUP_INTENT = 0x00004000;
+        private const uint OBJ_CASE_INSENSITIVE = 0x00000040;
 
         private const int STATUS_SUCCESS = 0x00000000;
         private const int STATUS_NO_MORE_FILES = unchecked((int)0x80000006);
@@ -40,6 +47,9 @@ namespace WTF
         private long _lastProgressReportTickCount;
         private int _pendingDirectoryCount;
         private BlockingCollection<WorkItem> _workQueue;
+        private FileSystemEntry _liveRootEntry;
+        private int _fileInformationClass;
+        private int _fileNameOffset;
 
         public NtQueryDirectoryScanner(AppSettings settings)
         {
@@ -52,11 +62,14 @@ namespace WTF
             {
                 FileSystemEntry rootEntry = CreateDirectoryEntry(rootPath);
 
+                _liveRootEntry = rootEntry;
                 _scannedBytes = 0;
                 _scannedDirectories = 1;
                 _scannedFiles = 0;
                 _lastProgressReportTickCount = 0;
                 _pendingDirectoryCount = 1;
+                _fileInformationClass = FileIdFullDirectoryInformationClass;
+                _fileNameOffset = FileIdFullDirectoryInformationFileNameOffset;
                 _workQueue = new BlockingCollection<WorkItem>();
 
                 ReportProgress(rootPath, progress, true);
@@ -77,7 +90,7 @@ namespace WTF
                     workerTasks[workerIndex] = Task.Run(() => WorkerLoop(progress, cancellationToken), cancellationToken);
                 }
 
-                _workQueue.Add(new WorkItem(rootEntry), cancellationToken);
+                _workQueue.Add(new WorkItem(rootEntry, new[] { rootEntry }, true), cancellationToken);
 
                 try
                 {
@@ -96,7 +109,6 @@ namespace WTF
                     throw;
                 }
 
-                FinalizeDirectorySizes(rootEntry);
                 SortChildrenRecursive(rootEntry);
                 ReportProgress(rootPath, progress, true);
 
@@ -116,7 +128,7 @@ namespace WTF
 
                     try
                     {
-                        ProcessDirectory(workItem.Entry, buffer, DirectoryQueryBufferSize, progress, cancellationToken);
+                        ProcessDirectory(workItem, buffer, DirectoryQueryBufferSize, progress, cancellationToken);
                     }
                     catch (OperationCanceledException)
                     {
@@ -124,6 +136,10 @@ namespace WTF
                     }
                     catch
                     {
+                        if (workItem.IsRoot)
+                        {
+                            throw;
+                        }
                     }
                     finally
                     {
@@ -140,22 +156,32 @@ namespace WTF
             }
         }
 
-        private void ProcessDirectory(FileSystemEntry directoryEntry, IntPtr buffer, int bufferLength, IProgress<ScanProgress> progress, CancellationToken cancellationToken)
+        private void ProcessDirectory(WorkItem workItem, IntPtr buffer, int bufferLength, IProgress<ScanProgress> progress, CancellationToken cancellationToken)
         {
+            FileSystemEntry directoryEntry = workItem.Entry;
+
             using SafeFileHandle directoryHandle = OpenDirectoryHandle(directoryEntry.FullPath);
 
             if (directoryHandle.IsInvalid)
+            {
+                if (workItem.IsRoot)
+                {
+                    throw new IOException("NT-API-Schnellscan konnte den Root-Pfad nicht öffnen: " + directoryEntry.FullPath);
+                }
+
                 return;
+            }
 
             bool restartScan = true;
-            int fileInformationClass = FileIdFullDirectoryInformationClass;
-            int fileNameOffset = FileIdFullDirectoryInformationFileNameOffset;
 
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 IO_STATUS_BLOCK ioStatusBlock = new IO_STATUS_BLOCK();
+
+                int fileInformationClass = Volatile.Read(ref _fileInformationClass);
+                int fileNameOffset = Volatile.Read(ref _fileNameOffset);
 
                 int status = NtQueryDirectoryFile(
                     directoryHandle,
@@ -174,8 +200,7 @@ namespace WTF
 
                 if (IsFileInformationClassUnsupported(status) && fileInformationClass == FileIdFullDirectoryInformationClass)
                 {
-                    fileInformationClass = FileFullDirectoryInformationClass;
-                    fileNameOffset = FileFullDirectoryInformationFileNameOffset;
+                    SetFileInformationClassFallback();
                     restartScan = true;
                     continue;
                 }
@@ -184,13 +209,25 @@ namespace WTF
                     return;
 
                 if (status < STATUS_SUCCESS)
-                    return;
+                {
+                    if (workItem.IsRoot)
+                    {
+                        throw new IOException("NT-API-Schnellscan konnte den Root-Pfad nicht lesen: " + directoryEntry.FullPath);
+                    }
 
-                ParseDirectoryBuffer(directoryEntry, buffer, fileNameOffset, progress, cancellationToken);
+                    return;
+                }
+
+                ParseDirectoryBuffer(workItem, buffer, fileNameOffset, progress, cancellationToken);
             }
         }
+        private void SetFileInformationClassFallback()
+        {
+            Volatile.Write(ref _fileInformationClass, FileFullDirectoryInformationClass);
+            Volatile.Write(ref _fileNameOffset, FileFullDirectoryInformationFileNameOffset);
+        }
 
-        private void ParseDirectoryBuffer(FileSystemEntry directoryEntry, IntPtr buffer, int fileNameOffset, IProgress<ScanProgress> progress, CancellationToken cancellationToken)
+        private void ParseDirectoryBuffer(WorkItem workItem, IntPtr buffer, int fileNameOffset, IProgress<ScanProgress> progress, CancellationToken cancellationToken)
         {
             IntPtr currentEntryPointer = buffer;
 
@@ -212,7 +249,7 @@ namespace WTF
                     if (!string.IsNullOrWhiteSpace(name) && name != "." && name != "..")
                     {
                         AddDirectoryEntryChild(
-                            directoryEntry,
+                            workItem,
                             name,
                             attributes,
                             endOfFile,
@@ -228,8 +265,9 @@ namespace WTF
             }
         }
 
-        private void AddDirectoryEntryChild(FileSystemEntry directoryEntry, string name, FileAttributes attributes, long sizeBytes, IProgress<ScanProgress> progress, CancellationToken cancellationToken)
+        private void AddDirectoryEntryChild(WorkItem workItem, string name, FileAttributes attributes, long sizeBytes, IProgress<ScanProgress> progress, CancellationToken cancellationToken)
         {
+            FileSystemEntry directoryEntry = workItem.Entry;
             bool isDirectory = attributes.HasFlag(FileAttributes.Directory);
             string fullPath = Path.Combine(directoryEntry.FullPath, name);
 
@@ -251,7 +289,12 @@ namespace WTF
 
                 try
                 {
-                    _workQueue.Add(new WorkItem(childEntry), cancellationToken);
+                    _workQueue.Add(
+                        new WorkItem(
+                            childEntry,
+                            AppendSizeUpdateEntry(workItem.SizeUpdateEntries, childEntry),
+                            false),
+                        cancellationToken);
                 }
                 catch
                 {
@@ -264,6 +307,8 @@ namespace WTF
             }
 
             long normalizedSizeBytes = Math.Max(0, sizeBytes);
+
+            AddSizeToEntries(workItem.SizeUpdateEntries, normalizedSizeBytes);
 
             Interlocked.Increment(ref _scannedFiles);
             Interlocked.Add(ref _scannedBytes, normalizedSizeBytes);
@@ -280,27 +325,8 @@ namespace WTF
                         IsDirectory = false
                     });
             }
-            else
-            {
-                lock (directoryEntry)
-                {
-                    directoryEntry.SizeBytes += normalizedSizeBytes;
-                }
-            }
 
             ReportProgress(fullPath, progress, false);
-        }
-
-        private static long FileTimeToUtcTicks(long fileTime)
-        {
-            try
-            {
-                return DateTime.FromFileTimeUtc(fileTime).Ticks;
-            }
-            catch
-            {
-                return 0;
-            }
         }
 
         private static bool IsFileInformationClassUnsupported(int status)
@@ -318,28 +344,102 @@ namespace WTF
 
         private SafeFileHandle OpenDirectoryHandle(string directoryPath)
         {
-            return CreateFile(
-                NormalizePathForWin32(directoryPath),
-                FILE_LIST_DIRECTORY,
-                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                IntPtr.Zero,
-                OPEN_EXISTING,
-                FILE_FLAG_BACKUP_SEMANTICS,
-                IntPtr.Zero);
+            string ntPath = NormalizePathForNtOpenFile(directoryPath);
+            IntPtr unicodeStringBuffer = IntPtr.Zero;
+            IntPtr objectNamePointer = IntPtr.Zero;
+
+            try
+            {
+                UNICODE_STRING objectName = CreateUnicodeString(ntPath, out unicodeStringBuffer);
+                objectNamePointer = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(UNICODE_STRING)));
+                Marshal.StructureToPtr(objectName, objectNamePointer, false);
+
+                OBJECT_ATTRIBUTES objectAttributes = new OBJECT_ATTRIBUTES
+                {
+                    Length = Marshal.SizeOf(typeof(OBJECT_ATTRIBUTES)),
+                    RootDirectory = IntPtr.Zero,
+                    ObjectName = objectNamePointer,
+                    Attributes = OBJ_CASE_INSENSITIVE,
+                    SecurityDescriptor = IntPtr.Zero,
+                    SecurityQualityOfService = IntPtr.Zero
+                };
+
+                IO_STATUS_BLOCK ioStatusBlock = new IO_STATUS_BLOCK();
+
+                int status = NtOpenFile(
+                    out SafeFileHandle directoryHandle,
+                    FILE_LIST_DIRECTORY | SYNCHRONIZE,
+                    ref objectAttributes,
+                    ref ioStatusBlock,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                    FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_FOR_BACKUP_INTENT);
+
+                if (status < STATUS_SUCCESS || directoryHandle == null || directoryHandle.IsInvalid)
+                {
+                    return new SafeFileHandle(INVALID_HANDLE_VALUE, true);
+                }
+
+                return directoryHandle;
+            }
+            finally
+            {
+                if (objectNamePointer != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(objectNamePointer);
+                }
+
+                if (unicodeStringBuffer != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(unicodeStringBuffer);
+                }
+            }
         }
 
-        private static string NormalizePathForWin32(string path)
+        private static UNICODE_STRING CreateUnicodeString(string text, out IntPtr buffer)
+        {
+            if (text == null)
+            {
+                buffer = IntPtr.Zero;
+
+                return new UNICODE_STRING
+                {
+                    Length = 0,
+                    MaximumLength = 0,
+                    Buffer = IntPtr.Zero
+                };
+            }
+
+            byte[] bytes = System.Text.Encoding.Unicode.GetBytes(text);
+            buffer = Marshal.AllocHGlobal(bytes.Length + 2);
+            Marshal.Copy(bytes, 0, buffer, bytes.Length);
+            Marshal.WriteInt16(buffer, bytes.Length, 0);
+
+            return new UNICODE_STRING
+            {
+                Length = (ushort)bytes.Length,
+                MaximumLength = (ushort)(bytes.Length + 2),
+                Buffer = buffer
+            };
+        }
+
+        private static string NormalizePathForNtOpenFile(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
                 return path;
 
-            if (path.StartsWith(@"\\?\", StringComparison.Ordinal))
+            if (path.StartsWith(@"\??\", StringComparison.Ordinal))
                 return path;
 
-            if (path.StartsWith(@"\\", StringComparison.Ordinal))
-                return @"\\?\UNC\" + path.Substring(2);
+            if (path.StartsWith(@"\\?\UNC\", StringComparison.Ordinal))
+                return @"\??\UNC\" + path.Substring(8);
 
-            return @"\\?\" + path;
+            if (path.StartsWith(@"\\?\", StringComparison.Ordinal))
+                return @"\??\" + path.Substring(4);
+
+            if (path.StartsWith(@"\\", StringComparison.Ordinal))
+                return @"\??\UNC\" + path.Substring(2);
+
+            return @"\??\" + path;
         }
 
         private FileSystemEntry CreateDirectoryEntry(string path)
@@ -395,19 +495,109 @@ namespace WTF
 
         private void ReportProgress(string currentPath, IProgress<ScanProgress> progress, bool force)
         {
+            if (progress == null)
+                return;
+
             if (!force && !ShouldReportProgress())
                 return;
 
-            progress?.Report(new ScanProgress
+            progress.Report(new ScanProgress
             {
                 CurrentPath = currentPath,
                 ScannedBytes = Interlocked.Read(ref _scannedBytes),
                 ScannedDirectories = Volatile.Read(ref _scannedDirectories),
                 ScannedFiles = Volatile.Read(ref _scannedFiles),
-                LiveRootEntry = null,
+                LiveRootEntry = _liveRootEntry,
                 IsCacheVerification = false,
                 IsCacheSavePhase = false
             });
+        }
+
+        private void AddSizeToEntries(FileSystemEntry[] entries, long sizeBytes)
+        {
+            if (entries == null)
+                return;
+
+            for (int index = 0; index < entries.Length; index++)
+            {
+                FileSystemEntry entry = entries[index];
+
+                if (entry == null)
+                    continue;
+
+                lock (entry)
+                {
+                    entry.SizeBytes += sizeBytes;
+                }
+            }
+        }
+
+        private static FileSystemEntry[] AppendSizeUpdateEntry(FileSystemEntry[] entries, FileSystemEntry entry)
+        {
+            if (entries == null || entries.Length == 0)
+            {
+                return new[] { entry };
+            }
+
+            FileSystemEntry[] result = new FileSystemEntry[entries.Length + 1];
+            Array.Copy(entries, result, entries.Length);
+            result[result.Length - 1] = entry;
+
+            return result;
+        }
+
+        private FileSystemEntry CreateLiveSnapshot(FileSystemEntry entry, int remainingDepth)
+        {
+            if (entry == null)
+            {
+                return null;
+            }
+
+            FileSystemEntry snapshot = new FileSystemEntry
+            {
+                Name = entry.Name,
+                FullPath = entry.FullPath,
+                SizeBytes = ReadEntrySize(entry),
+                IsDirectory = entry.IsDirectory
+            };
+
+            if (remainingDepth <= 0)
+            {
+                return snapshot;
+            }
+
+            foreach (FileSystemEntry child in GetLiveSnapshotChildren(entry))
+            {
+                snapshot.Children.Add(CreateLiveSnapshot(child, remainingDepth - 1));
+            }
+
+            return snapshot;
+        }
+
+        private List<FileSystemEntry> GetLiveSnapshotChildren(FileSystemEntry entry)
+        {
+            List<FileSystemEntry> children;
+
+            lock (entry.Children)
+            {
+                children = entry.Children
+                    .Where(child => child.IsDirectory || _settings.ShowFilesInTree)
+                    .ToList();
+            }
+
+            return children
+                .OrderByDescending(ReadEntrySize)
+                .ThenBy(child => child.Name)
+                .Take(MaxLiveChildrenPerDirectory)
+                .ToList();
+        }
+
+        private static long ReadEntrySize(FileSystemEntry entry)
+        {
+            lock (entry)
+            {
+                return entry.SizeBytes;
+            }
         }
 
         private bool ShouldReportProgress()
@@ -424,15 +614,14 @@ namespace WTF
                 lastProgressReportTickCount) == lastProgressReportTickCount;
         }
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern SafeFileHandle CreateFile(
-            string lpFileName,
-            uint dwDesiredAccess,
-            uint dwShareMode,
-            IntPtr lpSecurityAttributes,
-            uint dwCreationDisposition,
-            uint dwFlagsAndAttributes,
-            IntPtr hTemplateFile);
+        [DllImport("ntdll.dll")]
+        private static extern int NtOpenFile(
+            out SafeFileHandle fileHandle,
+            uint desiredAccess,
+            ref OBJECT_ATTRIBUTES objectAttributes,
+            ref IO_STATUS_BLOCK ioStatusBlock,
+            uint shareAccess,
+            uint openOptions);
 
         [DllImport("ntdll.dll")]
         private static extern int NtQueryDirectoryFile(
@@ -449,6 +638,25 @@ namespace WTF
             [MarshalAs(UnmanagedType.U1)] bool restartScan);
 
         [StructLayout(LayoutKind.Sequential)]
+        private struct UNICODE_STRING
+        {
+            public ushort Length;
+            public ushort MaximumLength;
+            public IntPtr Buffer;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct OBJECT_ATTRIBUTES
+        {
+            public int Length;
+            public IntPtr RootDirectory;
+            public IntPtr ObjectName;
+            public uint Attributes;
+            public IntPtr SecurityDescriptor;
+            public IntPtr SecurityQualityOfService;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
         private struct IO_STATUS_BLOCK
         {
             public IntPtr Status;
@@ -457,12 +665,16 @@ namespace WTF
 
         private sealed class WorkItem
         {
-            public WorkItem(FileSystemEntry entry)
+            public WorkItem(FileSystemEntry entry, FileSystemEntry[] sizeUpdateEntries, bool isRoot)
             {
                 Entry = entry;
+                SizeUpdateEntries = sizeUpdateEntries;
+                IsRoot = isRoot;
             }
 
             public FileSystemEntry Entry { get; }
+            public FileSystemEntry[] SizeUpdateEntries { get; }
+            public bool IsRoot { get; }
         }
     }
 }

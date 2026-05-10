@@ -221,9 +221,10 @@ namespace WTF
                 }
 
                 return string.Format(
-                    "Erstellt: {0}{1}Geändert: {2}{1}Letzter Zugriff: {3}",
-                    creationTime,
+                    "{0}{1}Erstellt: {2}{1}Geändert: {3}{1}Letzter Zugriff: {4}",
+                    entry.FullPath,
                     Environment.NewLine,
+                    creationTime,
                     lastWriteTime,
                     lastAccessTime);
             }

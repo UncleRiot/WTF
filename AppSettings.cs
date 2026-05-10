@@ -15,8 +15,8 @@ namespace WTF
     public sealed class AppSettings
     {
         private static readonly string SettingsDirectoryPath = System.IO.Path.Combine(
-            System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData),
-            "WTF");
+            System.AppContext.BaseDirectory,
+            "Settings");
 
         private static readonly string SettingsFilePath = System.IO.Path.Combine(
             SettingsDirectoryPath,
@@ -47,6 +47,8 @@ namespace WTF
         public int ToolStripMainTop { get; set; }
         public int ToolStripViewModeLeft { get; set; }
         public int ToolStripViewModeTop { get; set; }
+        public int ToolStripExportLeft { get; set; }
+        public int ToolStripExportTop { get; set; }
 
         public bool HasSplitterLayout { get; set; }
         public int SplitContainerMainDistance { get; set; }

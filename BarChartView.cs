@@ -9,8 +9,15 @@ namespace WTF
 {
     public sealed class BarChartView : Control
     {
+        private const int SHGFI_ICON = 0x000000100;
+        private const int SHGFI_SMALLICON = 0x000000001;
+        private const int SHGFI_USEFILEATTRIBUTES = 0x000000010;
+        private const int FILE_ATTRIBUTE_DIRECTORY = 0x00000010;
+        private const int FILE_ATTRIBUTE_NORMAL = 0x00000080;
+
         private readonly ToolTip _toolTip;
         private readonly List<ChartHitArea> _hitAreas;
+        private readonly Dictionary<string, Bitmap> _systemIconCache;
         private FileSystemEntry _entry;
         private string _currentToolTipText;
 
@@ -19,6 +26,7 @@ namespace WTF
             DoubleBuffered = true;
             _toolTip = new ToolTip();
             _hitAreas = new List<ChartHitArea>();
+            _systemIconCache = new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
 
             SetStyle(
                 ControlStyles.AllPaintingInWmPaint |
@@ -36,6 +44,23 @@ namespace WTF
             _currentToolTipText = null;
             _toolTip.SetToolTip(this, string.Empty);
             Invalidate();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _toolTip.Dispose();
+
+                foreach (Bitmap bitmap in _systemIconCache.Values)
+                {
+                    bitmap.Dispose();
+                }
+
+                _systemIconCache.Clear();
+            }
+
+            base.Dispose(disposing);
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
@@ -120,6 +145,8 @@ namespace WTF
             int labelToBarGap = 20;
             int rowHeight = 21;
             int barHeight = 14;
+            int iconSize = 16;
+            int iconToTextGap = 6;
             int textPaddingLeft = 10;
             int textGapRightOfBar = 8;
 
@@ -134,10 +161,10 @@ namespace WTF
             foreach (FileSystemEntry item in items)
             {
                 Size labelSize = TextRenderer.MeasureText(e.Graphics, item.Name, Font);
-                longestLabelWidth = Math.Max(longestLabelWidth, labelSize.Width);
+                longestLabelWidth = Math.Max(longestLabelWidth, iconSize + iconToTextGap + labelSize.Width);
             }
 
-            int maximumLabelWidth = Math.Max(80, Math.Min(220, visibleWidth / 3));
+            int maximumLabelWidth = Math.Max(100, Math.Min(260, visibleWidth / 3));
             int labelWidth = Math.Min(longestLabelWidth, maximumLabelWidth);
 
             int barLeft = contentLeft + labelWidth + labelToBarGap;
@@ -159,11 +186,30 @@ namespace WTF
                 Rectangle labelBounds = new Rectangle(contentLeft, y, labelWidth, rowHeight);
                 _hitAreas.Add(new ChartHitArea(labelBounds, item));
 
+                Rectangle iconBounds = new Rectangle(
+                    labelBounds.Left,
+                    y + Math.Max(0, (rowHeight - iconSize) / 2),
+                    iconSize,
+                    iconSize);
+
+                Bitmap systemIcon = GetSystemIcon(item);
+
+                if (systemIcon != null)
+                {
+                    e.Graphics.DrawImage(systemIcon, iconBounds);
+                }
+
+                Rectangle labelTextBounds = new Rectangle(
+                    labelBounds.Left + iconSize + iconToTextGap,
+                    labelBounds.Top,
+                    Math.Max(0, labelBounds.Width - iconSize - iconToTextGap),
+                    labelBounds.Height);
+
                 TextRenderer.DrawText(
                     e.Graphics,
                     item.Name,
                     Font,
-                    labelBounds,
+                    labelTextBounds,
                     ForeColor,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
@@ -285,6 +331,55 @@ namespace WTF
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
 
+        private Bitmap GetSystemIcon(FileSystemEntry entry)
+        {
+            if (entry == null)
+                return null;
+
+            string cacheKey = entry.IsDirectory
+                ? "Directory"
+                : "File:" + Path.GetExtension(entry.Name);
+
+            if (_systemIconCache.TryGetValue(cacheKey, out Bitmap cachedBitmap))
+            {
+                return cachedBitmap;
+            }
+
+            SHFILEINFO shellFileInfo = new SHFILEINFO();
+
+            string iconPath = entry.IsDirectory
+                ? entry.FullPath
+                : entry.FullPath;
+
+            int fileAttributes = entry.IsDirectory
+                ? FILE_ATTRIBUTE_DIRECTORY
+                : FILE_ATTRIBUTE_NORMAL;
+
+            IntPtr result = SHGetFileInfo(
+                iconPath,
+                fileAttributes,
+                ref shellFileInfo,
+                (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(SHFILEINFO)),
+                SHGFI_ICON | SHGFI_SMALLICON | SHGFI_USEFILEATTRIBUTES);
+
+            if (result == IntPtr.Zero || shellFileInfo.hIcon == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            try
+            {
+                using Icon icon = (Icon)Icon.FromHandle(shellFileInfo.hIcon).Clone();
+                Bitmap bitmap = icon.ToBitmap();
+                _systemIconCache[cacheKey] = bitmap;
+                return bitmap;
+            }
+            finally
+            {
+                DestroyIcon(shellFileInfo.hIcon);
+            }
+        }
+
         private string FormatFileSystemDateToolTip(FileSystemEntry entry)
         {
             if (entry == null)
@@ -329,6 +424,31 @@ namespace WTF
             {
                 return string.Empty;
             }
+        }
+
+        [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+        private static extern IntPtr SHGetFileInfo(
+            string pszPath,
+            int dwFileAttributes,
+            ref SHFILEINFO psfi,
+            uint cbFileInfo,
+            int uFlags);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool DestroyIcon(IntPtr hIcon);
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+        private struct SHFILEINFO
+        {
+            public IntPtr hIcon;
+            public int iIcon;
+            public uint dwAttributes;
+
+            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 260)]
+            public string szDisplayName;
+
+            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 80)]
+            public string szTypeName;
         }
 
         private sealed class ChartHitArea

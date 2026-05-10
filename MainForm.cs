@@ -33,6 +33,7 @@ namespace WTF
         private ToolStripButton toolStripButtonScan;
         private ToolStripButton toolStripButtonOpenFolder;
         private ToolStrip toolStripViewMode;
+        private ToolStrip toolStripExport;
         private ToolStripButton toolStripButtonTable;
         private ToolStripButton toolStripButtonPieChart;
         private ToolStripButton toolStripButtonBarChart;
@@ -56,9 +57,17 @@ namespace WTF
         private FileSystemEntry _selectedEntry;
         private StatusStrip statusStripMain;
         private ToolStripStatusLabel toolStripStatusLabel;
+        
+        private System.Windows.Forms.Timer liveTreeUpdateTimer;
+        private ScanProgress _pendingLiveTreeScanProgress;
+        private bool _liveTreeUpdateInProgress;
+        private bool _suspendPersistentSettingsSave;
 
         private const int SHGFI_ICON = 0x100;
         private const int SHGFI_SMALLICON = 0x1;
+        private const int WM_SETREDRAW = 0x000B;
+        private const int TVM_SETEXTENDEDSTYLE = 0x112C;
+        private const int TVS_EX_DOUBLEBUFFER = 0x0004;
 
         [System.Runtime.InteropServices.DllImport("shell32.dll")]
         private static extern IntPtr SHGetFileInfo(
@@ -70,6 +79,9 @@ namespace WTF
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool DestroyIcon(IntPtr hIcon);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
         [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Auto)]
         private static extern bool GetDiskFreeSpace(
@@ -102,12 +114,16 @@ namespace WTF
         }
         public MainForm()
         {
+            _suspendPersistentSettingsSave = true;
+
             _settings = AppSettings.Load();
             _driveService = new DriveService();
             _csvExportService = new CsvExportService();
             _viewMode = _settings.SelectedViewMode;
 
             InitializeComponent();
+            ConfigureTreeViewFlickerReduction();
+            ConfigureLiveTreeUpdateTimer();
             ConfigureDriveComboBoxDrawing();
             ConfigureOpenFolderButtonImage();
             ApplyMainWindowSettings();
@@ -121,6 +137,9 @@ namespace WTF
             dataGridViewEntries.SizeChanged += dataGridViewEntries_SizeChanged;
             splitContainerMain.SplitterMoved += splitContainerMain_SplitterMoved;
             splitContainerMain.Panel2.SizeChanged += splitContainerMainPanel2_SizeChanged;
+            toolStripMain.LocationChanged += toolStripLayout_LocationChanged;
+            toolStripViewMode.LocationChanged += toolStripLayout_LocationChanged;
+            toolStripExport.LocationChanged += toolStripLayout_LocationChanged;
 
             SetDoubleBuffered(treeViewEntries, true);
             SetDoubleBuffered(dataGridViewEntries, true);
@@ -131,6 +150,7 @@ namespace WTF
             ModernFormStyler.Apply(this, _settings.Layout);
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
             toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
+            toolStripExport.GripStyle = ToolStripGripStyle.Visible;
             LoadDrives();
             LoadPartitionList();
             ApplyColumnLayout();
@@ -138,7 +158,110 @@ namespace WTF
             UpdatePartitionPanelVisibility();
             SetViewMode(_settings.SelectedViewMode);
             UpdateRightViewBounds();
+
+            _suspendPersistentSettingsSave = false;
         }
+        private void SavePersistentSettings()
+        {
+            if (_suspendPersistentSettingsSave)
+                return;
+
+            SaveToolStripLayout();
+            SaveViewSettings();
+            _settings.Save();
+        }
+        private void toolStripLayout_LocationChanged(object sender, EventArgs e)
+        {
+            SavePersistentSettings();
+        }
+        private void ConfigureTreeViewFlickerReduction()
+        {
+            treeViewEntries.HandleCreated -= treeViewEntries_HandleCreated;
+            treeViewEntries.HandleCreated += treeViewEntries_HandleCreated;
+
+            if (treeViewEntries.IsHandleCreated)
+            {
+                ApplyTreeViewNativeDoubleBuffer();
+            }
+        }
+        private void FlushPendingLiveTreeUpdate()
+        {
+            if (_liveTreeUpdateInProgress)
+                return;
+
+            ScanProgress scanProgress = _pendingLiveTreeScanProgress;
+
+            if (scanProgress == null)
+                return;
+
+            _pendingLiveTreeScanProgress = null;
+            _liveTreeUpdateInProgress = true;
+
+            try
+            {
+                ApplyScanProgressToLiveTree(scanProgress);
+            }
+            finally
+            {
+                _liveTreeUpdateInProgress = false;
+            }
+        }
+        private void QueueLiveTreeUpdate(ScanProgress scanProgress)
+        {
+            if (scanProgress == null)
+                return;
+
+            if (scanProgress.LiveRootEntry == null)
+                return;
+
+            _pendingLiveTreeScanProgress = scanProgress;
+
+            if (liveTreeUpdateTimer != null && !liveTreeUpdateTimer.Enabled)
+            {
+                liveTreeUpdateTimer.Start();
+            }
+        }
+        private void ConfigureLiveTreeUpdateTimer()
+        {
+            liveTreeUpdateTimer = new System.Windows.Forms.Timer
+            {
+                Interval = 250
+            };
+
+            liveTreeUpdateTimer.Tick += liveTreeUpdateTimer_Tick;
+        }
+        private void liveTreeUpdateTimer_Tick(object sender, EventArgs e)
+        {
+            FlushPendingLiveTreeUpdate();
+        }
+
+        private void treeViewEntries_HandleCreated(object sender, EventArgs e)
+        {
+            ApplyTreeViewNativeDoubleBuffer();
+        }
+
+        private void ApplyTreeViewNativeDoubleBuffer()
+        {
+            SendMessage(
+                treeViewEntries.Handle,
+                TVM_SETEXTENDEDSTYLE,
+                new IntPtr(TVS_EX_DOUBLEBUFFER),
+                new IntPtr(TVS_EX_DOUBLEBUFFER));
+        }        private void SetTreeViewRedraw(bool enabled)
+        {
+            if (treeViewEntries == null || !treeViewEntries.IsHandleCreated)
+                return;
+
+            SendMessage(
+                treeViewEntries.Handle,
+                WM_SETREDRAW,
+                enabled ? new IntPtr(1) : IntPtr.Zero,
+                IntPtr.Zero);
+        }
+
+
+
+
         private void ConfigureDriveComboBoxDrawing()
         {
             toolStripComboBoxDrives.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -469,6 +592,11 @@ namespace WTF
                 toolStripViewMode,
                 Math.Max(0, _settings.ToolStripViewModeLeft),
                 Math.Max(0, _settings.ToolStripViewModeTop));
+
+            toolStripPanelMain.Join(
+                toolStripExport,
+                Math.Max(0, _settings.ToolStripExportLeft),
+                Math.Max(0, _settings.ToolStripExportTop));
         }
         private void SaveToolStripLayout()
         {
@@ -479,6 +607,9 @@ namespace WTF
 
             _settings.ToolStripViewModeLeft = toolStripViewMode.Left;
             _settings.ToolStripViewModeTop = toolStripViewMode.Top;
+
+            _settings.ToolStripExportLeft = toolStripExport.Left;
+            _settings.ToolStripExportTop = toolStripExport.Top;
         }
         private void SaveMainWindowSettings()
         {
@@ -571,29 +702,39 @@ namespace WTF
             toolStripButtonTable = new ToolStripButton("▦ Tabelle");
             toolStripButtonPieChart = new ToolStripButton("◔ Pie-Chart");
             toolStripButtonBarChart = new ToolStripButton("▥ Balkenchart");
-            toolStripButtonExportCsv = new ToolStripButton("Export");
 
             toolStripButtonTable.DisplayStyle = ToolStripItemDisplayStyle.Text;
             toolStripButtonPieChart.DisplayStyle = ToolStripItemDisplayStyle.Text;
             toolStripButtonBarChart.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            toolStripButtonExportCsv.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            toolStripButtonExportCsv.ToolTipText = "CSV exportieren";
-            toolStripButtonExportCsv.Enabled = false;
-            menuItemExportCsv.Enabled = false;
 
             toolStripButtonTable.Click += toolStripButtonTable_Click;
             toolStripButtonPieChart.Click += toolStripButtonPieChart_Click;
             toolStripButtonBarChart.Click += toolStripButtonBarChart_Click;
-            toolStripButtonExportCsv.Click += toolStripButtonExportCsv_Click;
 
             toolStripViewMode.Items.Add(toolStripButtonTable);
             toolStripViewMode.Items.Add(toolStripButtonPieChart);
             toolStripViewMode.Items.Add(toolStripButtonBarChart);
-            toolStripViewMode.Items.Add(new ToolStripSeparator());
-            toolStripViewMode.Items.Add(toolStripButtonExportCsv);
+
+            toolStripExport = new ToolStrip();
+            toolStripExport.Dock = DockStyle.None;
+            toolStripExport.GripStyle = ToolStripGripStyle.Visible;
+            toolStripExport.AllowItemReorder = true;
+            toolStripExport.Padding = new Padding(0);
+            toolStripExport.Margin = new Padding(0);
+
+            toolStripButtonExportCsv = new ToolStripButton("Export");
+            toolStripButtonExportCsv.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
+            toolStripButtonExportCsv.Image = CreateExportButtonImage();
+            toolStripButtonExportCsv.ToolTipText = "CSV exportieren";
+            toolStripButtonExportCsv.Enabled = false;
+            menuItemExportCsv.Enabled = false;
+            toolStripButtonExportCsv.Click += toolStripButtonExportCsv_Click;
+
+            toolStripExport.Items.Add(toolStripButtonExportCsv);
 
             toolStripPanelMain.Join(toolStripMain, 0, 0);
             toolStripPanelMain.Join(toolStripViewMode, 340, 0);
+            toolStripPanelMain.Join(toolStripExport, 610, 0);
 
             splitContainerMain = new SplitContainer();
             splitContainerMain.Dock = DockStyle.Fill;
@@ -660,7 +801,6 @@ namespace WTF
             listViewPartitions.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
             listViewPartitions.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
             listViewPartitions.ColumnHeadersHeight = 24;
-            listViewPartitions.RowTemplate.Height = 19;
             listViewPartitions.EnableHeadersVisualStyles = true;
             listViewPartitions.MultiSelect = false;
             listViewPartitions.ReadOnly = true;
@@ -834,6 +974,37 @@ namespace WTF
             Controls.Add(tableLayoutPanelMain);
 
             MainMenuStrip = menuStripMain;
+        }
+        private System.Drawing.Bitmap CreateExportButtonImage()
+        {
+            System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(16, 16, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+            using (System.Drawing.Graphics graphics = System.Drawing.Graphics.FromImage(bitmap))
+            {
+                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                graphics.Clear(System.Drawing.Color.Transparent);
+
+                using System.Drawing.SolidBrush documentBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(245, 245, 245));
+                using System.Drawing.Pen documentPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(90, 90, 90));
+                using System.Drawing.SolidBrush arrowBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(0, 120, 215));
+                using System.Drawing.Pen arrowPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0, 84, 153));
+
+                graphics.FillRectangle(documentBrush, new Rectangle(2, 2, 8, 12));
+                graphics.DrawRectangle(documentPen, new Rectangle(2, 2, 8, 12));
+
+                System.Drawing.Point[] arrowPoints =
+                {
+            new System.Drawing.Point(8, 5),
+            new System.Drawing.Point(14, 8),
+            new System.Drawing.Point(8, 11)
+        };
+
+                graphics.FillPolygon(arrowBrush, arrowPoints);
+                graphics.DrawPolygon(arrowPen, arrowPoints);
+                graphics.DrawLine(arrowPen, 5, 8, 12, 8);
+            }
+
+            return bitmap;
         }
         private async void toolStripButtonOpenFolder_Click(object sender, EventArgs e)
         {
@@ -1333,6 +1504,7 @@ namespace WTF
             SetScanningState(true);
             dataGridViewEntries.DataSource = null;
             _currentRootEntry = null;
+            _pendingLiveTreeScanProgress = null;
             treeViewEntries.Nodes.Clear();
 
             long scanTargetBytes = GetUsedSpaceBytes(rootPath);
@@ -1344,10 +1516,7 @@ namespace WTF
             {
                 double percent = scanTargetBytes <= 0 ? 0D : (double)scanProgress.ScannedBytes * 100D / scanTargetBytes;
 
-                if (scanProgress.LiveRootEntry != null)
-                {
-                    ApplyScanProgressToLiveTree(scanProgress);
-                }
+                QueueLiveTreeUpdate(scanProgress);
 
                 if (scanProgress.IsCacheSavePhase)
                 {
@@ -1440,6 +1609,7 @@ namespace WTF
                     }
                 }
 
+                FlushPendingLiveTreeUpdate();
                 RenderScanResult(_currentRootEntry);
                 LoadPartitionList();
                 UpdateStatusStripForDrive(rootPath);
@@ -1452,6 +1622,12 @@ namespace WTF
             }
             finally
             {
+                if (liveTreeUpdateTimer != null)
+                {
+                    liveTreeUpdateTimer.Stop();
+                }
+
+                _pendingLiveTreeScanProgress = null;
                 _scanCancellationTokenSource.Dispose();
                 _scanCancellationTokenSource = null;
                 SetScanningState(false);
@@ -1472,74 +1648,93 @@ namespace WTF
         }
         private void ApplyScanProgressToLiveTree(ScanProgress scanProgress)
         {
+            if (scanProgress == null)
+                return;
+
             if (scanProgress.LiveRootEntry == null)
                 return;
 
-            treeViewEntries.BeginUpdate();
-
-            try
+            if (treeViewEntries.Nodes.Count == 0)
             {
-                if (treeViewEntries.Nodes.Count == 0)
-                {
-                    TreeNode rootNode = CreateLiveTreeNode(scanProgress.LiveRootEntry);
-                    treeViewEntries.Nodes.Add(rootNode);
-                    treeViewEntries.SelectedNode = rootNode;
-                    rootNode.Expand();
-                    SyncLiveTreeChildren(rootNode, scanProgress.LiveRootEntry);
-                    return;
-                }
-
-                TreeNode existingRootNode = treeViewEntries.Nodes[0];
-                UpdateLiveTreeNode(existingRootNode, scanProgress.LiveRootEntry);
-                SyncLiveTreeChildren(existingRootNode, scanProgress.LiveRootEntry);
-                existingRootNode.Expand();
+                TreeNode rootNode = CreateLiveTreeNode(scanProgress.LiveRootEntry);
+                treeViewEntries.Nodes.Add(rootNode);
+                treeViewEntries.SelectedNode = rootNode;
+                rootNode.Expand();
+                SyncLiveTreeChildren(rootNode, scanProgress.LiveRootEntry, true);
+                return;
             }
-            finally
+
+            TreeNode existingRootNode = treeViewEntries.Nodes[0];
+            UpdateLiveTreeNode(existingRootNode, scanProgress.LiveRootEntry);
+            SyncLiveTreeChildren(existingRootNode, scanProgress.LiveRootEntry, true);
+
+            if (!existingRootNode.IsExpanded)
             {
-                treeViewEntries.EndUpdate();
+                existingRootNode.Expand();
             }
         }
 
-        private void SyncLiveTreeChildren(TreeNode parentNode, FileSystemEntry parentEntry)
+        private void SyncLiveTreeChildren(TreeNode parentNode, FileSystemEntry parentEntry, bool liveUpdate)
         {
-            HashSet<string> expectedChildPaths = new HashSet<string>(
-                parentEntry.Children
-                    .Select(child => child.FullPath),
-                StringComparer.OrdinalIgnoreCase);
+            List<FileSystemEntry> childEntries = GetChildEntriesSnapshot(parentEntry);
 
-            for (int index = parentNode.Nodes.Count - 1; index >= 0; index--)
+            if (parentNode.Nodes.Count == 1 && IsLazyPlaceholderNode(parentNode.Nodes[0]) && childEntries.Count > 0)
             {
-                TreeNode childNode = parentNode.Nodes[index];
+                parentNode.Nodes.Clear();
+            }
 
-                if (childNode.Tag is not FileSystemEntry childEntry || !expectedChildPaths.Contains(childEntry.FullPath))
+            Dictionary<string, TreeNode> existingNodesByPath = new Dictionary<string, TreeNode>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (TreeNode childNode in parentNode.Nodes)
+            {
+                if (childNode.Tag is FileSystemEntry childEntry && !string.IsNullOrWhiteSpace(childEntry.FullPath))
                 {
-                    parentNode.Nodes.RemoveAt(index);
+                    existingNodesByPath[childEntry.FullPath] = childNode;
                 }
             }
 
-            int targetIndex = 0;
-
-            foreach (FileSystemEntry childEntry in parentEntry.Children)
+            foreach (FileSystemEntry childEntry in childEntries)
             {
-                TreeNode childNode = FindChildNodeByFullPath(parentNode, childEntry.FullPath);
+                if (string.IsNullOrWhiteSpace(childEntry.FullPath))
+                    continue;
 
-                if (childNode == null)
+                if (!existingNodesByPath.TryGetValue(childEntry.FullPath, out TreeNode childNode))
                 {
                     childNode = CreateLiveTreeNode(childEntry);
-                    parentNode.Nodes.Insert(targetIndex, childNode);
+                    parentNode.Nodes.Add(childNode);
                 }
                 else
                 {
                     UpdateLiveTreeNode(childNode, childEntry);
-
-                    if (childNode.Index != targetIndex)
-                    {
-                        parentNode.Nodes.Remove(childNode);
-                        parentNode.Nodes.Insert(targetIndex, childNode);
-                    }
                 }
 
-                targetIndex++;
+                if (childEntry.IsDirectory && childNode.IsExpanded)
+                {
+                    SyncLiveTreeChildren(childNode, childEntry, liveUpdate);
+                }
+                else if (childEntry.IsDirectory && HasChildEntries(childEntry) && childNode.Nodes.Count == 0)
+                {
+                    childNode.Nodes.Add(CreateLazyPlaceholderNode());
+                }
+            }
+
+            if (!liveUpdate)
+            {
+                HashSet<string> expectedChildPaths = new HashSet<string>(
+                    childEntries
+                        .Where(child => !string.IsNullOrWhiteSpace(child.FullPath))
+                        .Select(child => child.FullPath),
+                    StringComparer.OrdinalIgnoreCase);
+
+                for (int index = parentNode.Nodes.Count - 1; index >= 0; index--)
+                {
+                    TreeNode childNode = parentNode.Nodes[index];
+
+                    if (childNode.Tag is not FileSystemEntry childEntry || !expectedChildPaths.Contains(childEntry.FullPath))
+                    {
+                        parentNode.Nodes.RemoveAt(index);
+                    }
+                }
             }
         }
 
@@ -1574,7 +1769,34 @@ namespace WTF
                 node.SelectedImageKey = driveImageKey;
             }
 
+            if (entry.IsDirectory && HasChildEntries(entry))
+            {
+                node.Nodes.Add(CreateLazyPlaceholderNode());
+            }
+
             return node;
+        }
+        private List<FileSystemEntry> GetChildEntriesSnapshot(FileSystemEntry entry)
+        {
+            if (entry == null)
+            {
+                return new List<FileSystemEntry>();
+            }
+
+            lock (entry.Children)
+            {
+                return entry.Children.ToList();
+            }
+        }
+        private bool HasChildEntries(FileSystemEntry entry)
+        {
+            if (entry == null)
+                return false;
+
+            lock (entry.Children)
+            {
+                return entry.Children.Count > 0;
+            }
         }
 
         private void UpdateLiveTreeNode(TreeNode node, FileSystemEntry entry)
@@ -1588,13 +1810,28 @@ namespace WTF
                 node.Text = text;
             }
 
-            node.ImageKey = entry.IsDirectory ? "Folder" : "File";
-            node.SelectedImageKey = entry.IsDirectory ? "Folder" : "File";
+            string imageKey = entry.IsDirectory ? "Folder" : "File";
+            string selectedImageKey = imageKey;
 
             if (entry.FullPath != null && entry.FullPath.EndsWith(":\\", StringComparison.OrdinalIgnoreCase))
             {
-                node.ImageKey = "Drive";
-                node.SelectedImageKey = "Drive";
+                imageKey = EnsureTreeDriveIcon(entry.FullPath);
+                selectedImageKey = imageKey;
+            }
+
+            if (node.ImageKey != imageKey)
+            {
+                node.ImageKey = imageKey;
+            }
+
+            if (node.SelectedImageKey != selectedImageKey)
+            {
+                node.SelectedImageKey = selectedImageKey;
+            }
+
+            if (entry.IsDirectory && HasChildEntries(entry) && node.Nodes.Count == 0)
+            {
+                node.Nodes.Add(CreateLazyPlaceholderNode());
             }
         }
 
@@ -1883,6 +2120,7 @@ namespace WTF
             _settings.SelectedViewMode = viewMode;
             UpdateViewModeButtons();
             UpdateRightView();
+            SavePersistentSettings();
         }
         private void UpdateViewModeButtons()
         {

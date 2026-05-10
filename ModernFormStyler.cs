@@ -282,7 +282,7 @@ namespace WTF
                 Location = new Point(10, 8),
                 Size = new Size(16, 16),
                 SizeMode = PictureBoxSizeMode.StretchImage,
-                Image = AppResources.ApplicationImage,
+                Image = CreateModernTitleBarIconImage(form),
                 BackColor = Color.Transparent
             };
 
@@ -330,6 +330,17 @@ namespace WTF
 
             form.Controls.Add(panelModernTitleBar);
             panelModernTitleBar.BringToFront();
+        }
+        private static Bitmap CreateModernTitleBarIconImage(Form form)
+        {
+            Icon icon = form.Icon ?? AppResources.ApplicationIcon;
+
+            if (icon == null)
+            {
+                return SystemIcons.Application.ToBitmap();
+            }
+
+            return icon.ToBitmap();
         }
 
         private static Button CreateModernTitleBarButton(string name, string text, Point location)
