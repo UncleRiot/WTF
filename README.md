@@ -10,14 +10,14 @@ Multilingual support comming, when requested - (Now: English/German)
 # Contextmenu
 
 <br>
-<img width="186" height="356" alt="grafik" src="https://github.com/user-attachments/assets/15528f71-0df2-4df1-b081-22511a4267b6" />
+<img width="266" height="275" alt="grafik" src="https://github.com/user-attachments/assets/25af2abe-ea05-4de2-8fa8-b0064a7b6eb7" />
 <br>
 
 
 # Export
 
 <br>
-<img width="426" height="317" alt="grafik" src="https://github.com/user-attachments/assets/700a4259-7e0a-44bf-b6e2-caabd360a37a" />
+<img width="334" height="192" alt="grafik" src="https://github.com/user-attachments/assets/12950fc2-d2e4-4984-9c84-9522e1f927f1" />
 <br>
 
 # Important
