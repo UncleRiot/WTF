@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -21,6 +22,8 @@ namespace WTF
         private long _scannedBytes;
         private int _scannedDirectories;
         private int _scannedFiles;
+        private int _skippedDirectories;
+        private List<string> _skippedDirectoryDetails;
         private long _lastProgressReportTickCount;
         private FileSystemEntry _liveRootEntry;
         private ScanCacheService _scanCacheService;
@@ -98,7 +101,29 @@ namespace WTF
         {
             return Task.Run(() =>
             {
+                FileSystemEntry cachedRootEntry = ScanCacheService.TryLoadCachedTree(rootPath);
+
+                if (cachedRootEntry != null)
+                {
+                    progress?.Report(new ScanProgress
+                    {
+                        CurrentPath = "Cache geladen - überprüfe Änderungen...",
+                        ScannedBytes = cachedRootEntry.SizeBytes,
+                        ScannedDirectories = cachedRootEntry.DirectoryCount,
+                        ScannedFiles = cachedRootEntry.FileCount,
+                        LiveRootEntry = cachedRootEntry,
+                        IsCacheVerification = true,
+                        IsCacheSavePhase = false
+                    });
+                }
+
                 _scanCacheService = ScanCacheService.Load(rootPath);
+
+                _scannedBytes = 0;
+                _scannedDirectories = 0;
+                _scannedFiles = 0;
+                _skippedDirectories = 0;
+                _skippedDirectoryDetails = new List<string>();
 
                 FileSystemEntry rootEntry = CreateDirectoryEntry(rootPath);
                 _liveRootEntry = rootEntry;
@@ -205,6 +230,7 @@ namespace WTF
 
             if (findHandle == INVALID_HANDLE_VALUE)
             {
+                AddSkippedDirectory(directoryPath, GetLastWin32ErrorMessage());
                 yield break;
             }
 
@@ -281,11 +307,49 @@ namespace WTF
                 ScannedBytes = _scannedBytes,
                 ScannedDirectories = _scannedDirectories,
                 ScannedFiles = _scannedFiles,
+                SkippedDirectories = _skippedDirectories,
+                SkippedDirectoryDetails = GetSkippedDirectoryDetailsSnapshot(),
                 LiveRootEntry = CreateLiveSnapshot(_liveRootEntry, LiveSnapshotDepth),
                 IsCacheVerification = true,
                 IsCacheSavePhase = false
             });
         }
+
+        private void AddSkippedDirectory(string directoryPath, string reason)
+        {
+            _skippedDirectories++;
+
+            if (_skippedDirectoryDetails == null)
+                return;
+
+            if (_skippedDirectoryDetails.Count >= 100)
+                return;
+
+            _skippedDirectoryDetails.Add(string.Format(
+                "{0}{1}Grund: {2}",
+                directoryPath,
+                Environment.NewLine,
+                string.IsNullOrWhiteSpace(reason) ? "Unbekannt" : reason));
+        }
+
+        private List<string> GetSkippedDirectoryDetailsSnapshot()
+        {
+            if (_skippedDirectoryDetails == null || _skippedDirectoryDetails.Count == 0)
+                return null;
+
+            return new List<string>(_skippedDirectoryDetails);
+        }
+
+        private static string GetLastWin32ErrorMessage()
+        {
+            int errorCode = Marshal.GetLastWin32Error();
+
+            if (errorCode == 0)
+                return "Unbekannt";
+
+            return "Win32-Fehler " + errorCode + ": " + new Win32Exception(errorCode).Message;
+        }
+
 
         private bool ShouldReportProgress()
         {

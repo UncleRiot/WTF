@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -56,6 +56,10 @@ namespace WTF
         private BarChartView barChartView;
         private ViewMode _viewMode;
         private FileSystemEntry _selectedEntry;
+        private StatusStrip statusStripAlerts;
+        private ToolStripStatusLabel toolStripAlertInformationLabel;
+        private ToolStripStatusLabel toolStripAlertWarningLabel;
+        private ToolStripStatusLabel toolStripAlertErrorLabel;
         private StatusStrip statusStripMain;
         private ToolStripStatusLabel toolStripStatusLabel;
         
@@ -128,6 +132,8 @@ namespace WTF
             _startupScanPath = startupScanPath;
 
             InitializeComponent();
+            AppAlertLog.Changed += AppAlertLog_Changed;
+            UpdateAlertStatusStrip();
             ConfigureTreeViewFlickerReduction();
             ConfigureLiveTreeUpdateTimer();
             ConfigureDriveComboBoxDrawing();
@@ -194,12 +200,67 @@ namespace WTF
                 return;
 
             SaveViewSettings();
-            _settings.Save();
+            TrySaveAppSettings(false);
+        }
+
+        private bool TrySaveAppSettings(bool showMessage)
+        {
+            try
+            {
+                _settings.Save();
+                return true;
+            }
+            catch (Exception exception)
+            {
+                AppAlertLog.AddError("Einstellungen", "Einstellungen konnten nicht gespeichert werden: " + exception.Message);
+
+                if (showMessage)
+                {
+                    MessageBox.Show(
+                        this,
+                        "Die Einstellungen konnten nicht gespeichert werden." + Environment.NewLine + Environment.NewLine + exception.Message,
+                        Text,
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
+
+                return false;
+            }
         }
         private void toolStripLayout_LocationChanged(object sender, EventArgs e)
         {
             SavePersistentSettings();
         }
+        private void AppAlertLog_Changed(object sender, EventArgs e)
+        {
+            if (IsDisposed)
+                return;
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(UpdateAlertStatusStrip));
+                return;
+            }
+
+            UpdateAlertStatusStrip();
+        }
+
+        private void UpdateAlertStatusStrip()
+        {
+            if (toolStripAlertInformationLabel == null || toolStripAlertWarningLabel == null || toolStripAlertErrorLabel == null)
+                return;
+
+            toolStripAlertInformationLabel.Text = AppAlertLog.GetUnconfirmedCount(AppAlertSeverity.Information).ToString();
+            toolStripAlertWarningLabel.Text = AppAlertLog.GetUnconfirmedCount(AppAlertSeverity.Warning).ToString();
+            toolStripAlertErrorLabel.Text = AppAlertLog.GetUnconfirmedCount(AppAlertSeverity.Error).ToString();
+        }
+
+        private void toolStripAlertLabel_Click(object sender, EventArgs e)
+        {
+            using AlertHistoryForm alertHistoryForm = new AlertHistoryForm(_settings);
+            alertHistoryForm.ShowDialog(this);
+        }
+
         private void ConfigureTreeViewFlickerReduction()
         {
             treeViewEntries.HandleCreated -= treeViewEntries_HandleCreated;
@@ -969,6 +1030,44 @@ namespace WTF
             splitContainerMain.Panel1.Controls.Add(splitContainerLeft);
             splitContainerMain.Panel2.Controls.Add(panelRightViewHost);
 
+            statusStripAlerts = new StatusStrip
+            {
+                Name = "statusStripAlerts",
+                SizingGrip = false
+            };
+
+            toolStripAlertInformationLabel = new ToolStripStatusLabel
+            {
+                Name = "toolStripAlertInformationLabel",
+                Image = SystemIcons.Information.ToBitmap(),
+                Text = "0",
+                ToolTipText = "Informationen anzeigen"
+            };
+
+            toolStripAlertWarningLabel = new ToolStripStatusLabel
+            {
+                Name = "toolStripAlertWarningLabel",
+                Image = SystemIcons.Warning.ToBitmap(),
+                Text = "0",
+                ToolTipText = "Warnungen anzeigen"
+            };
+
+            toolStripAlertErrorLabel = new ToolStripStatusLabel
+            {
+                Name = "toolStripAlertErrorLabel",
+                Image = SystemIcons.Error.ToBitmap(),
+                Text = "0",
+                ToolTipText = "Fehler anzeigen"
+            };
+
+            toolStripAlertInformationLabel.Click += toolStripAlertLabel_Click;
+            toolStripAlertWarningLabel.Click += toolStripAlertLabel_Click;
+            toolStripAlertErrorLabel.Click += toolStripAlertLabel_Click;
+
+            statusStripAlerts.Items.Add(toolStripAlertInformationLabel);
+            statusStripAlerts.Items.Add(toolStripAlertWarningLabel);
+            statusStripAlerts.Items.Add(toolStripAlertErrorLabel);
+
             statusStripMain = new StatusStrip();
             statusStripMain.SizingGrip = true;
 
@@ -991,21 +1090,24 @@ namespace WTF
             TableLayoutPanel tableLayoutPanelMain = new TableLayoutPanel();
             tableLayoutPanelMain.Dock = DockStyle.Fill;
             tableLayoutPanelMain.ColumnCount = 1;
-            tableLayoutPanelMain.RowCount = 4;
+            tableLayoutPanelMain.RowCount = 5;
             tableLayoutPanelMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tableLayoutPanelMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tableLayoutPanelMain.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            tableLayoutPanelMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tableLayoutPanelMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             menuStripMain.Dock = DockStyle.Fill;
             toolStripPanelMain.Dock = DockStyle.Fill;
             splitContainerMain.Dock = DockStyle.Fill;
+            statusStripAlerts.Dock = DockStyle.Fill;
             statusStripMain.Dock = DockStyle.Fill;
 
             tableLayoutPanelMain.Controls.Add(menuStripMain, 0, 0);
             tableLayoutPanelMain.Controls.Add(toolStripPanelMain, 0, 1);
             tableLayoutPanelMain.Controls.Add(splitContainerMain, 0, 2);
-            tableLayoutPanelMain.Controls.Add(statusStripMain, 0, 3);
+            tableLayoutPanelMain.Controls.Add(statusStripAlerts, 0, 3);
+            tableLayoutPanelMain.Controls.Add(statusStripMain, 0, 4);
 
             Controls.Add(tableLayoutPanelMain);
 
@@ -1547,10 +1649,25 @@ namespace WTF
             SetStatusProgressText(0D);
 
             _scanCancellationTokenSource = new CancellationTokenSource();
+            int skippedDirectories = 0;
+            HashSet<string> skippedDirectoryDetailSet = new HashSet<string>();
+            List<string> skippedDirectoryDetails = new List<string>();
 
             Progress<ScanProgress> progress = new Progress<ScanProgress>(scanProgress =>
             {
                 double percent = scanTargetBytes <= 0 ? 0D : (double)scanProgress.ScannedBytes * 100D / scanTargetBytes;
+                skippedDirectories = Math.Max(skippedDirectories, scanProgress.SkippedDirectories);
+
+                if (scanProgress.SkippedDirectoryDetails != null)
+                {
+                    foreach (string skippedDirectoryDetail in scanProgress.SkippedDirectoryDetails)
+                    {
+                        if (skippedDirectoryDetailSet.Add(skippedDirectoryDetail))
+                        {
+                            skippedDirectoryDetails.Add(skippedDirectoryDetail);
+                        }
+                    }
+                }
 
                 QueueLiveTreeUpdate(scanProgress);
 
@@ -1609,8 +1726,10 @@ namespace WTF
                     {
                         throw;
                     }
-                    catch
+                    catch (Exception mftException)
                     {
+                        AppAlertLog.AddWarning("Scan", "MFT-Schnellscan nicht verfügbar: " + mftException.Message);
+
                         try
                         {
                             toolStripStatusLabel.Text = "MFT-Schnellscan nicht verfügbar - NT-API-Schnellscan läuft...";
@@ -1620,8 +1739,9 @@ namespace WTF
                         {
                             throw;
                         }
-                        catch
+                        catch (Exception ntQueryException)
                         {
+                            AppAlertLog.AddWarning("Scan", "NT-API-Schnellscan nicht verfügbar: " + ntQueryException.Message);
                             toolStripStatusLabel.Text = "NT-API-Schnellscan nicht verfügbar - normaler Scan läuft...";
                             _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
                         }
@@ -1638,8 +1758,9 @@ namespace WTF
                     {
                         throw;
                     }
-                    catch
+                    catch (Exception ntQueryException)
                     {
+                        AppAlertLog.AddWarning("Scan", "NT-API-Schnellscan nicht verfügbar: " + ntQueryException.Message);
                         toolStripStatusLabel.Text = "NT-API-Schnellscan nicht verfügbar - normaler Scan läuft...";
                         _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
                     }
@@ -1650,6 +1771,70 @@ namespace WTF
                 LoadPartitionList();
                 UpdateStatusStripForDrive(rootPath);
                 SetStatusProgressText(100D);
+
+                if (skippedDirectories > 0)
+                {
+                    List<string> expectedSkippedDirectoryDetails = new List<string>();
+                    List<string> warningSkippedDirectoryDetails = new List<string>();
+
+                    foreach (string skippedDirectoryDetail in skippedDirectoryDetails)
+                    {
+                        string[] lines = skippedDirectoryDetail
+                            .Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+
+                        string skippedDirectoryPath = lines.Length > 0 ? lines[0] : string.Empty;
+                        string skippedDirectoryReason = skippedDirectoryDetail;
+
+                        string normalizedSkippedDirectoryPath = skippedDirectoryPath
+                            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                        bool isExpectedSystemDirectory =
+                            normalizedSkippedDirectoryPath.EndsWith(
+                                Path.DirectorySeparatorChar + "System Volume Information",
+                                StringComparison.OrdinalIgnoreCase) &&
+                            (skippedDirectoryReason.IndexOf("0xC0000022", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                             skippedDirectoryReason.IndexOf("Zugriff verweigert", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                             skippedDirectoryReason.IndexOf("Access is denied", StringComparison.OrdinalIgnoreCase) >= 0);
+
+                        if (isExpectedSystemDirectory)
+                        {
+                            expectedSkippedDirectoryDetails.Add(skippedDirectoryDetail);
+                        }
+                        else
+                        {
+                            warningSkippedDirectoryDetails.Add(skippedDirectoryDetail);
+                        }
+                    }
+
+                    int unknownSkippedDirectories = Math.Max(0, skippedDirectories - skippedDirectoryDetails.Count);
+
+                    if (unknownSkippedDirectories > 0)
+                    {
+                        warningSkippedDirectoryDetails.Add(unknownSkippedDirectories + " weitere Ordner konnten nicht gelesen werden. Details wurden nicht erfasst.");
+                    }
+
+                    if (expectedSkippedDirectoryDetails.Count > 0)
+                    {
+                        string expectedSkippedDirectoryMessage = expectedSkippedDirectoryDetails.Count == 1
+                            ? "1 Systemordner wurde erwartungsgemäß übersprungen."
+                            : expectedSkippedDirectoryDetails.Count + " Systemordner wurden erwartungsgemäß übersprungen.";
+
+                        string expectedSkippedDirectoryDetailsText = string.Join(Environment.NewLine + Environment.NewLine, expectedSkippedDirectoryDetails);
+
+                        AppAlertLog.AddInformation("Scan", expectedSkippedDirectoryMessage, expectedSkippedDirectoryDetailsText);
+                    }
+
+                    if (warningSkippedDirectoryDetails.Count > 0)
+                    {
+                        string skippedDirectoryMessage = warningSkippedDirectoryDetails.Count == 1
+                            ? "1 Ordner konnte nicht gelesen werden."
+                            : warningSkippedDirectoryDetails.Count + " Ordner konnten nicht gelesen werden.";
+
+                        string skippedDirectoryDetailsText = string.Join(Environment.NewLine + Environment.NewLine, warningSkippedDirectoryDetails);
+
+                        AppAlertLog.AddWarning("Scan", skippedDirectoryMessage, skippedDirectoryDetailsText);
+                    }
+                }
             }
             catch (OperationCanceledException)
             {
@@ -2302,7 +2487,6 @@ namespace WTF
             if (settingsForm.ShowDialog(this) != DialogResult.OK)
                 return;
 
-            _settings.Save();
             ModernFormStyler.Apply(this, _settings.Layout);
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
             toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
@@ -2338,7 +2522,9 @@ namespace WTF
             SaveSplitterLayout();
             SaveColumnLayout();
             SaveViewSettings();
-            _settings.Save();
+            TrySaveAppSettings(false);
+
+            AppAlertLog.Changed -= AppAlertLog_Changed;
 
             base.OnFormClosing(e);
         }

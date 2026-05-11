@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -44,6 +44,8 @@ namespace WTF
         private long _scannedBytes;
         private int _scannedDirectories;
         private int _scannedFiles;
+        private int _skippedDirectories;
+        private ConcurrentQueue<string> _skippedDirectoryDetails;
         private long _lastProgressReportTickCount;
         private int _pendingDirectoryCount;
         private BlockingCollection<WorkItem> _workQueue;
@@ -66,6 +68,8 @@ namespace WTF
                 _scannedBytes = 0;
                 _scannedDirectories = 1;
                 _scannedFiles = 0;
+                _skippedDirectories = 0;
+                _skippedDirectoryDetails = new ConcurrentQueue<string>();
                 _lastProgressReportTickCount = 0;
                 _pendingDirectoryCount = 1;
                 _fileInformationClass = FileIdFullDirectoryInformationClass;
@@ -134,12 +138,14 @@ namespace WTF
                     {
                         throw;
                     }
-                    catch
+                    catch (Exception exception)
                     {
                         if (workItem.IsRoot)
                         {
                             throw;
                         }
+
+                        AddSkippedDirectory(workItem.Entry.FullPath, exception.Message);
                     }
                     finally
                     {
@@ -160,7 +166,7 @@ namespace WTF
         {
             FileSystemEntry directoryEntry = workItem.Entry;
 
-            using SafeFileHandle directoryHandle = OpenDirectoryHandle(directoryEntry.FullPath);
+            using SafeFileHandle directoryHandle = OpenDirectoryHandle(directoryEntry.FullPath, out int openStatus);
 
             if (directoryHandle.IsInvalid)
             {
@@ -169,6 +175,7 @@ namespace WTF
                     throw new IOException("NT-API-Schnellscan konnte den Root-Pfad nicht öffnen: " + directoryEntry.FullPath);
                 }
 
+                AddSkippedDirectory(directoryEntry.FullPath, "Ordner konnte nicht geöffnet werden. NTSTATUS: " + FormatNtStatus(openStatus));
                 return;
             }
 
@@ -215,6 +222,7 @@ namespace WTF
                         throw new IOException("NT-API-Schnellscan konnte den Root-Pfad nicht lesen: " + directoryEntry.FullPath);
                     }
 
+                    AddSkippedDirectory(directoryEntry.FullPath, "Ordner konnte nicht gelesen werden. NTSTATUS: " + FormatNtStatus(status));
                     return;
                 }
 
@@ -342,11 +350,13 @@ namespace WTF
             }
         }
 
-        private SafeFileHandle OpenDirectoryHandle(string directoryPath)
+        private SafeFileHandle OpenDirectoryHandle(string directoryPath, out int status)
         {
             string ntPath = NormalizePathForNtOpenFile(directoryPath);
             IntPtr unicodeStringBuffer = IntPtr.Zero;
             IntPtr objectNamePointer = IntPtr.Zero;
+
+            status = STATUS_SUCCESS;
 
             try
             {
@@ -366,7 +376,7 @@ namespace WTF
 
                 IO_STATUS_BLOCK ioStatusBlock = new IO_STATUS_BLOCK();
 
-                int status = NtOpenFile(
+                status = NtOpenFile(
                     out SafeFileHandle directoryHandle,
                     FILE_LIST_DIRECTORY | SYNCHRONIZE,
                     ref objectAttributes,
@@ -507,11 +517,48 @@ namespace WTF
                 ScannedBytes = Interlocked.Read(ref _scannedBytes),
                 ScannedDirectories = Volatile.Read(ref _scannedDirectories),
                 ScannedFiles = Volatile.Read(ref _scannedFiles),
-                LiveRootEntry = _liveRootEntry,
+                SkippedDirectories = Volatile.Read(ref _skippedDirectories),
+                SkippedDirectoryDetails = GetSkippedDirectoryDetailsSnapshot(),
+                LiveRootEntry = CreateLiveSnapshot(_liveRootEntry, LiveSnapshotDepth),
                 IsCacheVerification = false,
                 IsCacheSavePhase = false
             });
         }
+
+        private void AddSkippedDirectory(string directoryPath, string reason)
+        {
+            Interlocked.Increment(ref _skippedDirectories);
+
+            ConcurrentQueue<string> skippedDirectoryDetails = _skippedDirectoryDetails;
+
+            if (skippedDirectoryDetails == null)
+                return;
+
+            if (skippedDirectoryDetails.Count >= 100)
+                return;
+
+            skippedDirectoryDetails.Enqueue(string.Format(
+                "{0}{1}Grund: {2}",
+                directoryPath,
+                Environment.NewLine,
+                string.IsNullOrWhiteSpace(reason) ? "Unbekannt" : reason));
+        }
+
+        private List<string> GetSkippedDirectoryDetailsSnapshot()
+        {
+            ConcurrentQueue<string> skippedDirectoryDetails = _skippedDirectoryDetails;
+
+            if (skippedDirectoryDetails == null || skippedDirectoryDetails.IsEmpty)
+                return null;
+
+            return skippedDirectoryDetails.ToList();
+        }
+
+        private static string FormatNtStatus(int status)
+        {
+            return "0x" + status.ToString("X8");
+        }
+
 
         private void AddSizeToEntries(FileSystemEntry[] entries, long sizeBytes)
         {

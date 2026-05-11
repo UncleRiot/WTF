@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows.Forms;
 
 namespace WTF
@@ -289,11 +289,33 @@ namespace WTF
 
             try
             {
+                _settings.Save();
+            }
+            catch (Exception exception)
+            {
+                AppAlertLog.AddError("Einstellungen", "Einstellungen konnten nicht gespeichert werden: " + exception.Message);
+                MessageBox.Show(
+                    this,
+                    "Die Einstellungen konnten nicht gespeichert werden." + Environment.NewLine + Environment.NewLine + exception.Message,
+                    Text,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return false;
+            }
+
+            try
+            {
                 ShellContextMenuService.Apply(_settings.ShellContextMenuEnabled);
             }
-            catch
+            catch (Exception exception)
             {
-                MessageBox.Show(this, "Der Explorer-Kontextmenüeintrag konnte nicht aktualisiert werden.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                AppAlertLog.AddWarning("Einstellungen", "Explorer-Kontextmenüeintrag konnte nicht aktualisiert werden: " + exception.Message);
+                MessageBox.Show(
+                    this,
+                    "Der Explorer-Kontextmenüeintrag konnte nicht aktualisiert werden." + Environment.NewLine + Environment.NewLine + exception.Message,
+                    Text,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
                 return false;
             }
 

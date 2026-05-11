@@ -15,7 +15,6 @@ namespace WTF
             Application.SetCompatibleTextRenderingDefault(false);
 
             AppSettings settings = AppSettings.Load();
-            ShellContextMenuService.Apply(settings.ShellContextMenuEnabled);
 
             if (settings.StartElevatedOnStartup && !IsRunningAsAdministrator())
             {
@@ -32,7 +31,20 @@ namespace WTF
                 if (elevationPromptResult.DoNotShowAgain)
                 {
                     settings.ShowElevationPromptOnStartup = false;
-                    settings.Save();
+
+                    try
+                    {
+                        settings.Save();
+                    }
+                    catch (Exception exception)
+                    {
+                        AppAlertLog.AddError("Einstellungen", "Einstellungen konnten beim Programmstart nicht gespeichert werden: " + exception.Message);
+                        MessageBox.Show(
+                            "Die Einstellung konnte nicht gespeichert werden." + Environment.NewLine + Environment.NewLine + exception.Message,
+                            "WTF",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
+                    }
                 }
 
                 if (elevationPromptResult.ShouldRestartElevated && TryRestartAsAdministrator(args))

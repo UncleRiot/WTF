@@ -100,7 +100,7 @@ namespace WTF
                     if (!fullPath.StartsWith(rootEntry.FullPath, StringComparison.OrdinalIgnoreCase))
                         continue;
 
-                    bool isDirectory = node.Attributes.HasFlag(FileAttributes.Directory);
+                    bool isDirectory = node.Attributes.HasFlag(System.IO.Filesystem.Ntfs.Attributes.Directory);
 
                     if (isDirectory)
                     {
