@@ -164,6 +164,7 @@ namespace WTF
             Shown += MainForm_Shown;
             listViewPartitions.SizeChanged += listViewPartitions_SizeChanged;
             treeViewEntries.BeforeExpand += treeViewEntries_BeforeExpand;
+            treeViewEntries.SizeChanged += treeViewEntries_SizeChanged;
             panelRightViewHost.SizeChanged += panelRightViewHost_SizeChanged;
             splitContainerMain.SplitterMoved += splitContainerMain_SplitterMoved;
             splitContainerMain.Panel2.SizeChanged += splitContainerMainPanel2_SizeChanged;
@@ -1491,15 +1492,21 @@ namespace WTF
 
             bool selected = (e.State & TreeNodeStates.Selected) == TreeNodeStates.Selected;
 
-            System.Drawing.Rectangle rowBounds = new System.Drawing.Rectangle(
+            System.Drawing.Rectangle fullRowBounds = new System.Drawing.Rectangle(
+                0,
+                e.Bounds.Top,
+                treeViewEntries.ClientSize.Width,
+                e.Bounds.Height);
+
+            System.Drawing.Rectangle textRowBounds = new System.Drawing.Rectangle(
                 e.Bounds.Left,
                 e.Bounds.Top,
-                treeViewEntries.ClientSize.Width - e.Bounds.Left,
+                Math.Max(0, treeViewEntries.ClientSize.Width - e.Bounds.Left),
                 e.Bounds.Height);
 
             using (System.Drawing.SolidBrush backgroundBrush = new System.Drawing.SolidBrush(selected ? System.Drawing.SystemColors.Highlight : treeViewEntries.BackColor))
             {
-                e.Graphics.FillRectangle(backgroundBrush, rowBounds);
+                e.Graphics.FillRectangle(backgroundBrush, fullRowBounds);
             }
 
             long totalSizeBytes = GetTreeRootSizeBytes(e.Node);
@@ -1520,7 +1527,7 @@ namespace WTF
                     e.Bounds.Left,
                     e.Bounds.Top + 2,
                     barWidth,
-                    e.Bounds.Height - 4);
+                    Math.Max(0, e.Bounds.Height - 4));
 
                 using (System.Drawing.SolidBrush barBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(110, 130, 120, 255)))
                 {
@@ -1534,9 +1541,13 @@ namespace WTF
                 e.Graphics,
                 text,
                 treeViewEntries.Font,
-                rowBounds,
+                textRowBounds,
                 selected ? System.Drawing.SystemColors.HighlightText : treeViewEntries.ForeColor,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+        private void treeViewEntries_SizeChanged(object sender, EventArgs e)
+        {
+            treeViewEntries.Invalidate();
         }
         private long GetTreeRootSizeBytes(TreeNode node)
         {
