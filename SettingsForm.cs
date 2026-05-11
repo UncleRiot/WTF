@@ -33,7 +33,7 @@ namespace WTF
             _settings = settings;
 
             InitializeComponent();
-            ModernFormStyler.Apply(this, _settings.Layout);
+            WindowsFormStyler.Apply(this, _settings.Layout);
             LoadSettings();
         }
 
@@ -152,7 +152,6 @@ namespace WTF
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
 
-            comboBoxLayout.Items.Add(new LayoutItem(LocalizationService.GetText("Settings.LayoutModern"), AppLayout.Modern));
             comboBoxLayout.Items.Add(new LayoutItem(LocalizationService.GetText("Settings.LayoutWindowsDefault"), AppLayout.WindowsDefault));
             comboBoxLayout.Items.Add(new LayoutItem(LocalizationService.GetText("Settings.LayoutWindowsLight"), AppLayout.WindowsLightMode));
             comboBoxLayout.Items.Add(new LayoutItem(LocalizationService.GetText("Settings.LayoutWindowsDark"), AppLayout.WindowsDarkMode));

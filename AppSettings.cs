@@ -6,7 +6,6 @@ namespace WTF
 {
     public enum AppLayout
     {
-        Modern,
         WindowsDefault,
         WindowsLightMode,
         WindowsDarkMode
@@ -28,7 +27,7 @@ namespace WTF
         public bool ShowElevationPromptOnStartup { get; set; } = true;
         public bool StartElevatedOnStartup { get; set; }
         public bool ShellContextMenuEnabled { get; set; }
-        public AppLayout Layout { get; set; } = AppLayout.Modern;
+        public AppLayout Layout { get; set; } = AppLayout.WindowsDefault;
         public ViewMode SelectedViewMode { get; set; } = ViewMode.Table;
         public string LanguageCode { get; set; } = LocalizationService.GermanLanguageCode;
 

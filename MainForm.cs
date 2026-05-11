@@ -1,12 +1,17 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Reflection;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+
+
 
 namespace WTF
 {
@@ -19,6 +24,8 @@ namespace WTF
         private CancellationTokenSource _scanCancellationTokenSource;
         private FileSystemEntry _currentRootEntry;
         private readonly string _startupScanPath;
+        private const string GitHubRepositoryUrl = "https://github.com/UncleRiot/WTF";
+        private const string GitHubLatestReleaseApiUrl = "https://api.github.com/repos/UncleRiot/WTF/releases/latest";
 
         private MenuStrip menuStripMain;
         private ToolStripMenuItem menuItemFile;
@@ -27,6 +34,7 @@ namespace WTF
         private ToolStripMenuItem menuItemExit;
         private ToolStripMenuItem menuItemHelp;
         private ToolStripMenuItem menuItemAbout;
+        private ToolStripMenuItem menuItemGitHubUpdate;
         private ToolStripPanel toolStripPanelMain;
         private ToolStrip toolStripMain;
         private ToolStripLabel toolStripLabelDrive;
@@ -50,7 +58,7 @@ namespace WTF
         private ImageList imageListEntries;
         private DataGridView listViewPartitions;
         private ImageList imageListPartitions;
-        private DataGridView dataGridViewEntries;
+        private Chart_TableGridChart dataGridViewEntries;
         private Panel panelRightViewHost;
         private PieChartView pieChartView;
         private BarChartView barChartView;
@@ -67,9 +75,16 @@ namespace WTF
         private ScanProgress _pendingLiveTreeScanProgress;
         private bool _liveTreeUpdateInProgress;
         private bool _suspendPersistentSettingsSave;
+        private bool _suppressDriveComboBoxSelectionChanged;
+        private System.Windows.Forms.Timer gitHubUpdateBlinkTimer;
+        private bool _gitHubUpdateBlinkState;
+        private string _gitHubUpdateUrl;
 
         private const int SHGFI_ICON = 0x100;
         private const int SHGFI_SMALLICON = 0x1;
+        private const int SHGFI_USEFILEATTRIBUTES = 0x10;
+        private const uint FILE_ATTRIBUTE_DIRECTORY = 0x10;
+        private const uint FILE_ATTRIBUTE_NORMAL = 0x80;
         private const int WM_SETREDRAW = 0x000B;
         private const int TVM_SETEXTENDEDSTYLE = 0x112C;
         private const int TVS_EX_DOUBLEBUFFER = 0x0004;
@@ -149,7 +164,6 @@ namespace WTF
             listViewPartitions.SizeChanged += listViewPartitions_SizeChanged;
             treeViewEntries.BeforeExpand += treeViewEntries_BeforeExpand;
             panelRightViewHost.SizeChanged += panelRightViewHost_SizeChanged;
-            dataGridViewEntries.SizeChanged += dataGridViewEntries_SizeChanged;
             splitContainerMain.SplitterMoved += splitContainerMain_SplitterMoved;
             splitContainerMain.Panel2.SizeChanged += splitContainerMainPanel2_SizeChanged;
 
@@ -159,14 +173,14 @@ namespace WTF
             SetDoubleBuffered(pieChartView, true);
             SetDoubleBuffered(barChartView, true);
 
-            ModernFormStyler.Apply(this, _settings.Layout);
+            WindowsFormStyler.Apply(this, _settings.Layout);
+            UpdateGitHubUpdateMenuItemVisual();
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
             toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
             toolStripExport.GripStyle = ToolStripGripStyle.Visible;
             LoadDrives();
             LoadPartitionList();
             ApplyColumnLayout();
-            ConfigureEntryGridColumns();
             UpdatePartitionPanelVisibility();
             SetViewMode(_settings.SelectedViewMode);
             UpdateRightViewBounds();
@@ -176,6 +190,7 @@ namespace WTF
         private void MainForm_Shown(object sender, EventArgs e)
         {
             Shown -= MainForm_Shown;
+            _ = CheckGitHubUpdateStatusOnStartupAsync();
             StartStartupScanIfRequested();
         }
         private void StartStartupScanIfRequested()
@@ -332,6 +347,8 @@ namespace WTF
             toolStripComboBoxDrives.ComboBox.ItemHeight = Math.Max(20, toolStripComboBoxDrives.ComboBox.ItemHeight);
             toolStripComboBoxDrives.ComboBox.DrawItem -= toolStripComboBoxDrives_DrawItem;
             toolStripComboBoxDrives.ComboBox.DrawItem += toolStripComboBoxDrives_DrawItem;
+            toolStripComboBoxDrives.SelectedIndexChanged -= toolStripComboBoxDrives_SelectedIndexChanged;
+            toolStripComboBoxDrives.SelectedIndexChanged += toolStripComboBoxDrives_SelectedIndexChanged;
         }
         private void ConfigureOpenFolderButtonImage()
         {
@@ -435,103 +452,9 @@ namespace WTF
         }
         private void ConfigureEntryGridColumns()
         {
-            dataGridViewEntries.Dock = DockStyle.Fill;
-            dataGridViewEntries.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
-            dataGridViewEntries.ScrollBars = ScrollBars.Vertical;
-
-            if (dataGridViewEntries.Columns.Contains("ColumnSizeBytes"))
-            {
-                dataGridViewEntries.Columns["ColumnSizeBytes"].Visible = false;
-                dataGridViewEntries.Columns["ColumnSizeBytes"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-                dataGridViewEntries.Columns["ColumnSizeBytes"].MinimumWidth = 2;
-            }
-
-            if (dataGridViewEntries.Columns.Contains("ColumnName"))
-            {
-                dataGridViewEntries.Columns["ColumnName"].Visible = true;
-                dataGridViewEntries.Columns["ColumnName"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-                dataGridViewEntries.Columns["ColumnName"].MinimumWidth = 20;
-            }
-
-            if (dataGridViewEntries.Columns.Contains("ColumnSize"))
-            {
-                dataGridViewEntries.Columns["ColumnSize"].Visible = true;
-                dataGridViewEntries.Columns["ColumnSize"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-                dataGridViewEntries.Columns["ColumnSize"].MinimumWidth = 20;
-            }
-
-            if (dataGridViewEntries.Columns.Contains("ColumnPercent"))
-            {
-                dataGridViewEntries.Columns["ColumnPercent"].Visible = true;
-                dataGridViewEntries.Columns["ColumnPercent"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-                dataGridViewEntries.Columns["ColumnPercent"].MinimumWidth = 20;
-            }
-
-            if (dataGridViewEntries.Columns.Contains("ColumnPath"))
-            {
-                dataGridViewEntries.Columns["ColumnPath"].Visible = true;
-                dataGridViewEntries.Columns["ColumnPath"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-                dataGridViewEntries.Columns["ColumnPath"].MinimumWidth = 20;
-            }
-
-            ApplyEntryGridColumnWidths();
         }
         private void ApplyEntryGridColumnWidths()
         {
-            if (dataGridViewEntries == null)
-                return;
-
-            if (!dataGridViewEntries.Columns.Contains("ColumnName"))
-                return;
-
-            if (!dataGridViewEntries.Columns.Contains("ColumnSize"))
-                return;
-
-            if (!dataGridViewEntries.Columns.Contains("ColumnPercent"))
-                return;
-
-            if (!dataGridViewEntries.Columns.Contains("ColumnPath"))
-                return;
-
-            int availableWidth = dataGridViewEntries.ClientSize.Width - 2;
-
-            if (availableWidth <= 0)
-                return;
-
-            if (dataGridViewEntries.RowCount > 0 &&
-                dataGridViewEntries.DisplayedRowCount(false) < dataGridViewEntries.RowCount)
-            {
-                availableWidth -= SystemInformation.VerticalScrollBarWidth;
-            }
-
-            availableWidth = Math.Max(availableWidth, 80);
-
-            int nameWidth = Math.Max(20, (int)Math.Round(availableWidth * 0.34D));
-            int sizeWidth = Math.Max(20, (int)Math.Round(availableWidth * 0.14D));
-            int percentWidth = Math.Max(20, (int)Math.Round(availableWidth * 0.18D));
-            int pathWidth = Math.Max(20, availableWidth - nameWidth - sizeWidth - percentWidth);
-
-            int usedWidth = nameWidth + sizeWidth + percentWidth + pathWidth;
-
-            if (usedWidth > availableWidth)
-            {
-                int overflow = usedWidth - availableWidth;
-                pathWidth = Math.Max(20, pathWidth - overflow);
-            }
-
-            dataGridViewEntries.SuspendLayout();
-
-            try
-            {
-                dataGridViewEntries.Columns["ColumnName"].Width = nameWidth;
-                dataGridViewEntries.Columns["ColumnSize"].Width = sizeWidth;
-                dataGridViewEntries.Columns["ColumnPercent"].Width = percentWidth;
-                dataGridViewEntries.Columns["ColumnPath"].Width = pathWidth;
-            }
-            finally
-            {
-                dataGridViewEntries.ResumeLayout();
-            }
         }
         private void splitContainerMain_SplitterMoved(object sender, SplitterEventArgs e)
         {
@@ -542,38 +465,20 @@ namespace WTF
             if (panelRightViewHost == null)
                 return;
 
-            panelRightViewHost.SuspendLayout();
-
-            try
+            if (pieChartView != null)
             {
-                if (dataGridViewEntries != null)
-                {
-                    dataGridViewEntries.Dock = DockStyle.Fill;
-                    ApplyEntryGridColumnWidths();
-                }
-
-                if (pieChartView != null)
-                {
-                    pieChartView.Dock = DockStyle.Fill;
-                    pieChartView.Invalidate();
-                }
-
-                if (barChartView != null)
-                {
-                    barChartView.Dock = DockStyle.Fill;
-                    barChartView.Invalidate();
-                }
-            }
-            finally
-            {
-                panelRightViewHost.ResumeLayout(true);
+                pieChartView.Dock = DockStyle.Fill;
+                pieChartView.Invalidate();
             }
 
-            panelRightViewHost.Invalidate(true);
+            if (barChartView != null)
+            {
+                barChartView.Dock = DockStyle.Fill;
+                barChartView.Invalidate();
+            }
         }
         private void dataGridViewEntries_SizeChanged(object sender, EventArgs e)
         {
-            ApplyEntryGridColumnWidths();
         }
         private void ApplyMainWindowSettings()
         {
@@ -715,6 +620,12 @@ namespace WTF
             menuItemExit = new ToolStripMenuItem(LocalizationService.GetText("Menu.Exit"));
             menuItemHelp = new ToolStripMenuItem(LocalizationService.GetText("Menu.Help"));
             menuItemAbout = new ToolStripMenuItem(LocalizationService.GetText("Menu.About"));
+            menuItemGitHubUpdate = new ToolStripMenuItem(string.Empty);
+            menuItemGitHubUpdate.Alignment = ToolStripItemAlignment.Right;
+            menuItemGitHubUpdate.Visible = false;
+            menuItemGitHubUpdate.ForeColor = Color.Blue;
+            menuItemGitHubUpdate.Font = new Font(menuStripMain.Font, FontStyle.Underline);
+            menuItemGitHubUpdate.ToolTipText = GitHubRepositoryUrl;
 
             menuItemFile.DropDownItems.Add(menuItemExportCsv);
             menuItemFile.DropDownItems.Add(new ToolStripSeparator());
@@ -724,11 +635,13 @@ namespace WTF
             menuItemHelp.DropDownItems.Add(menuItemAbout);
             menuStripMain.Items.Add(menuItemFile);
             menuStripMain.Items.Add(menuItemHelp);
+            menuStripMain.Items.Add(menuItemGitHubUpdate);
 
             menuItemExportCsv.Click += menuItemExportCsv_Click;
             menuItemSettings.Click += menuItemSettings_Click;
             menuItemExit.Click += menuItemExit_Click;
             menuItemAbout.Click += menuItemAbout_Click;
+            menuItemGitHubUpdate.Click += menuItemGitHubUpdate_Click;
 
             toolStripPanelMain = new ToolStripPanel
             {
@@ -925,57 +838,7 @@ namespace WTF
                 }
             });
 
-            dataGridViewEntries = new DataGridView();
-            dataGridViewEntries.Dock = DockStyle.Fill;
-            dataGridViewEntries.AllowUserToAddRows = false;
-            dataGridViewEntries.AllowUserToDeleteRows = false;
-            dataGridViewEntries.AllowUserToResizeRows = false;
-            dataGridViewEntries.AutoGenerateColumns = false;
-            dataGridViewEntries.ReadOnly = true;
-            dataGridViewEntries.RowHeadersVisible = false;
-            dataGridViewEntries.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dataGridViewEntries.MultiSelect = false;
-
-            dataGridViewEntries.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "ColumnName",
-                HeaderText = LocalizationService.GetText("Common.Name"),
-                DataPropertyName = "Name",
-                Width = 220
-            });
-
-            dataGridViewEntries.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "ColumnSize",
-                HeaderText = LocalizationService.GetText("Common.Size"),
-                DataPropertyName = "FormattedSize",
-                Width = 110
-            });
-
-            dataGridViewEntries.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "ColumnSizeBytes",
-                HeaderText = LocalizationService.GetText("Common.Bytes"),
-                DataPropertyName = "SizeBytes",
-                Width = 120
-            });
-
-            dataGridViewEntries.Columns.Add(new SizeBarColumn
-            {
-                Name = "ColumnPercent",
-                HeaderText = LocalizationService.GetText("Common.Percent"),
-                DataPropertyName = "Percent",
-                Width = 160
-            });
-
-            dataGridViewEntries.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "ColumnPath",
-                HeaderText = LocalizationService.GetText("Common.Path"),
-                DataPropertyName = "FullPath",
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
-            });
-
+            dataGridViewEntries = new Chart_TableGridChart();
             pieChartView = new PieChartView
             {
                 Name = "pieChartView",
@@ -1046,6 +909,7 @@ namespace WTF
 
             statusStripMain = new StatusStrip();
             statusStripMain.SizingGrip = true;
+            statusStripMain.Dock = DockStyle.Bottom;
 
             toolStripStatusLabel = new ToolStripStatusLabel(LocalizationService.GetText("Common.Ready"))
             {
@@ -1066,26 +930,24 @@ namespace WTF
             TableLayoutPanel tableLayoutPanelMain = new TableLayoutPanel();
             tableLayoutPanelMain.Dock = DockStyle.Fill;
             tableLayoutPanelMain.ColumnCount = 1;
-            tableLayoutPanelMain.RowCount = 5;
+            tableLayoutPanelMain.RowCount = 4;
             tableLayoutPanelMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tableLayoutPanelMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tableLayoutPanelMain.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tableLayoutPanelMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tableLayoutPanelMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             menuStripMain.Dock = DockStyle.Fill;
             toolStripPanelMain.Dock = DockStyle.Fill;
             splitContainerMain.Dock = DockStyle.Fill;
             statusStripAlerts.Dock = DockStyle.Fill;
-            statusStripMain.Dock = DockStyle.Fill;
 
             tableLayoutPanelMain.Controls.Add(menuStripMain, 0, 0);
             tableLayoutPanelMain.Controls.Add(toolStripPanelMain, 0, 1);
             tableLayoutPanelMain.Controls.Add(splitContainerMain, 0, 2);
             tableLayoutPanelMain.Controls.Add(statusStripAlerts, 0, 3);
-            tableLayoutPanelMain.Controls.Add(statusStripMain, 0, 4);
 
             Controls.Add(tableLayoutPanelMain);
+            Controls.Add(statusStripMain);
 
             MainMenuStrip = menuStripMain;
         }
@@ -1100,6 +962,7 @@ namespace WTF
             menuItemExit.Text = LocalizationService.GetText("Menu.Exit");
             menuItemHelp.Text = LocalizationService.GetText("Menu.Help");
             menuItemAbout.Text = LocalizationService.GetText("Menu.About");
+            UpdateGitHubUpdateMenuItemVisual();
 
             toolStripLabelDrive.Text = LocalizationService.GetText("Toolbar.Drive");
             toolStripButtonOpenFolder.Text = LocalizationService.GetText("Toolbar.Open");
@@ -1231,12 +1094,26 @@ namespace WTF
         {
             SHFILEINFO shellFileInfo = new SHFILEINFO();
 
+            bool directoryExists = Directory.Exists(path);
+            bool fileExists = File.Exists(path);
+
+            uint attributes = directoryExists
+                ? FILE_ATTRIBUTE_DIRECTORY
+                : FILE_ATTRIBUTE_NORMAL;
+
+            uint flags = SHGFI_ICON | SHGFI_SMALLICON;
+
+            if (!directoryExists && !fileExists)
+            {
+                flags |= SHGFI_USEFILEATTRIBUTES;
+            }
+
             IntPtr result = SHGetFileInfo(
                 path,
-                0,
+                attributes,
                 ref shellFileInfo,
                 (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(SHFILEINFO)),
-                SHGFI_ICON | SHGFI_SMALLICON);
+                flags);
 
             if (result == IntPtr.Zero || shellFileInfo.hIcon == IntPtr.Zero)
             {
@@ -1258,18 +1135,27 @@ namespace WTF
         {
             List<DriveItem> drives = _driveService.GetReadyDrives();
 
-            toolStripComboBoxDrives.DropDownStyle = ComboBoxStyle.DropDownList;
-            toolStripComboBoxDrives.Items.Clear();
+            _suppressDriveComboBoxSelectionChanged = true;
 
-            foreach (DriveItem driveItem in drives)
+            try
             {
-                toolStripComboBoxDrives.Items.Add(driveItem);
+                toolStripComboBoxDrives.DropDownStyle = ComboBoxStyle.DropDownList;
+                toolStripComboBoxDrives.Items.Clear();
+
+                foreach (DriveItem driveItem in drives)
+                {
+                    toolStripComboBoxDrives.Items.Add(driveItem);
+                }
+
+                if (toolStripComboBoxDrives.Items.Count > 0)
+                {
+                    toolStripComboBoxDrives.SelectedIndex = 0;
+                    UpdateStatusStripForDrive(((DriveItem)toolStripComboBoxDrives.SelectedItem).RootPath);
+                }
             }
-
-            if (toolStripComboBoxDrives.Items.Count > 0)
+            finally
             {
-                toolStripComboBoxDrives.SelectedIndex = 0;
-                UpdateStatusStripForDrive(((DriveItem)toolStripComboBoxDrives.SelectedItem).RootPath);
+                _suppressDriveComboBoxSelectionChanged = false;
             }
         }
         private const uint SHGSI_ICON = 0x000000100;
@@ -1663,25 +1549,54 @@ namespace WTF
 
             string fullPath = Path.GetFullPath(path);
 
-            foreach (object item in toolStripComboBoxDrives.Items)
+            _suppressDriveComboBoxSelectionChanged = true;
+
+            try
             {
-                if (item is DriveItem driveItem &&
-                    string.Equals(driveItem.RootPath, fullPath, StringComparison.OrdinalIgnoreCase))
+                foreach (object item in toolStripComboBoxDrives.Items)
                 {
-                    toolStripComboBoxDrives.SelectedItem = item;
-                    return;
+                    if (item is DriveItem driveItem &&
+                        string.Equals(driveItem.RootPath, fullPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        toolStripComboBoxDrives.SelectedItem = item;
+                        return;
+                    }
+
+                    if (item is string itemPath &&
+                        string.Equals(itemPath, fullPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        toolStripComboBoxDrives.SelectedItem = item;
+                        return;
+                    }
                 }
 
-                if (item is string itemPath &&
-                    string.Equals(itemPath, fullPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    toolStripComboBoxDrives.SelectedItem = item;
-                    return;
-                }
+                toolStripComboBoxDrives.Items.Add(fullPath);
+                toolStripComboBoxDrives.SelectedItem = fullPath;
             }
+            finally
+            {
+                _suppressDriveComboBoxSelectionChanged = false;
+            }
+        }
+        private async void toolStripComboBoxDrives_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (_suppressDriveComboBoxSelectionChanged)
+                return;
 
-            toolStripComboBoxDrives.Items.Add(fullPath);
-            toolStripComboBoxDrives.SelectedItem = fullPath;
+            if (_scanCancellationTokenSource != null)
+                return;
+
+            string rootPath = GetSelectedScanPath();
+
+            if (string.IsNullOrWhiteSpace(rootPath))
+                return;
+
+            if (!Directory.Exists(rootPath))
+                return;
+
+            UpdateStatusStripForDrive(rootPath);
+
+            await StartScanAsync(rootPath);
         }
         private async void toolStripButtonScan_Click(object sender, EventArgs e)
         {
@@ -1716,7 +1631,6 @@ namespace WTF
             dataGridViewEntries.DataSource = null;
             _currentRootEntry = null;
             _pendingLiveTreeScanProgress = null;
-            treeViewEntries.Nodes.Clear();
 
             long scanTargetBytes = GetUsedSpaceBytes(rootPath);
             SetStatusProgressText(0D);
@@ -1879,12 +1793,6 @@ namespace WTF
 
             Text = title;
 
-            Control[] titleLabels = Controls.Find("labelModernTitle", true);
-
-            foreach (Control control in titleLabels)
-            {
-                control.Text = " " + title;
-            }
         }
         private void ApplyScanProgressToLiveTree(ScanProgress scanProgress)
         {
@@ -1894,17 +1802,18 @@ namespace WTF
             if (scanProgress.LiveRootEntry == null)
                 return;
 
-            if (treeViewEntries.Nodes.Count == 0)
+            TreeNode existingRootNode = FindRootNodeByFullPath(scanProgress.LiveRootEntry.FullPath);
+
+            if (existingRootNode == null)
             {
-                TreeNode rootNode = CreateLiveTreeNode(scanProgress.LiveRootEntry);
-                treeViewEntries.Nodes.Add(rootNode);
-                treeViewEntries.SelectedNode = rootNode;
-                rootNode.Expand();
-                SyncLiveTreeChildren(rootNode, scanProgress.LiveRootEntry, true);
+                existingRootNode = CreateLiveTreeNode(scanProgress.LiveRootEntry);
+                treeViewEntries.Nodes.Add(existingRootNode);
+                treeViewEntries.SelectedNode = existingRootNode;
+                existingRootNode.Expand();
+                SyncLiveTreeChildren(existingRootNode, scanProgress.LiveRootEntry, true);
                 return;
             }
 
-            TreeNode existingRootNode = treeViewEntries.Nodes[0];
             UpdateLiveTreeNode(existingRootNode, scanProgress.LiveRootEntry);
             SyncLiveTreeChildren(existingRootNode, scanProgress.LiveRootEntry, true);
 
@@ -1912,6 +1821,8 @@ namespace WTF
             {
                 existingRootNode.Expand();
             }
+
+            treeViewEntries.SelectedNode = existingRootNode;
         }
 
         private void SyncLiveTreeChildren(TreeNode parentNode, FileSystemEntry parentEntry, bool liveUpdate)
@@ -2127,12 +2038,6 @@ namespace WTF
 
             Text = title;
 
-            Control[] titleLabels = Controls.Find("labelModernTitle", true);
-
-            foreach (Control control in titleLabels)
-            {
-                control.Text = " " + title;
-            }
         }
 
         private void SetDoubleBuffered(Control control, bool enabled)
@@ -2232,14 +2137,31 @@ namespace WTF
 
         private void RenderScanResult(FileSystemEntry rootEntry)
         {
-            TreeNode rootNode = CreateTreeNode(rootEntry);
+            if (rootEntry == null)
+                return;
 
             treeViewEntries.BeginUpdate();
 
             try
             {
-                treeViewEntries.Nodes.Clear();
-                treeViewEntries.Nodes.Add(rootNode);
+                TreeNode rootNode = FindRootNodeByFullPath(rootEntry.FullPath);
+
+                if (rootNode == null)
+                {
+                    rootNode = CreateTreeNode(rootEntry);
+                    treeViewEntries.Nodes.Add(rootNode);
+                }
+                else
+                {
+                    UpdateLiveTreeNode(rootNode, rootEntry);
+                    rootNode.Nodes.Clear();
+
+                    if (rootEntry.IsDirectory && rootEntry.Children.Any())
+                    {
+                        rootNode.Nodes.Add(CreateLazyPlaceholderNode());
+                    }
+                }
+
                 PopulateTreeNodeChildren(rootNode);
                 rootNode.Expand();
                 treeViewEntries.SelectedNode = rootNode;
@@ -2252,6 +2174,22 @@ namespace WTF
             }
 
             BindGrid(rootEntry);
+        }
+        private TreeNode FindRootNodeByFullPath(string fullPath)
+        {
+            if (string.IsNullOrWhiteSpace(fullPath))
+                return null;
+
+            foreach (TreeNode rootNode in treeViewEntries.Nodes)
+            {
+                if (rootNode.Tag is FileSystemEntry rootEntry &&
+                    string.Equals(rootEntry.FullPath, fullPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return rootNode;
+                }
+            }
+
+            return null;
         }
         private string EnsureTreeDriveIcon(string rootPath)
         {
@@ -2390,22 +2328,7 @@ namespace WTF
         {
             _selectedEntry = entry;
 
-            long totalSize = entry.Children.Sum(child => child.SizeBytes);
-
-            List<EntryChartItem> rows = entry.Children
-                .OrderByDescending(child => child.SizeBytes)
-                .Select(child => new EntryChartItem
-                {
-                    Name = child.Name,
-                    FullPath = child.FullPath,
-                    SizeBytes = child.SizeBytes,
-                    FormattedSize = SizeFormatter.Format(child.SizeBytes),
-                    Percent = totalSize <= 0 ? 0 : (double)child.SizeBytes * 100D / totalSize
-                })
-                .ToList();
-
-            dataGridViewEntries.DataSource = rows;
-            ApplyEntryGridColumnWidths();
+            dataGridViewEntries.SetEntry(entry);
             pieChartView.SetEntry(entry);
             barChartView.SetEntry(entry);
             UpdateRightView();
@@ -2567,6 +2490,179 @@ namespace WTF
             return name + ".csv";
         }
 
+        private async Task CheckGitHubUpdateStatusOnStartupAsync()
+        {
+            GitHubUpdateResult result = await CheckForUpdateAsync(GetApplicationVersionText());
+
+            if (IsDisposed)
+                return;
+
+            if (!result.CanConnectToGitHub)
+                return;
+
+            if (!result.UpdateAvailable)
+                return;
+
+            _gitHubUpdateUrl = string.IsNullOrWhiteSpace(result.DownloadUrl)
+                ? GitHubRepositoryUrl
+                : result.DownloadUrl;
+
+            menuItemGitHubUpdate.Text = LocalizationService.Format("About.UpdateAvailable", result.LatestVersion);
+            menuItemGitHubUpdate.ToolTipText = _gitHubUpdateUrl;
+            menuItemGitHubUpdate.Visible = true;
+            UpdateGitHubUpdateMenuItemVisual();
+            StartGitHubUpdateBlinkTimer();
+        }
+
+        private async Task<GitHubUpdateResult> CheckForUpdateAsync(string currentVersionText)
+        {
+            try
+            {
+                using HttpClient httpClient = new HttpClient();
+                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("WTF-WhereIsTheFilespace");
+
+                string json = await httpClient.GetStringAsync(GitHubLatestReleaseApiUrl);
+
+                using JsonDocument jsonDocument = JsonDocument.Parse(json);
+                JsonElement root = jsonDocument.RootElement;
+
+                string latestVersionText = root.TryGetProperty("tag_name", out JsonElement tagNameElement)
+                    ? NormalizeVersionText(tagNameElement.GetString())
+                    : string.Empty;
+
+                string downloadUrl = root.TryGetProperty("html_url", out JsonElement htmlUrlElement)
+                    ? htmlUrlElement.GetString()
+                    : GitHubRepositoryUrl;
+
+                bool updateAvailable = IsNewerVersion(latestVersionText, currentVersionText);
+
+                return new GitHubUpdateResult
+                {
+                    CanConnectToGitHub = true,
+                    UpdateAvailable = updateAvailable,
+                    LatestVersion = latestVersionText,
+                    DownloadUrl = downloadUrl
+                };
+            }
+            catch
+            {
+                return new GitHubUpdateResult
+                {
+                    CanConnectToGitHub = false,
+                    UpdateAvailable = false,
+                    LatestVersion = string.Empty,
+                    DownloadUrl = string.Empty
+                };
+            }
+        }
+
+        private string GetApplicationVersionText()
+        {
+            Assembly assembly = typeof(MainForm).Assembly;
+
+            foreach (object attribute in assembly.GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false))
+            {
+                if (attribute is AssemblyInformationalVersionAttribute informationalVersionAttribute &&
+                    !string.IsNullOrWhiteSpace(informationalVersionAttribute.InformationalVersion))
+                {
+                    return informationalVersionAttribute.InformationalVersion.Split('+')[0];
+                }
+            }
+
+            Version version = assembly.GetName().Version;
+
+            if (version == null)
+            {
+                return LocalizationService.GetText("Common.Unknown");
+            }
+
+            return version.Major + "." + version.Minor + "." + version.Build;
+        }
+
+        private string NormalizeVersionText(string versionText)
+        {
+            if (string.IsNullOrWhiteSpace(versionText))
+            {
+                return string.Empty;
+            }
+
+            return versionText.Trim().TrimStart('v', 'V');
+        }
+
+        private bool IsNewerVersion(string latestVersionText, string currentVersionText)
+        {
+            if (!Version.TryParse(NormalizeVersionText(latestVersionText), out Version latestVersion))
+            {
+                return false;
+            }
+
+            if (!Version.TryParse(NormalizeVersionText(currentVersionText), out Version currentVersion))
+            {
+                return false;
+            }
+
+            return latestVersion > currentVersion;
+        }
+
+        private void StartGitHubUpdateBlinkTimer()
+        {
+            if (gitHubUpdateBlinkTimer == null)
+            {
+                gitHubUpdateBlinkTimer = new System.Windows.Forms.Timer();
+                gitHubUpdateBlinkTimer.Interval = 650;
+                gitHubUpdateBlinkTimer.Tick += gitHubUpdateBlinkTimer_Tick;
+            }
+
+            _gitHubUpdateBlinkState = false;
+            gitHubUpdateBlinkTimer.Start();
+        }
+
+        private void gitHubUpdateBlinkTimer_Tick(object sender, EventArgs e)
+        {
+            if (menuItemGitHubUpdate == null)
+                return;
+
+            if (!menuItemGitHubUpdate.Visible)
+                return;
+
+            _gitHubUpdateBlinkState = !_gitHubUpdateBlinkState;
+            menuItemGitHubUpdate.ForeColor = _gitHubUpdateBlinkState ? Color.Blue : Color.DodgerBlue;
+        }
+
+        private void UpdateGitHubUpdateMenuItemVisual()
+        {
+            if (menuItemGitHubUpdate == null)
+                return;
+
+            menuItemGitHubUpdate.Alignment = ToolStripItemAlignment.Right;
+            menuItemGitHubUpdate.ForeColor = Color.Blue;
+            menuItemGitHubUpdate.Font = new Font(menuStripMain.Font, FontStyle.Underline);
+            menuItemGitHubUpdate.ToolTipText = string.IsNullOrWhiteSpace(_gitHubUpdateUrl)
+                ? GitHubRepositoryUrl
+                : _gitHubUpdateUrl;
+        }
+
+        private void menuItemGitHubUpdate_Click(object sender, EventArgs e)
+        {
+            string url = string.IsNullOrWhiteSpace(_gitHubUpdateUrl)
+                ? GitHubRepositoryUrl
+                : _gitHubUpdateUrl;
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+
+        private sealed class GitHubUpdateResult
+        {
+            public bool CanConnectToGitHub { get; set; }
+            public bool UpdateAvailable { get; set; }
+            public string LatestVersion { get; set; }
+            public string DownloadUrl { get; set; }
+        }
+
         private void menuItemSettings_Click(object sender, EventArgs e)
         {
             using SettingsForm settingsForm = new SettingsForm(_settings);
@@ -2578,7 +2674,8 @@ namespace WTF
             LocalizationService.Load(_settings.LanguageCode);
             ApplyLocalizedTexts();
             LoadDrives();
-            ModernFormStyler.Apply(this, _settings.Layout);
+            WindowsFormStyler.Apply(this, _settings.Layout);
+            UpdateGitHubUpdateMenuItemVisual();
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
             toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
             UpdatePartitionPanelVisibility();
@@ -2614,6 +2711,13 @@ namespace WTF
             SaveColumnLayout();
             SaveViewSettings();
             _settings.Save();
+
+            if (gitHubUpdateBlinkTimer != null)
+            {
+                gitHubUpdateBlinkTimer.Stop();
+                gitHubUpdateBlinkTimer.Dispose();
+                gitHubUpdateBlinkTimer = null;
+            }
 
             base.OnFormClosing(e);
         }

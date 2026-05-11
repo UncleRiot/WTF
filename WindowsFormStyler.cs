@@ -1,12 +1,11 @@
 using System;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace WTF
 {
-    public static class ModernFormStyler
+    public static class WindowsFormStyler
     {
         [DllImport("dwmapi.dll")]
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
@@ -121,7 +120,29 @@ namespace WTF
             control.Font = SystemFonts.MessageBoxFont;
             control.ForeColor = textColor;
 
-            if (control is TextBox textBox)
+            if (control is TabControl tabControl)
+            {
+                tabControl.DrawMode = useDarkMode ? TabDrawMode.OwnerDrawFixed : TabDrawMode.Normal;
+                tabControl.BackColor = useDarkMode ? windowBackColor : SystemColors.Control;
+                tabControl.ForeColor = textColor;
+                tabControl.DrawItem -= tabControl_DrawItem;
+
+                if (useDarkMode)
+                {
+                    tabControl.DrawItem += tabControl_DrawItem;
+                    DarkTabControlHeaderPainter.Attach(tabControl);
+                }
+                else
+                {
+                    DarkTabControlHeaderPainter.Detach(tabControl);
+                }
+            }
+            else if (control is TabPage tabPage)
+            {
+                tabPage.BackColor = useDarkMode ? windowBackColor : SystemColors.Control;
+                tabPage.ForeColor = textColor;
+            }
+            else if (control is TextBox textBox)
             {
                 textBox.BorderStyle = BorderStyle.Fixed3D;
                 textBox.BackColor = windowBackColor;
@@ -129,20 +150,39 @@ namespace WTF
             }
             else if (control is ComboBox comboBox)
             {
-                comboBox.FlatStyle = FlatStyle.Standard;
+                comboBox.FlatStyle = useDarkMode ? FlatStyle.Flat : FlatStyle.Standard;
                 comboBox.BackColor = windowBackColor;
                 comboBox.ForeColor = textColor;
+
+                if (comboBox.DrawMode != DrawMode.OwnerDrawFixed)
+                {
+                    comboBox.DrawMode = useDarkMode ? DrawMode.OwnerDrawFixed : DrawMode.Normal;
+                }
+
+                if (useDarkMode)
+                {
+                    comboBox.DrawItem -= comboBox_DrawItem;
+                    comboBox.DrawItem += comboBox_DrawItem;
+                }
             }
             else if (control is Button button)
             {
-                button.FlatStyle = FlatStyle.Standard;
+                button.FlatStyle = useDarkMode ? FlatStyle.Flat : FlatStyle.Standard;
                 button.UseVisualStyleBackColor = !useDarkMode;
                 button.BackColor = useDarkMode ? controlBackColor : SystemColors.Control;
                 button.ForeColor = textColor;
                 button.Cursor = Cursors.Default;
+
+                if (useDarkMode)
+                {
+                    button.FlatAppearance.BorderColor = Color.FromArgb(120, 120, 120);
+                    button.FlatAppearance.MouseOverBackColor = Color.FromArgb(55, 55, 55);
+                    button.FlatAppearance.MouseDownBackColor = Color.FromArgb(65, 65, 65);
+                }
             }
             else if (control is CheckBox checkBox)
             {
+                checkBox.FlatStyle = useDarkMode ? FlatStyle.Flat : FlatStyle.Standard;
                 checkBox.UseVisualStyleBackColor = !useDarkMode;
                 checkBox.BackColor = useDarkMode ? windowBackColor : SystemColors.Control;
                 checkBox.ForeColor = textColor;
@@ -164,20 +204,25 @@ namespace WTF
             {
                 menuStrip.BackColor = controlBackColor;
                 menuStrip.ForeColor = textColor;
-                menuStrip.RenderMode = ToolStripRenderMode.System;
-                menuStrip.Renderer = null;
+                menuStrip.RenderMode = ToolStripRenderMode.ManagerRenderMode;
+                menuStrip.Renderer = useDarkMode ? new DarkToolStripRenderer() : null;
 
-                foreach (ToolStripMenuItem item in menuStrip.Items)
+                foreach (ToolStripItem item in menuStrip.Items)
                 {
-                    ApplyWindowsMenuItem(item, useDarkMode);
+                    ApplyWindowsToolStripItem(item, useDarkMode);
+
+                    if (item is ToolStripMenuItem menuItem)
+                    {
+                        ApplyWindowsMenuItem(menuItem, useDarkMode);
+                    }
                 }
             }
             else if (control is ToolStrip toolStrip)
             {
                 toolStrip.BackColor = controlBackColor;
                 toolStrip.ForeColor = textColor;
-                toolStrip.RenderMode = ToolStripRenderMode.System;
-                toolStrip.Renderer = null;
+                toolStrip.RenderMode = ToolStripRenderMode.ManagerRenderMode;
+                toolStrip.Renderer = useDarkMode ? new DarkToolStripRenderer() : null;
                 toolStrip.GripStyle = ToolStripGripStyle.Hidden;
 
                 foreach (ToolStripItem item in toolStrip.Items)
@@ -189,8 +234,8 @@ namespace WTF
             {
                 statusStrip.BackColor = controlBackColor;
                 statusStrip.ForeColor = textColor;
-                statusStrip.RenderMode = ToolStripRenderMode.System;
-                statusStrip.Renderer = null;
+                statusStrip.RenderMode = ToolStripRenderMode.ManagerRenderMode;
+                statusStrip.Renderer = useDarkMode ? new DarkToolStripRenderer() : null;
 
                 foreach (ToolStripItem item in statusStrip.Items)
                 {
@@ -280,6 +325,67 @@ namespace WTF
             }
         }
 
+        private static void tabControl_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            if (sender is not TabControl tabControl)
+                return;
+
+            bool selected = e.Index == tabControl.SelectedIndex;
+
+            Color backColor = selected
+                ? Color.FromArgb(32, 32, 32)
+                : Color.FromArgb(45, 45, 45);
+
+            Color foreColor = Color.White;
+            Color borderColor = Color.FromArgb(120, 120, 120);
+
+            Rectangle tabBounds = tabControl.GetTabRect(e.Index);
+
+            using SolidBrush backBrush = new SolidBrush(backColor);
+            e.Graphics.FillRectangle(backBrush, tabBounds);
+
+            using Pen borderPen = new Pen(borderColor);
+            e.Graphics.DrawRectangle(borderPen, tabBounds);
+
+            TextRenderer.DrawText(
+                e.Graphics,
+                tabControl.TabPages[e.Index].Text,
+                tabControl.Font,
+                tabBounds,
+                foreColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        }
+
+        private static void comboBox_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            if (sender is not ComboBox comboBox)
+                return;
+
+            if (e.Index < 0)
+                return;
+
+            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+
+            Color backColor = selected
+                ? SystemColors.Highlight
+                : Color.FromArgb(32, 32, 32);
+
+            Color foreColor = selected
+                ? SystemColors.HighlightText
+                : Color.White;
+
+            using SolidBrush backBrush = new SolidBrush(backColor);
+            e.Graphics.FillRectangle(backBrush, e.Bounds);
+
+            TextRenderer.DrawText(
+                e.Graphics,
+                comboBox.Items[e.Index].ToString(),
+                e.Font,
+                e.Bounds,
+                foreColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+        }
+
         private static void ApplyWindowsMenuItem(ToolStripMenuItem item, bool useDarkMode)
         {
             Color backColor = useDarkMode
@@ -328,6 +434,136 @@ namespace WTF
 
             int useDarkMode = enabled ? 1 : 0;
             DwmSetWindowAttribute(form.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDarkMode, sizeof(int));
+        }
+
+        private sealed class DarkTabControlHeaderPainter : NativeWindow
+        {
+            private const int WM_PAINT = 0x000F;
+            private readonly TabControl _tabControl;
+
+            private DarkTabControlHeaderPainter(TabControl tabControl)
+            {
+                _tabControl = tabControl;
+                AssignHandle(tabControl.Handle);
+            }
+
+            public static void Attach(TabControl tabControl)
+            {
+                if (tabControl.Tag is DarkTabControlHeaderPainter)
+                    return;
+
+                tabControl.Tag = new DarkTabControlHeaderPainter(tabControl);
+            }
+
+            public static void Detach(TabControl tabControl)
+            {
+                if (tabControl.Tag is not DarkTabControlHeaderPainter painter)
+                    return;
+
+                painter.ReleaseHandle();
+                tabControl.Tag = null;
+                tabControl.Invalidate();
+            }
+
+            protected override void WndProc(ref Message m)
+            {
+                base.WndProc(ref m);
+
+                if (m.Msg != WM_PAINT)
+                    return;
+
+                if (_tabControl.TabPages.Count == 0)
+                    return;
+
+                using Graphics graphics = Graphics.FromHwnd(_tabControl.Handle);
+
+                int headerHeight = _tabControl.DisplayRectangle.Top;
+                Rectangle lastTabBounds = _tabControl.GetTabRect(_tabControl.TabPages.Count - 1);
+
+                Rectangle headerBounds = new Rectangle(
+                    lastTabBounds.Right,
+                    0,
+                    Math.Max(0, _tabControl.Width - lastTabBounds.Right),
+                    headerHeight);
+
+                using SolidBrush headerBrush = new SolidBrush(Color.FromArgb(32, 32, 32));
+                graphics.FillRectangle(headerBrush, headerBounds);
+
+                using Pen borderPen = new Pen(Color.FromArgb(120, 120, 120));
+                graphics.DrawLine(borderPen, 0, headerHeight - 1, _tabControl.Width, headerHeight - 1);
+            }
+        }
+
+        private sealed class DarkToolStripRenderer : ToolStripProfessionalRenderer
+        {
+            public DarkToolStripRenderer()
+                : base(new DarkProfessionalColorTable())
+            {
+            }
+
+            protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
+            {
+                using SolidBrush brush = new SolidBrush(Color.FromArgb(45, 45, 45));
+                e.Graphics.FillRectangle(brush, e.AffectedBounds);
+            }
+
+            protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+            {
+                Rectangle bounds = new Rectangle(Point.Empty, e.Item.Size);
+
+                Color backColor = e.Item.Selected
+                    ? Color.FromArgb(65, 65, 65)
+                    : Color.FromArgb(45, 45, 45);
+
+                using SolidBrush brush = new SolidBrush(backColor);
+                e.Graphics.FillRectangle(brush, bounds);
+            }
+
+            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+            {
+                e.TextColor = Color.White;
+                base.OnRenderItemText(e);
+            }
+
+            protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+            {
+                using Pen pen = new Pen(Color.FromArgb(80, 80, 80));
+                int y = e.Item.Height / 2;
+                e.Graphics.DrawLine(pen, 4, y, e.Item.Width - 4, y);
+            }
+
+            protected override void OnRenderImageMargin(ToolStripRenderEventArgs e)
+            {
+                using SolidBrush brush = new SolidBrush(Color.FromArgb(45, 45, 45));
+                e.Graphics.FillRectangle(brush, e.AffectedBounds);
+            }
+
+            protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+            {
+                using Pen pen = new Pen(Color.FromArgb(80, 80, 80));
+                Rectangle bounds = new Rectangle(Point.Empty, e.ToolStrip.Size - new Size(1, 1));
+                e.Graphics.DrawRectangle(pen, bounds);
+            }
+        }
+
+        private sealed class DarkProfessionalColorTable : ProfessionalColorTable
+        {
+            public override Color ToolStripDropDownBackground => Color.FromArgb(45, 45, 45);
+            public override Color MenuBorder => Color.FromArgb(80, 80, 80);
+            public override Color MenuItemBorder => Color.FromArgb(80, 80, 80);
+            public override Color MenuItemSelected => Color.FromArgb(65, 65, 65);
+            public override Color MenuItemSelectedGradientBegin => Color.FromArgb(65, 65, 65);
+            public override Color MenuItemSelectedGradientEnd => Color.FromArgb(65, 65, 65);
+            public override Color MenuItemPressedGradientBegin => Color.FromArgb(65, 65, 65);
+            public override Color MenuItemPressedGradientMiddle => Color.FromArgb(65, 65, 65);
+            public override Color MenuItemPressedGradientEnd => Color.FromArgb(65, 65, 65);
+            public override Color ImageMarginGradientBegin => Color.FromArgb(45, 45, 45);
+            public override Color ImageMarginGradientMiddle => Color.FromArgb(45, 45, 45);
+            public override Color ImageMarginGradientEnd => Color.FromArgb(45, 45, 45);
+            public override Color ToolStripBorder => Color.FromArgb(80, 80, 80);
+            public override Color ToolStripGradientBegin => Color.FromArgb(45, 45, 45);
+            public override Color ToolStripGradientMiddle => Color.FromArgb(45, 45, 45);
+            public override Color ToolStripGradientEnd => Color.FromArgb(45, 45, 45);
         }
     }
 }

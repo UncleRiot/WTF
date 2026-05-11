@@ -32,7 +32,14 @@ namespace WTF
             _settings = settings;
 
             InitializeComponent();
+            WindowsFormStyler.Apply(this, _settings.Layout);
+            ConfigureImageBackgrounds();
             UpdateGitHubStatusAsync();
+        }
+        private void ConfigureImageBackgrounds()
+        {
+            pictureBoxMolotov.BackColor = Color.Transparent;
+            pictureBoxKoFi.BackColor = Color.Transparent;
         }
 
         private void InitializeComponent()
@@ -62,7 +69,7 @@ namespace WTF
             {
                 Name = "labelTitle",
                 Text = LocalizationService.GetText("App.Title"),
-                Font = new Font(ModernTheme.FontFamilyName, 11F, FontStyle.Bold),
+                Font = new Font(SystemFonts.MessageBoxFont, FontStyle.Bold),
                 AutoSize = true,
                 Location = new Point(122, 26),
                 BackColor = Color.Transparent
@@ -210,9 +217,15 @@ namespace WTF
             using Image sourceImage = Image.FromStream(stream);
             Bitmap output = new Bitmap(sourceImage.Width, sourceImage.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
 
-            using Graphics graphics = Graphics.FromImage(output);
-            graphics.Clear(Color.Transparent);
-            graphics.DrawImage(sourceImage, 0, 0, sourceImage.Width, sourceImage.Height);
+            using (Graphics graphics = Graphics.FromImage(output))
+            {
+                graphics.Clear(Color.Transparent);
+                graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
+                graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                graphics.DrawImage(sourceImage, 0, 0, sourceImage.Width, sourceImage.Height);
+            }
 
             output.MakeTransparent(Color.White);
 

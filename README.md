@@ -23,7 +23,6 @@ WTF is a lightweight Windows disk space analyzer for quickly finding where stora
 - Optional Explorer context menu entry for folders and drives.
 - Optional display of files inside the tree.
 - Configurable layout (in progress):
-  - Modern
   - Windows default
   - Windows light mode
   - Windows dark mode

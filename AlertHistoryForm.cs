@@ -22,7 +22,7 @@ namespace WTF
             _settings = settings;
 
             InitializeComponent();
-            ModernFormStyler.Apply(this, _settings.Layout);
+            WindowsFormStyler.Apply(this, _settings.Layout);
             LoadAlerts();
 
             AppAlertLog.Changed += AppAlertLog_Changed;

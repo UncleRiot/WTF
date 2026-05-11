@@ -2,7 +2,6 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
-
 namespace WTF
 {
     public sealed class SizeBarCell : DataGridViewTextBoxCell
@@ -48,7 +47,7 @@ namespace WTF
                 (int)((cellBounds.Width - 8) * percent / 100D),
                 cellBounds.Height - 12);
 
-            using Brush barBrush = new SolidBrush(ModernTheme.AccentColor);
+            using Brush barBrush = new SolidBrush(SystemColors.Highlight);
             graphics.FillRectangle(barBrush, barBounds);
 
             string text = percent.ToString("0.##") + " %";

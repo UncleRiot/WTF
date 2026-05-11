@@ -88,7 +88,7 @@ namespace WTF
                 Text = title;
 
                 InitializeComponent();
-                ModernFormStyler.Apply(this, _settings.Layout);
+                WindowsFormStyler.Apply(this, _settings.Layout);
             }
 
             private void InitializeComponent()

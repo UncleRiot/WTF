@@ -10,6 +10,21 @@ namespace WTF
 {
     public sealed class PieChartView : Control
     {
+        private static readonly Color[] ChartColors =
+{
+    Color.FromArgb(102, 192, 244),
+    Color.FromArgb(244, 159, 67),
+    Color.FromArgb(120, 220, 140),
+    Color.FromArgb(190, 140, 255),
+    Color.FromArgb(255, 120, 120),
+    Color.FromArgb(120, 210, 210),
+    Color.FromArgb(255, 210, 90),
+    Color.FromArgb(170, 190, 255),
+    Color.FromArgb(210, 160, 120),
+    Color.FromArgb(150, 220, 180),
+    Color.FromArgb(220, 150, 210)
+};
+
         private readonly ToolTip _toolTip;
         private readonly List<ChartHitArea> _hitAreas;
         private FileSystemEntry _entry;
@@ -102,7 +117,7 @@ namespace WTF
                 ChartItem item = chartItems[index];
                 float sweepAngle = (float)((double)item.SizeBytes * 360D / totalSize);
 
-                using SolidBrush brush = new SolidBrush(ModernTheme.ChartColors[index % ModernTheme.ChartColors.Length]);
+                using SolidBrush brush = new SolidBrush(ChartColors[index % ChartColors.Length]);
                 e.Graphics.FillPie(brush, chartBounds, startAngle, sweepAngle);
 
                 if (item.Entry != null)
@@ -159,7 +174,7 @@ namespace WTF
             {
                 ChartItem item = chartItems[index];
 
-                using SolidBrush colorBrush = new SolidBrush(ModernTheme.ChartColors[index % ModernTheme.ChartColors.Length]);
+                using SolidBrush colorBrush = new SolidBrush(ChartColors[index % ChartColors.Length]);
                 graphics.FillRectangle(colorBrush, left, y + 3, 14, 14);
 
                 string text = string.Format(
