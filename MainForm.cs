@@ -1502,16 +1502,7 @@ namespace WTF
                 e.Graphics.FillRectangle(backgroundBrush, rowBounds);
             }
 
-            long totalSizeBytes = 0;
-
-            if (_currentRootEntry != null)
-            {
-                totalSizeBytes = _currentRootEntry.SizeBytes;
-            }
-            else if (treeViewEntries.Nodes.Count > 0 && treeViewEntries.Nodes[0].Tag is FileSystemEntry liveRootEntry)
-            {
-                totalSizeBytes = liveRootEntry.SizeBytes;
-            }
+            long totalSizeBytes = GetTreeRootSizeBytes(e.Node);
 
             if (totalSizeBytes <= 0)
             {
@@ -1546,6 +1537,25 @@ namespace WTF
                 rowBounds,
                 selected ? System.Drawing.SystemColors.HighlightText : treeViewEntries.ForeColor,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+        private long GetTreeRootSizeBytes(TreeNode node)
+        {
+            if (node == null)
+                return 0;
+
+            TreeNode rootNode = node;
+
+            while (rootNode.Parent != null)
+            {
+                rootNode = rootNode.Parent;
+            }
+
+            if (rootNode.Tag is FileSystemEntry rootEntry)
+            {
+                return rootEntry.SizeBytes;
+            }
+
+            return 0;
         }
         private string GetSelectedScanPath()
         {
