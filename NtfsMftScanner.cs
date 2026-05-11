@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Filesystem.Ntfs;
@@ -67,7 +67,7 @@ namespace WTF
 
                 if (string.IsNullOrWhiteSpace(driveRoot))
                 {
-                    throw new InvalidOperationException("Kein gültiges NTFS-Laufwerk.");
+                    throw new InvalidOperationException(LocalizationService.GetText("Alert.InvalidNtfsDrive"));
                 }
 
                 DriveInfo driveInfo = new DriveInfo(driveRoot);
@@ -162,7 +162,7 @@ namespace WTF
 
                 progress?.Report(new ScanProgress
                 {
-                    CurrentPath = "MFT-Schnellscan abgeschlossen",
+                    CurrentPath = LocalizationService.GetText("Status.MftFastScanCompleted"),
                     ScannedBytes = rootEntry.SizeBytes,
                     ScannedDirectories = scannedDirectories,
                     ScannedFiles = scannedFiles,

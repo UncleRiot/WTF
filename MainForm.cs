@@ -126,6 +126,7 @@ namespace WTF
             _suspendPersistentSettingsSave = true;
 
             _settings = AppSettings.Load();
+            LocalizationService.Load(_settings.LanguageCode);
             _driveService = new DriveService();
             _csvExportService = new CsvExportService();
             _viewMode = _settings.SelectedViewMode;
@@ -200,32 +201,7 @@ namespace WTF
                 return;
 
             SaveViewSettings();
-            TrySaveAppSettings(false);
-        }
-
-        private bool TrySaveAppSettings(bool showMessage)
-        {
-            try
-            {
-                _settings.Save();
-                return true;
-            }
-            catch (Exception exception)
-            {
-                AppAlertLog.AddError("Einstellungen", "Einstellungen konnten nicht gespeichert werden: " + exception.Message);
-
-                if (showMessage)
-                {
-                    MessageBox.Show(
-                        this,
-                        "Die Einstellungen konnten nicht gespeichert werden." + Environment.NewLine + Environment.NewLine + exception.Message,
-                        Text,
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
-                }
-
-                return false;
-            }
+            _settings.Save();
         }
         private void toolStripLayout_LocationChanged(object sender, EventArgs e)
         {
@@ -723,7 +699,7 @@ namespace WTF
         }
         private void InitializeComponent()
         {
-            Text = "WTF - Where’s The Filespace";
+            Text = LocalizationService.GetText("App.Title");
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new System.Drawing.Size(780, 490);
             Size = new System.Drawing.Size(1180, 760);
@@ -733,12 +709,12 @@ namespace WTF
             menuStripMain = new MenuStrip();
             menuStripMain.Padding = new Padding(0, 2, 0, 2);
 
-            menuItemFile = new ToolStripMenuItem("Datei");
-            menuItemExportCsv = new ToolStripMenuItem("Export CSV");
-            menuItemSettings = new ToolStripMenuItem("Einstellungen");
-            menuItemExit = new ToolStripMenuItem("Beenden");
-            menuItemHelp = new ToolStripMenuItem("Hilfe");
-            menuItemAbout = new ToolStripMenuItem("Über");
+            menuItemFile = new ToolStripMenuItem(LocalizationService.GetText("Menu.File"));
+            menuItemExportCsv = new ToolStripMenuItem(LocalizationService.GetText("Menu.ExportCsv"));
+            menuItemSettings = new ToolStripMenuItem(LocalizationService.GetText("Menu.Settings"));
+            menuItemExit = new ToolStripMenuItem(LocalizationService.GetText("Menu.Exit"));
+            menuItemHelp = new ToolStripMenuItem(LocalizationService.GetText("Menu.Help"));
+            menuItemAbout = new ToolStripMenuItem(LocalizationService.GetText("Menu.About"));
 
             menuItemFile.DropDownItems.Add(menuItemExportCsv);
             menuItemFile.DropDownItems.Add(new ToolStripSeparator());
@@ -768,20 +744,20 @@ namespace WTF
             toolStripMain.Padding = new Padding(0);
             toolStripMain.Margin = new Padding(0);
 
-            toolStripLabelDrive = new ToolStripLabel("Laufwerk:");
+            toolStripLabelDrive = new ToolStripLabel(LocalizationService.GetText("Toolbar.Drive"));
             toolStripComboBoxDrives = new ToolStripComboBox();
             toolStripButtonScan = new ToolStripButton("▶");
-            toolStripButtonOpenFolder = new ToolStripButton("Öffnen");
+            toolStripButtonOpenFolder = new ToolStripButton(LocalizationService.GetText("Toolbar.Open"));
 
             toolStripLabelDrive.Margin = new Padding(0, 1, 0, 2);
             toolStripComboBoxDrives.DropDownStyle = ComboBoxStyle.DropDownList;
             toolStripComboBoxDrives.AutoSize = false;
             toolStripComboBoxDrives.Width = 260;
             toolStripButtonScan.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            toolStripButtonScan.ToolTipText = "Scan starten";
+            toolStripButtonScan.ToolTipText = LocalizationService.GetText("Toolbar.ScanStart");
             toolStripButtonScan.Click += toolStripButtonScan_Click;
             toolStripButtonOpenFolder.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            toolStripButtonOpenFolder.ToolTipText = "Ordner auswählen und scannen";
+            toolStripButtonOpenFolder.ToolTipText = LocalizationService.GetText("Toolbar.SelectFolderAndScan");
             toolStripButtonOpenFolder.Click += toolStripButtonOpenFolder_Click;
 
             toolStripMain.Items.Add(toolStripLabelDrive);
@@ -796,9 +772,9 @@ namespace WTF
             toolStripViewMode.Padding = new Padding(0);
             toolStripViewMode.Margin = new Padding(0);
 
-            toolStripButtonTable = new ToolStripButton("▦ Tabelle");
-            toolStripButtonPieChart = new ToolStripButton("◔ Pie-Chart");
-            toolStripButtonBarChart = new ToolStripButton("▥ Balkenchart");
+            toolStripButtonTable = new ToolStripButton(LocalizationService.GetText("Toolbar.Table"));
+            toolStripButtonPieChart = new ToolStripButton(LocalizationService.GetText("Toolbar.PieChart"));
+            toolStripButtonBarChart = new ToolStripButton(LocalizationService.GetText("Toolbar.BarChart"));
 
             toolStripButtonTable.DisplayStyle = ToolStripItemDisplayStyle.Text;
             toolStripButtonPieChart.DisplayStyle = ToolStripItemDisplayStyle.Text;
@@ -819,10 +795,10 @@ namespace WTF
             toolStripExport.Padding = new Padding(0);
             toolStripExport.Margin = new Padding(0);
 
-            toolStripButtonExportCsv = new ToolStripButton("Export");
+            toolStripButtonExportCsv = new ToolStripButton(LocalizationService.GetText("Toolbar.Export"));
             toolStripButtonExportCsv.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
             toolStripButtonExportCsv.Image = CreateExportButtonImage();
-            toolStripButtonExportCsv.ToolTipText = "CSV exportieren";
+            toolStripButtonExportCsv.ToolTipText = LocalizationService.GetText("Toolbar.ExportCsv");
             toolStripButtonExportCsv.Enabled = false;
             menuItemExportCsv.Enabled = false;
             toolStripButtonExportCsv.Click += toolStripButtonExportCsv_Click;
@@ -872,9 +848,9 @@ namespace WTF
             treeViewEntries.NodeMouseClick += treeViewEntries_NodeMouseClick;
 
             contextMenuStripTreeEntries = new ContextMenuStrip();
-            contextMenuItemOpenInExplorer = new ToolStripMenuItem("Im Explorer öffnen");
-            contextMenuItemExport = new ToolStripMenuItem("Export");
-            contextMenuItemCopyToClipboard = new ToolStripMenuItem("In Zwischenablage kopieren");
+            contextMenuItemOpenInExplorer = new ToolStripMenuItem(LocalizationService.GetText("Context.OpenInExplorer"));
+            contextMenuItemExport = new ToolStripMenuItem(LocalizationService.GetText("Context.Export"));
+            contextMenuItemCopyToClipboard = new ToolStripMenuItem(LocalizationService.GetText("Context.CopyToClipboard"));
             contextMenuItemOpenInExplorer.Click += contextMenuItemOpenInExplorer_Click;
             contextMenuItemExport.Click += contextMenuItemExport_Click;
             contextMenuItemCopyToClipboard.Click += contextMenuItemCopyToClipboard_Click;
@@ -908,7 +884,7 @@ namespace WTF
             listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "PartitionColumnName",
-                HeaderText = "Name",
+                HeaderText = LocalizationService.GetText("Common.Name"),
                 Width = 120,
                 SortMode = DataGridViewColumnSortMode.NotSortable
             });
@@ -916,7 +892,7 @@ namespace WTF
             listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "PartitionColumnSize",
-                HeaderText = "Größe",
+                HeaderText = LocalizationService.GetText("Common.Size"),
                 Width = 80,
                 SortMode = DataGridViewColumnSortMode.NotSortable,
                 DefaultCellStyle = new DataGridViewCellStyle
@@ -928,7 +904,7 @@ namespace WTF
             listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "PartitionColumnFree",
-                HeaderText = "Frei",
+                HeaderText = LocalizationService.GetText("Common.Free"),
                 Width = 80,
                 SortMode = DataGridViewColumnSortMode.NotSortable,
                 DefaultCellStyle = new DataGridViewCellStyle
@@ -940,7 +916,7 @@ namespace WTF
             listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "PartitionColumnFreePercent",
-                HeaderText = "% Frei",
+                HeaderText = LocalizationService.GetText("Common.FreePercent"),
                 Width = 70,
                 SortMode = DataGridViewColumnSortMode.NotSortable,
                 DefaultCellStyle = new DataGridViewCellStyle
@@ -963,7 +939,7 @@ namespace WTF
             dataGridViewEntries.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnName",
-                HeaderText = "Name",
+                HeaderText = LocalizationService.GetText("Common.Name"),
                 DataPropertyName = "Name",
                 Width = 220
             });
@@ -971,7 +947,7 @@ namespace WTF
             dataGridViewEntries.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnSize",
-                HeaderText = "Größe",
+                HeaderText = LocalizationService.GetText("Common.Size"),
                 DataPropertyName = "FormattedSize",
                 Width = 110
             });
@@ -979,7 +955,7 @@ namespace WTF
             dataGridViewEntries.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnSizeBytes",
-                HeaderText = "Bytes",
+                HeaderText = LocalizationService.GetText("Common.Bytes"),
                 DataPropertyName = "SizeBytes",
                 Width = 120
             });
@@ -987,7 +963,7 @@ namespace WTF
             dataGridViewEntries.Columns.Add(new SizeBarColumn
             {
                 Name = "ColumnPercent",
-                HeaderText = "Anteil",
+                HeaderText = LocalizationService.GetText("Common.Percent"),
                 DataPropertyName = "Percent",
                 Width = 160
             });
@@ -995,7 +971,7 @@ namespace WTF
             dataGridViewEntries.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnPath",
-                HeaderText = "Pfad",
+                HeaderText = LocalizationService.GetText("Common.Path"),
                 DataPropertyName = "FullPath",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
             });
@@ -1041,7 +1017,7 @@ namespace WTF
                 Name = "toolStripAlertInformationLabel",
                 Image = SystemIcons.Information.ToBitmap(),
                 Text = "0",
-                ToolTipText = "Informationen anzeigen"
+                ToolTipText = LocalizationService.GetText("Alert.ToolTipInformation")
             };
 
             toolStripAlertWarningLabel = new ToolStripStatusLabel
@@ -1049,7 +1025,7 @@ namespace WTF
                 Name = "toolStripAlertWarningLabel",
                 Image = SystemIcons.Warning.ToBitmap(),
                 Text = "0",
-                ToolTipText = "Warnungen anzeigen"
+                ToolTipText = LocalizationService.GetText("Alert.ToolTipWarning")
             };
 
             toolStripAlertErrorLabel = new ToolStripStatusLabel
@@ -1057,7 +1033,7 @@ namespace WTF
                 Name = "toolStripAlertErrorLabel",
                 Image = SystemIcons.Error.ToBitmap(),
                 Text = "0",
-                ToolTipText = "Fehler anzeigen"
+                ToolTipText = LocalizationService.GetText("Alert.ToolTipError")
             };
 
             toolStripAlertInformationLabel.Click += toolStripAlertLabel_Click;
@@ -1071,7 +1047,7 @@ namespace WTF
             statusStripMain = new StatusStrip();
             statusStripMain.SizingGrip = true;
 
-            toolStripStatusLabel = new ToolStripStatusLabel("Bereit")
+            toolStripStatusLabel = new ToolStripStatusLabel(LocalizationService.GetText("Common.Ready"))
             {
                 Spring = true,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft
@@ -1113,6 +1089,95 @@ namespace WTF
 
             MainMenuStrip = menuStripMain;
         }
+
+        private void ApplyLocalizedTexts()
+        {
+            Text = LocalizationService.GetText("App.Title");
+
+            menuItemFile.Text = LocalizationService.GetText("Menu.File");
+            menuItemExportCsv.Text = LocalizationService.GetText("Menu.ExportCsv");
+            menuItemSettings.Text = LocalizationService.GetText("Menu.Settings");
+            menuItemExit.Text = LocalizationService.GetText("Menu.Exit");
+            menuItemHelp.Text = LocalizationService.GetText("Menu.Help");
+            menuItemAbout.Text = LocalizationService.GetText("Menu.About");
+
+            toolStripLabelDrive.Text = LocalizationService.GetText("Toolbar.Drive");
+            toolStripButtonOpenFolder.Text = LocalizationService.GetText("Toolbar.Open");
+            toolStripButtonScan.ToolTipText = _scanCancellationTokenSource != null
+                ? LocalizationService.GetText("Toolbar.ScanCancel")
+                : LocalizationService.GetText("Toolbar.ScanStart");
+            toolStripButtonOpenFolder.ToolTipText = LocalizationService.GetText("Toolbar.SelectFolderAndScan");
+            toolStripButtonTable.Text = LocalizationService.GetText("Toolbar.Table");
+            toolStripButtonPieChart.Text = LocalizationService.GetText("Toolbar.PieChart");
+            toolStripButtonBarChart.Text = LocalizationService.GetText("Toolbar.BarChart");
+            toolStripButtonExportCsv.Text = LocalizationService.GetText("Toolbar.Export");
+            toolStripButtonExportCsv.ToolTipText = LocalizationService.GetText("Toolbar.ExportCsv");
+
+            contextMenuItemOpenInExplorer.Text = LocalizationService.GetText("Context.OpenInExplorer");
+            contextMenuItemExport.Text = LocalizationService.GetText("Context.Export");
+            contextMenuItemCopyToClipboard.Text = LocalizationService.GetText("Context.CopyToClipboard");
+
+            if (toolStripAlertInformationLabel != null)
+            {
+                toolStripAlertInformationLabel.ToolTipText = LocalizationService.GetText("Alert.ToolTipInformation");
+            }
+
+            if (toolStripAlertWarningLabel != null)
+            {
+                toolStripAlertWarningLabel.ToolTipText = LocalizationService.GetText("Alert.ToolTipWarning");
+            }
+
+            if (toolStripAlertErrorLabel != null)
+            {
+                toolStripAlertErrorLabel.ToolTipText = LocalizationService.GetText("Alert.ToolTipError");
+            }
+
+            if (listViewPartitions.Columns.Contains("PartitionColumnName"))
+            {
+                listViewPartitions.Columns["PartitionColumnName"].HeaderText = LocalizationService.GetText("Common.Name");
+            }
+
+            if (listViewPartitions.Columns.Contains("PartitionColumnSize"))
+            {
+                listViewPartitions.Columns["PartitionColumnSize"].HeaderText = LocalizationService.GetText("Common.Size");
+            }
+
+            if (listViewPartitions.Columns.Contains("PartitionColumnFree"))
+            {
+                listViewPartitions.Columns["PartitionColumnFree"].HeaderText = LocalizationService.GetText("Common.Free");
+            }
+
+            if (listViewPartitions.Columns.Contains("PartitionColumnFreePercent"))
+            {
+                listViewPartitions.Columns["PartitionColumnFreePercent"].HeaderText = LocalizationService.GetText("Common.FreePercent");
+            }
+
+            if (dataGridViewEntries.Columns.Contains("ColumnName"))
+            {
+                dataGridViewEntries.Columns["ColumnName"].HeaderText = LocalizationService.GetText("Common.Name");
+            }
+
+            if (dataGridViewEntries.Columns.Contains("ColumnSize"))
+            {
+                dataGridViewEntries.Columns["ColumnSize"].HeaderText = LocalizationService.GetText("Common.Size");
+            }
+
+            if (dataGridViewEntries.Columns.Contains("ColumnSizeBytes"))
+            {
+                dataGridViewEntries.Columns["ColumnSizeBytes"].HeaderText = LocalizationService.GetText("Common.Bytes");
+            }
+
+            if (dataGridViewEntries.Columns.Contains("ColumnPercent"))
+            {
+                dataGridViewEntries.Columns["ColumnPercent"].HeaderText = LocalizationService.GetText("Common.Percent");
+            }
+
+            if (dataGridViewEntries.Columns.Contains("ColumnPath"))
+            {
+                dataGridViewEntries.Columns["ColumnPath"].HeaderText = LocalizationService.GetText("Common.Path");
+            }
+        }
+
         private System.Drawing.Bitmap CreateExportButtonImage()
         {
             System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(16, 16, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
@@ -1148,7 +1213,7 @@ namespace WTF
         {
             using FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog
             {
-                Description = "Ordner zum Scannen auswählen",
+                Description = LocalizationService.GetText("Dialog.SelectFolder"),
                 ShowNewFolderButton = false
             };
 
@@ -1331,9 +1396,9 @@ namespace WTF
 
             System.Drawing.Rectangle barBounds = new System.Drawing.Rectangle(
                 e.CellBounds.Left + 4,
-                e.CellBounds.Top + 3,
+                e.CellBounds.Top + 2,
                 Math.Max(0, e.CellBounds.Width - 8),
-                Math.Max(0, e.CellBounds.Height - 6));
+                Math.Max(0, e.CellBounds.Height - 4));
 
             int barWidth = (int)Math.Round(barBounds.Width * freePercent / 100D);
 
@@ -1364,6 +1429,7 @@ namespace WTF
         private void LoadPartitionList()
         {
             listViewPartitions.SuspendLayout();
+            ApplyCompactPartitionGridLayout();
             listViewPartitions.Rows.Clear();
             imageListPartitions.Images.Clear();
 
@@ -1386,6 +1452,7 @@ namespace WTF
                     freePercent + " %");
 
                 DataGridViewRow row = listViewPartitions.Rows[rowIndex];
+                row.Height = listViewPartitions.RowTemplate.Height;
                 row.Tag = freePercent;
                 row.Cells[0].Tag = rootPath;
             }
@@ -1393,6 +1460,18 @@ namespace WTF
             AdjustPartitionColumns();
             listViewPartitions.ResumeLayout();
             listViewPartitions.Invalidate();
+        }
+        private void ApplyCompactPartitionGridLayout()
+        {
+            int rowHeight = Math.Max(listViewPartitions.Font.Height + 6, 22);
+            int headerHeight = Math.Max(listViewPartitions.Font.Height + 8, 22);
+
+            listViewPartitions.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
+            listViewPartitions.RowTemplate.Height = rowHeight;
+            listViewPartitions.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            listViewPartitions.ColumnHeadersHeight = headerHeight;
+            listViewPartitions.RowTemplate.MinimumHeight = rowHeight;
+            listViewPartitions.RowsDefaultCellStyle.Padding = Padding.Empty;
         }
 
         private void listViewPartitions_SizeChanged(object sender, EventArgs e)
@@ -1413,39 +1492,33 @@ namespace WTF
         }
         private void ApplyColumnLayout()
         {
-            if (!_settings.HasColumnLayout)
-                return;
-
-            if (listViewPartitions.Columns.Count == 4)
-            {
-                if (_settings.PartitionColumnNameWidth > 0)
-                    listViewPartitions.Columns[0].Width = _settings.PartitionColumnNameWidth;
-
-                if (_settings.PartitionColumnSizeWidth > 0)
-                    listViewPartitions.Columns[1].Width = _settings.PartitionColumnSizeWidth;
-
-                if (_settings.PartitionColumnFreeWidth > 0)
-                    listViewPartitions.Columns[2].Width = _settings.PartitionColumnFreeWidth;
-
-                if (_settings.PartitionColumnFreePercentWidth > 0)
-                    listViewPartitions.Columns[3].Width = _settings.PartitionColumnFreePercentWidth;
-            }
+            AdjustPartitionColumns();
         }
         private void AdjustPartitionColumns()
         {
-            if (_settings.HasColumnLayout)
-                return;
-
             if (listViewPartitions.Columns.Count != 4)
                 return;
 
-            int fixedWidth =
-                listViewPartitions.Columns[0].Width +
-                listViewPartitions.Columns[1].Width +
-                listViewPartitions.Columns[2].Width;
+            int clientWidth = listViewPartitions.ClientSize.Width;
 
-            int remainingWidth = listViewPartitions.ClientSize.Width - fixedWidth - 1;
-            listViewPartitions.Columns[3].Width = Math.Max(70, remainingWidth);
+            if (clientWidth <= 0)
+                return;
+
+            int verticalScrollBarWidth = listViewPartitions.Rows.Count > listViewPartitions.DisplayedRowCount(false)
+                ? SystemInformation.VerticalScrollBarWidth
+                : 0;
+
+            int availableWidth = Math.Max(0, clientWidth - verticalScrollBarWidth - 2);
+
+            int sizeColumnWidth = Math.Max(64, Math.Min(78, availableWidth / 5));
+            int freeColumnWidth = Math.Max(64, Math.Min(78, availableWidth / 5));
+            int freePercentColumnWidth = Math.Max(68, Math.Min(82, availableWidth / 5));
+            int nameColumnWidth = Math.Max(70, availableWidth - sizeColumnWidth - freeColumnWidth - freePercentColumnWidth);
+
+            listViewPartitions.Columns[0].Width = nameColumnWidth;
+            listViewPartitions.Columns[1].Width = sizeColumnWidth;
+            listViewPartitions.Columns[2].Width = freeColumnWidth;
+            listViewPartitions.Columns[3].Width = freePercentColumnWidth;
         }
 
         private void UpdatePartitionPanelVisibility()
@@ -1461,7 +1534,7 @@ namespace WTF
 
                 if (string.IsNullOrWhiteSpace(driveRootPath))
                 {
-                    toolStripStatusLabel.Text = "Bereit";
+                    toolStripStatusLabel.Text = LocalizationService.GetText("Common.Ready");
                     SetStatusProgressText(null);
                     return;
                 }
@@ -1471,7 +1544,7 @@ namespace WTF
                 string driveName = driveInfo.Name.TrimEnd('\\');
 
                 toolStripStatusLabel.Text = string.Format(
-                    "Freier Speicherplatz {0}: {1} (von {2}), Clustersize: {3}",
+                    LocalizationService.GetText("Status.FreeSpace"),
                     driveName,
                     SizeFormatter.Format(driveInfo.AvailableFreeSpace),
                     SizeFormatter.Format(driveInfo.TotalSize),
@@ -1481,7 +1554,7 @@ namespace WTF
             }
             catch
             {
-                toolStripStatusLabel.Text = "Bereit";
+                toolStripStatusLabel.Text = LocalizationService.GetText("Common.Ready");
                 SetStatusProgressText(null);
             }
         }
@@ -1622,13 +1695,13 @@ namespace WTF
 
             if (string.IsNullOrWhiteSpace(rootPath))
             {
-                MessageBox.Show(this, "Kein Pfad ausgewählt.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, LocalizationService.GetText("Message.NoPathSelected"), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             if (!Directory.Exists(rootPath))
             {
-                MessageBox.Show(this, "Pfad nicht gefunden: " + rootPath, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, LocalizationService.GetText("Message.PathNotFoundPrefix") + rootPath, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -1674,7 +1747,7 @@ namespace WTF
                 if (scanProgress.IsCacheSavePhase)
                 {
                     toolStripStatusLabel.Text = string.Format(
-                        "{0} | {1} | Ordner: {2} | Dateien: {3}",
+                        LocalizationService.GetText("Status.ScanCacheSave"),
                         scanProgress.CurrentPath,
                         SizeFormatter.Format(scanProgress.ScannedBytes),
                         scanProgress.ScannedDirectories,
@@ -1683,7 +1756,7 @@ namespace WTF
                 else if (scanProgress.IsCacheVerification)
                 {
                     toolStripStatusLabel.Text = string.Format(
-                        "Cache geladen - überprüfe Änderungen: {0} | {1} | Ordner: {2} | Dateien: {3}",
+                        LocalizationService.GetText("Status.CacheVerification"),
                         scanProgress.CurrentPath,
                         SizeFormatter.Format(scanProgress.ScannedBytes),
                         scanProgress.ScannedDirectories,
@@ -1692,7 +1765,7 @@ namespace WTF
                 else
                 {
                     toolStripStatusLabel.Text = string.Format(
-                        "Schnellscan: {0} | {1} | Ordner: {2} | Dateien: {3}",
+                        LocalizationService.GetText("Status.FastScan"),
                         scanProgress.CurrentPath,
                         SizeFormatter.Format(scanProgress.ScannedBytes),
                         scanProgress.ScannedDirectories,
@@ -1718,7 +1791,7 @@ namespace WTF
                 {
                     try
                     {
-                        toolStripStatusLabel.Text = "NTFS-MFT-Schnellscan läuft...";
+                        toolStripStatusLabel.Text = LocalizationService.GetText("Status.MftFastScanRunning");
                         NtfsMftScanner ntfsMftScanner = new NtfsMftScanner(_settings);
                         _currentRootEntry = await ntfsMftScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
                     }
@@ -1728,11 +1801,13 @@ namespace WTF
                     }
                     catch (Exception mftException)
                     {
-                        AppAlertLog.AddWarning("Scan", "MFT-Schnellscan nicht verfügbar: " + mftException.Message);
+                        AppAlertLog.AddWarning(
+                            LocalizationService.GetText("Alert.Scan"),
+                            LocalizationService.Format("Alert.MftUnavailable", mftException.Message));
 
                         try
                         {
-                            toolStripStatusLabel.Text = "MFT-Schnellscan nicht verfügbar - NT-API-Schnellscan läuft...";
+                            toolStripStatusLabel.Text = LocalizationService.GetText("Status.MftUnavailableNtQuery");
                             _currentRootEntry = await ntQueryDirectoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
                         }
                         catch (OperationCanceledException)
@@ -1741,8 +1816,11 @@ namespace WTF
                         }
                         catch (Exception ntQueryException)
                         {
-                            AppAlertLog.AddWarning("Scan", "NT-API-Schnellscan nicht verfügbar: " + ntQueryException.Message);
-                            toolStripStatusLabel.Text = "NT-API-Schnellscan nicht verfügbar - normaler Scan läuft...";
+                            AppAlertLog.AddWarning(
+                                LocalizationService.GetText("Alert.Scan"),
+                                LocalizationService.Format("Alert.NtQueryUnavailable", ntQueryException.Message));
+
+                            toolStripStatusLabel.Text = LocalizationService.GetText("Status.NtQueryUnavailableNormal");
                             _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
                         }
                     }
@@ -1751,7 +1829,7 @@ namespace WTF
                 {
                     try
                     {
-                        toolStripStatusLabel.Text = "NT-API-Schnellscan läuft...";
+                        toolStripStatusLabel.Text = LocalizationService.GetText("Status.NtQueryRunning");
                         _currentRootEntry = await ntQueryDirectoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
                     }
                     catch (OperationCanceledException)
@@ -1760,8 +1838,11 @@ namespace WTF
                     }
                     catch (Exception ntQueryException)
                     {
-                        AppAlertLog.AddWarning("Scan", "NT-API-Schnellscan nicht verfügbar: " + ntQueryException.Message);
-                        toolStripStatusLabel.Text = "NT-API-Schnellscan nicht verfügbar - normaler Scan läuft...";
+                        AppAlertLog.AddWarning(
+                            LocalizationService.GetText("Alert.Scan"),
+                            LocalizationService.Format("Alert.NtQueryUnavailable", ntQueryException.Message));
+
+                        toolStripStatusLabel.Text = LocalizationService.GetText("Status.NtQueryUnavailableNormal");
                         _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
                     }
                 }
@@ -1772,73 +1853,11 @@ namespace WTF
                 UpdateStatusStripForDrive(rootPath);
                 SetStatusProgressText(100D);
 
-                if (skippedDirectories > 0)
-                {
-                    List<string> expectedSkippedDirectoryDetails = new List<string>();
-                    List<string> warningSkippedDirectoryDetails = new List<string>();
-
-                    foreach (string skippedDirectoryDetail in skippedDirectoryDetails)
-                    {
-                        string[] lines = skippedDirectoryDetail
-                            .Split(new[] { Environment.NewLine }, StringSplitOptions.None);
-
-                        string skippedDirectoryPath = lines.Length > 0 ? lines[0] : string.Empty;
-                        string skippedDirectoryReason = skippedDirectoryDetail;
-
-                        string normalizedSkippedDirectoryPath = skippedDirectoryPath
-                            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-                        bool isExpectedSystemDirectory =
-                            normalizedSkippedDirectoryPath.EndsWith(
-                                Path.DirectorySeparatorChar + "System Volume Information",
-                                StringComparison.OrdinalIgnoreCase) &&
-                            (skippedDirectoryReason.IndexOf("0xC0000022", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                             skippedDirectoryReason.IndexOf("Zugriff verweigert", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                             skippedDirectoryReason.IndexOf("Access is denied", StringComparison.OrdinalIgnoreCase) >= 0);
-
-                        if (isExpectedSystemDirectory)
-                        {
-                            expectedSkippedDirectoryDetails.Add(skippedDirectoryDetail);
-                        }
-                        else
-                        {
-                            warningSkippedDirectoryDetails.Add(skippedDirectoryDetail);
-                        }
-                    }
-
-                    int unknownSkippedDirectories = Math.Max(0, skippedDirectories - skippedDirectoryDetails.Count);
-
-                    if (unknownSkippedDirectories > 0)
-                    {
-                        warningSkippedDirectoryDetails.Add(unknownSkippedDirectories + " weitere Ordner konnten nicht gelesen werden. Details wurden nicht erfasst.");
-                    }
-
-                    if (expectedSkippedDirectoryDetails.Count > 0)
-                    {
-                        string expectedSkippedDirectoryMessage = expectedSkippedDirectoryDetails.Count == 1
-                            ? "1 Systemordner wurde erwartungsgemäß übersprungen."
-                            : expectedSkippedDirectoryDetails.Count + " Systemordner wurden erwartungsgemäß übersprungen.";
-
-                        string expectedSkippedDirectoryDetailsText = string.Join(Environment.NewLine + Environment.NewLine, expectedSkippedDirectoryDetails);
-
-                        AppAlertLog.AddInformation("Scan", expectedSkippedDirectoryMessage, expectedSkippedDirectoryDetailsText);
-                    }
-
-                    if (warningSkippedDirectoryDetails.Count > 0)
-                    {
-                        string skippedDirectoryMessage = warningSkippedDirectoryDetails.Count == 1
-                            ? "1 Ordner konnte nicht gelesen werden."
-                            : warningSkippedDirectoryDetails.Count + " Ordner konnten nicht gelesen werden.";
-
-                        string skippedDirectoryDetailsText = string.Join(Environment.NewLine + Environment.NewLine, warningSkippedDirectoryDetails);
-
-                        AppAlertLog.AddWarning("Scan", skippedDirectoryMessage, skippedDirectoryDetailsText);
-                    }
-                }
+                ReportSkippedDirectories(skippedDirectories, skippedDirectoryDetails);
             }
             catch (OperationCanceledException)
             {
-                toolStripStatusLabel.Text = "Scan abgebrochen";
+                toolStripStatusLabel.Text = LocalizationService.GetText("Status.ScanCanceled");
                 SetStatusProgressText(null);
             }
             finally
@@ -1856,7 +1875,7 @@ namespace WTF
         }
         private void SetMainWindowTitleForCacheVerification()
         {
-            string title = "WTF - Where’s The Filespace - Cache geladen / überprüfe Änderungen";
+            string title = LocalizationService.GetText("App.Title") + " - " + LocalizationService.GetText("Status.TitleCacheVerification");
 
             Text = title;
 
@@ -2090,7 +2109,7 @@ namespace WTF
 
         private void SetMainWindowTitle(double? scanPercent)
         {
-            string title = "WTF - Where’s The Filespace";
+            string title = LocalizationService.GetText("App.Title");
 
             if (scanPercent.HasValue)
             {
@@ -2098,11 +2117,11 @@ namespace WTF
 
                 if (value >= 100D)
                 {
-                    title += " - Scan: 100% / completed";
+                    title += " - " + LocalizationService.GetText("Status.ScanCompletedTitle");
                 }
                 else
                 {
-                    title += " - Scan: " + value.ToString("0.0") + "%";
+                    title += " - " + LocalizationService.GetText("Status.ScanTitlePrefix") + value.ToString("0.0") + "%";
                 }
             }
 
@@ -2131,10 +2150,78 @@ namespace WTF
             propertyInfo.SetValue(control, enabled, null);
         }
 
+        private void ReportSkippedDirectories(int skippedDirectories, List<string> skippedDirectoryDetails)
+        {
+            if (skippedDirectories <= 0)
+                return;
+
+            List<string> expectedSkippedDirectoryDetails = new List<string>();
+            List<string> warningSkippedDirectoryDetails = new List<string>();
+
+            foreach (string skippedDirectoryDetail in skippedDirectoryDetails)
+            {
+                string[] lines = skippedDirectoryDetail
+                    .Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+
+                string skippedDirectoryPath = lines.Length > 0 ? lines[0] : string.Empty;
+                string skippedDirectoryReason = skippedDirectoryDetail;
+
+                string normalizedSkippedDirectoryPath = skippedDirectoryPath
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                bool isExpectedSystemDirectory =
+                    normalizedSkippedDirectoryPath.EndsWith(
+                        Path.DirectorySeparatorChar + "System Volume Information",
+                        StringComparison.OrdinalIgnoreCase) &&
+                    (skippedDirectoryReason.IndexOf("0xC0000022", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     skippedDirectoryReason.IndexOf("Zugriff verweigert", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     skippedDirectoryReason.IndexOf("Access is denied", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     skippedDirectoryReason.IndexOf("Access denied", StringComparison.OrdinalIgnoreCase) >= 0);
+
+                if (isExpectedSystemDirectory)
+                {
+                    expectedSkippedDirectoryDetails.Add(skippedDirectoryDetail);
+                }
+                else
+                {
+                    warningSkippedDirectoryDetails.Add(skippedDirectoryDetail);
+                }
+            }
+
+            int unknownSkippedDirectories = Math.Max(0, skippedDirectories - skippedDirectoryDetails.Count);
+
+            if (unknownSkippedDirectories > 0)
+            {
+                warningSkippedDirectoryDetails.Add(LocalizationService.Format("Alert.UnknownSkippedDirectories", unknownSkippedDirectories));
+            }
+
+            if (expectedSkippedDirectoryDetails.Count > 0)
+            {
+                string expectedSkippedDirectoryMessage = expectedSkippedDirectoryDetails.Count == 1
+                    ? LocalizationService.GetText("Alert.ExpectedSystemDirectorySingle")
+                    : LocalizationService.Format("Alert.ExpectedSystemDirectoryMultiple", expectedSkippedDirectoryDetails.Count);
+
+                string expectedSkippedDirectoryDetailsText = string.Join(Environment.NewLine + Environment.NewLine, expectedSkippedDirectoryDetails);
+
+                AppAlertLog.AddInformation(LocalizationService.GetText("Alert.Scan"), expectedSkippedDirectoryMessage, expectedSkippedDirectoryDetailsText);
+            }
+
+            if (warningSkippedDirectoryDetails.Count > 0)
+            {
+                string skippedDirectoryMessage = warningSkippedDirectoryDetails.Count == 1
+                    ? LocalizationService.GetText("Alert.SkippedDirectorySingle")
+                    : LocalizationService.Format("Alert.SkippedDirectoryMultiple", warningSkippedDirectoryDetails.Count);
+
+                string skippedDirectoryDetailsText = string.Join(Environment.NewLine + Environment.NewLine, warningSkippedDirectoryDetails);
+
+                AppAlertLog.AddWarning(LocalizationService.GetText("Alert.Scan"), skippedDirectoryMessage, skippedDirectoryDetailsText);
+            }
+        }
+
         private void SetScanningState(bool scanning)
         {
             toolStripButtonScan.Text = scanning ? "■" : "▶";
-            toolStripButtonScan.ToolTipText = scanning ? "Scan abbrechen" : "Scan starten";
+            toolStripButtonScan.ToolTipText = scanning ? LocalizationService.GetText("Toolbar.ScanCancel") : LocalizationService.GetText("Toolbar.ScanStart");
             toolStripComboBoxDrives.Enabled = !scanning;
             toolStripButtonOpenFolder.Enabled = !scanning;
             menuItemExportCsv.Enabled = !scanning && _currentRootEntry != null;
@@ -2275,7 +2362,7 @@ namespace WTF
                 }
 
                 return string.Format(
-                    "Erstellt: {0}{1}Geändert: {2}{1}Letzter Zugriff: {3}",
+                    LocalizationService.GetText("Chart.TooltipDates"),
                     creationTime,
                     Environment.NewLine,
                     lastWriteTime,
@@ -2447,7 +2534,7 @@ namespace WTF
                 return;
 
             Clipboard.SetText(csvText, TextDataFormat.UnicodeText);
-            toolStripStatusLabel.Text = "Export in Zwischenablage kopiert: " + rootEntry.FullPath;
+            toolStripStatusLabel.Text = LocalizationService.GetText("Status.ExportCopied") + rootEntry.FullPath;
         }
 
         private void ExportEntry(FileSystemEntry rootEntry)
@@ -2465,7 +2552,7 @@ namespace WTF
                 return;
 
             _csvExportService.Export(saveFileDialog.FileName, new[] { rootEntry }, _settings);
-            toolStripStatusLabel.Text = "Export gespeichert: " + saveFileDialog.FileName;
+            toolStripStatusLabel.Text = LocalizationService.GetText("Status.ExportSaved") + saveFileDialog.FileName;
         }
 
         private string CreateExportFileName(FileSystemEntry entry)
@@ -2487,6 +2574,10 @@ namespace WTF
             if (settingsForm.ShowDialog(this) != DialogResult.OK)
                 return;
 
+            _settings.Save();
+            LocalizationService.Load(_settings.LanguageCode);
+            ApplyLocalizedTexts();
+            LoadDrives();
             ModernFormStyler.Apply(this, _settings.Layout);
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
             toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
@@ -2522,9 +2613,7 @@ namespace WTF
             SaveSplitterLayout();
             SaveColumnLayout();
             SaveViewSettings();
-            TrySaveAppSettings(false);
-
-            AppAlertLog.Changed -= AppAlertLog_Changed;
+            _settings.Save();
 
             base.OnFormClosing(e);
         }

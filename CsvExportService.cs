@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -10,7 +10,7 @@ namespace WTF
     {
         public string FileFilter
         {
-            get { return "CSV files (*.csv)|*.csv"; }
+            get { return LocalizationService.GetText("Csv.FileFilter"); }
         }
 
         public void Export(string filePath, IEnumerable<FileSystemEntry> entries, AppSettings settings)
@@ -42,19 +42,19 @@ namespace WTF
 
             if (settings.ExportPath)
             {
-                columns.Add("Path");
+                columns.Add(LocalizationService.GetText("Csv.Path"));
             }
 
-            columns.Add("Ebene");
+            columns.Add(LocalizationService.GetText("Csv.Level"));
 
             if (settings.ExportSizeGb)
             {
-                columns.Add("Size (GB)");
+                columns.Add(LocalizationService.GetText("Csv.SizeGb"));
             }
 
             if (settings.ExportSizeMb)
             {
-                columns.Add("Size (MB)");
+                columns.Add(LocalizationService.GetText("Csv.SizeMb"));
             }
 
             writer.WriteLine(string.Join(";", columns));
@@ -72,7 +72,7 @@ namespace WTF
                 values.Add("\"" + Escape(entry.FullPath) + "\"");
             }
 
-            values.Add(level == 0 ? "Root" : level.ToString(CultureInfo.InvariantCulture));
+            values.Add(level == 0 ? LocalizationService.GetText("Csv.Root") : level.ToString(CultureInfo.InvariantCulture));
 
             if (settings.ExportSizeGb)
             {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -123,7 +123,7 @@ namespace WTF
         {
             TextRenderer.DrawText(
                 graphics,
-                "Keine Daten vorhanden.",
+                LocalizationService.GetText("Chart.NoData"),
                 Font,
                 ClientRectangle,
                 ForeColor,
@@ -145,7 +145,7 @@ namespace WTF
 
             if (otherSize > 0)
             {
-                items.Add(new ChartItem("Sonstige", otherSize, null));
+                items.Add(new ChartItem(LocalizationService.GetText("Chart.Other"), otherSize, null));
             }
 
             return items;
@@ -163,7 +163,7 @@ namespace WTF
                 graphics.FillRectangle(colorBrush, left, y + 3, 14, 14);
 
                 string text = string.Format(
-                    "{0} - {1} ({2:0.0} %)",
+                    LocalizationService.GetText("Chart.ItemLabel"),
                     item.Name,
                     SizeFormatter.Format(item.SizeBytes),
                     (double)item.SizeBytes * 100D / totalSize);
@@ -221,7 +221,7 @@ namespace WTF
                 }
 
                 return string.Format(
-                    "{0}{1}Erstellt: {2}{1}Geändert: {3}{1}Letzter Zugriff: {4}",
+                    LocalizationService.GetText("Chart.PieTooltip"),
                     entry.FullPath,
                     Environment.NewLine,
                     creationTime,

@@ -16,6 +16,8 @@ namespace WTF
         private CheckBox checkBoxStartElevatedOnStartup;
         private CheckBox checkBoxShowElevationPromptOnStartup;
         private CheckBox checkBoxShellContextMenuEnabled;
+        private Label labelLanguage;
+        private ComboBox comboBoxLanguage;
         private Label labelLayout;
         private ComboBox comboBoxLayout;
         private CheckBox checkBoxExportPath;
@@ -37,9 +39,9 @@ namespace WTF
 
         private void InitializeComponent()
         {
-            Text = "Einstellungen";
+            Text = LocalizationService.GetText("Settings.Title");
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new System.Drawing.Size(460, 382);
+            ClientSize = new System.Drawing.Size(460, 414);
             MinimumSize = Size;
             MaximumSize = Size;
             MaximizeBox = false;
@@ -50,25 +52,25 @@ namespace WTF
             {
                 Name = "tabControlSettings",
                 Location = new System.Drawing.Point(12, 12),
-                Size = new System.Drawing.Size(436, 310)
+                Size = new System.Drawing.Size(436, 342)
             };
 
             tabPageGeneral = new TabPage
             {
                 Name = "tabPageGeneral",
-                Text = "Allgemein"
+                Text = LocalizationService.GetText("Settings.General")
             };
 
             tabPageExport = new TabPage
             {
                 Name = "tabPageExport",
-                Text = "Export"
+                Text = LocalizationService.GetText("Settings.Export")
             };
 
             checkBoxShowFilesInTree = new CheckBox
             {
                 Name = "checkBoxShowFilesInTree",
-                Text = "Dateien im Baum anzeigen",
+                Text = LocalizationService.GetText("Settings.ShowFilesInTree"),
                 Location = new System.Drawing.Point(12, 18),
                 AutoSize = true
             };
@@ -76,7 +78,7 @@ namespace WTF
             checkBoxSkipReparsePoints = new CheckBox
             {
                 Name = "checkBoxSkipReparsePoints",
-                Text = "Reparse Points / Junctions überspringen",
+                Text = LocalizationService.GetText("Settings.SkipReparsePoints"),
                 Location = new System.Drawing.Point(12, 50),
                 AutoSize = true
             };
@@ -84,7 +86,7 @@ namespace WTF
             checkBoxShowPartitionPanel = new CheckBox
             {
                 Name = "checkBoxShowPartitionPanel",
-                Text = "Partitionsfenster anzeigen",
+                Text = LocalizationService.GetText("Settings.ShowPartitionPanel"),
                 Location = new System.Drawing.Point(12, 82),
                 AutoSize = true
             };
@@ -92,7 +94,7 @@ namespace WTF
             checkBoxStartElevatedOnStartup = new CheckBox
             {
                 Name = "checkBoxStartElevatedOnStartup",
-                Text = "Starten mit erhöhten Rechten",
+                Text = LocalizationService.GetText("Settings.StartElevated"),
                 Location = new System.Drawing.Point(12, 114),
                 AutoSize = true
             };
@@ -100,7 +102,7 @@ namespace WTF
             checkBoxShowElevationPromptOnStartup = new CheckBox
             {
                 Name = "checkBoxShowElevationPromptOnStartup",
-                Text = "Admin-Hinweis beim Start anzeigen",
+                Text = LocalizationService.GetText("Settings.ShowElevationPrompt"),
                 Location = new System.Drawing.Point(12, 146),
                 AutoSize = true
             };
@@ -108,16 +110,36 @@ namespace WTF
             checkBoxShellContextMenuEnabled = new CheckBox
             {
                 Name = "checkBoxShellContextMenuEnabled",
-                Text = "Explorer-Kontextmenüeintrag für Ordner und Laufwerke anzeigen",
+                Text = LocalizationService.GetText("Settings.ShellContextMenu"),
                 Location = new System.Drawing.Point(12, 178),
                 AutoSize = true
             };
 
+            labelLanguage = new Label
+            {
+                Name = "labelLanguage",
+                Text = LocalizationService.GetText("Settings.Language"),
+                Location = new System.Drawing.Point(12, 218),
+                Size = new System.Drawing.Size(120, 23),
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+
+            comboBoxLanguage = new ComboBox
+            {
+                Name = "comboBoxLanguage",
+                Location = new System.Drawing.Point(138, 218),
+                Size = new System.Drawing.Size(205, 23),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+
+            comboBoxLanguage.Items.Add(new LanguageItem(LocalizationService.GetText("Settings.LanguageGerman"), LocalizationService.GermanLanguageCode));
+            comboBoxLanguage.Items.Add(new LanguageItem(LocalizationService.GetText("Settings.LanguageEnglish"), LocalizationService.EnglishLanguageCode));
+
             labelLayout = new Label
             {
                 Name = "labelLayout",
-                Text = "Layout:",
-                Location = new System.Drawing.Point(12, 218),
+                Text = LocalizationService.GetText("Settings.Layout"),
+                Location = new System.Drawing.Point(12, 252),
                 Size = new System.Drawing.Size(120, 23),
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
@@ -125,20 +147,20 @@ namespace WTF
             comboBoxLayout = new ComboBox
             {
                 Name = "comboBoxLayout",
-                Location = new System.Drawing.Point(138, 218),
+                Location = new System.Drawing.Point(138, 252),
                 Size = new System.Drawing.Size(205, 23),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
 
-            comboBoxLayout.Items.Add(new LayoutItem("Modern", AppLayout.Modern));
-            comboBoxLayout.Items.Add(new LayoutItem("Windows default", AppLayout.WindowsDefault));
-            comboBoxLayout.Items.Add(new LayoutItem("Windows light mode", AppLayout.WindowsLightMode));
-            comboBoxLayout.Items.Add(new LayoutItem("Windows dark mode", AppLayout.WindowsDarkMode));
+            comboBoxLayout.Items.Add(new LayoutItem(LocalizationService.GetText("Settings.LayoutModern"), AppLayout.Modern));
+            comboBoxLayout.Items.Add(new LayoutItem(LocalizationService.GetText("Settings.LayoutWindowsDefault"), AppLayout.WindowsDefault));
+            comboBoxLayout.Items.Add(new LayoutItem(LocalizationService.GetText("Settings.LayoutWindowsLight"), AppLayout.WindowsLightMode));
+            comboBoxLayout.Items.Add(new LayoutItem(LocalizationService.GetText("Settings.LayoutWindowsDark"), AppLayout.WindowsDarkMode));
 
             checkBoxExportPath = new CheckBox
             {
                 Name = "checkBoxExportPath",
-                Text = "Path exportieren",
+                Text = LocalizationService.GetText("Settings.ExportPath"),
                 Location = new System.Drawing.Point(12, 18),
                 AutoSize = true
             };
@@ -146,7 +168,7 @@ namespace WTF
             checkBoxExportSizeGb = new CheckBox
             {
                 Name = "checkBoxExportSizeGb",
-                Text = "Size (GB) exportieren",
+                Text = LocalizationService.GetText("Settings.ExportSizeGb"),
                 Location = new System.Drawing.Point(12, 50),
                 AutoSize = true
             };
@@ -154,7 +176,7 @@ namespace WTF
             checkBoxExportSizeMb = new CheckBox
             {
                 Name = "checkBoxExportSizeMb",
-                Text = "Size (MB) exportieren",
+                Text = LocalizationService.GetText("Settings.ExportSizeMb"),
                 Location = new System.Drawing.Point(12, 82),
                 AutoSize = true
             };
@@ -162,7 +184,7 @@ namespace WTF
             labelExportMaxDepth = new Label
             {
                 Name = "labelExportMaxDepth",
-                Text = "Maximale Ebenen/Tiefe:",
+                Text = LocalizationService.GetText("Settings.ExportMaxDepth"),
                 Location = new System.Drawing.Point(12, 122),
                 Size = new System.Drawing.Size(150, 23),
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft
@@ -181,6 +203,8 @@ namespace WTF
             tabPageGeneral.Controls.Add(checkBoxStartElevatedOnStartup);
             tabPageGeneral.Controls.Add(checkBoxShowElevationPromptOnStartup);
             tabPageGeneral.Controls.Add(checkBoxShellContextMenuEnabled);
+            tabPageGeneral.Controls.Add(labelLanguage);
+            tabPageGeneral.Controls.Add(comboBoxLanguage);
             tabPageGeneral.Controls.Add(labelLayout);
             tabPageGeneral.Controls.Add(comboBoxLayout);
 
@@ -196,8 +220,8 @@ namespace WTF
             buttonOk = new Button
             {
                 Name = "buttonOk",
-                Text = "OK",
-                Location = new System.Drawing.Point(280, 338),
+                Text = LocalizationService.GetText("Common.OK"),
+                Location = new System.Drawing.Point(280, 370),
                 Size = new System.Drawing.Size(75, 30),
                 DialogResult = DialogResult.OK
             };
@@ -205,8 +229,8 @@ namespace WTF
             buttonCancel = new Button
             {
                 Name = "buttonCancel",
-                Text = "Abbrechen",
-                Location = new System.Drawing.Point(365, 338),
+                Text = LocalizationService.GetText("Common.Cancel"),
+                Location = new System.Drawing.Point(365, 370),
                 Size = new System.Drawing.Size(75, 30),
                 DialogResult = DialogResult.Cancel
             };
@@ -233,6 +257,21 @@ namespace WTF
             checkBoxExportSizeGb.Checked = _settings.ExportSizeGb;
             checkBoxExportSizeMb.Checked = _settings.ExportSizeMb;
             textBoxExportMaxDepth.Text = _settings.ExportMaxDepth.HasValue ? _settings.ExportMaxDepth.Value.ToString() : string.Empty;
+
+            for (int index = 0; index < comboBoxLanguage.Items.Count; index++)
+            {
+                if (comboBoxLanguage.Items[index] is LanguageItem languageItem &&
+                    string.Equals(languageItem.LanguageCode, LocalizationService.NormalizeLanguageCode(_settings.LanguageCode), StringComparison.OrdinalIgnoreCase))
+                {
+                    comboBoxLanguage.SelectedIndex = index;
+                    break;
+                }
+            }
+
+            if (comboBoxLanguage.SelectedIndex < 0)
+            {
+                comboBoxLanguage.SelectedIndex = 0;
+            }
 
             for (int index = 0; index < comboBoxLayout.Items.Count; index++)
             {
@@ -262,7 +301,7 @@ namespace WTF
             {
                 if (!int.TryParse(textBoxExportMaxDepth.Text.Trim(), out int parsedExportMaxDepth) || parsedExportMaxDepth < 0)
                 {
-                    MessageBox.Show(this, "Die maximale Ebenen/Tiefe muss leer oder eine Zahl ab 0 sein.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(this, LocalizationService.GetText("Settings.ExportMaxDepthInvalid"), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     tabControlSettings.SelectedTab = tabPageExport;
                     textBoxExportMaxDepth.Focus();
                     return false;
@@ -282,6 +321,12 @@ namespace WTF
             _settings.ExportSizeMb = checkBoxExportSizeMb.Checked;
             _settings.ExportMaxDepth = exportMaxDepth;
 
+            if (comboBoxLanguage.SelectedItem is LanguageItem selectedLanguageItem)
+            {
+                _settings.LanguageCode = LocalizationService.NormalizeLanguageCode(selectedLanguageItem.LanguageCode);
+                LocalizationService.Load(_settings.LanguageCode);
+            }
+
             if (comboBoxLayout.SelectedItem is LayoutItem layoutItem)
             {
                 _settings.Layout = layoutItem.Layout;
@@ -289,37 +334,32 @@ namespace WTF
 
             try
             {
-                _settings.Save();
-            }
-            catch (Exception exception)
-            {
-                AppAlertLog.AddError("Einstellungen", "Einstellungen konnten nicht gespeichert werden: " + exception.Message);
-                MessageBox.Show(
-                    this,
-                    "Die Einstellungen konnten nicht gespeichert werden." + Environment.NewLine + Environment.NewLine + exception.Message,
-                    Text,
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return false;
-            }
-
-            try
-            {
                 ShellContextMenuService.Apply(_settings.ShellContextMenuEnabled);
             }
-            catch (Exception exception)
+            catch
             {
-                AppAlertLog.AddWarning("Einstellungen", "Explorer-Kontextmenüeintrag konnte nicht aktualisiert werden: " + exception.Message);
-                MessageBox.Show(
-                    this,
-                    "Der Explorer-Kontextmenüeintrag konnte nicht aktualisiert werden." + Environment.NewLine + Environment.NewLine + exception.Message,
-                    Text,
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                MessageBox.Show(this, LocalizationService.GetText("Settings.ShellContextMenuFailed"), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
 
             return true;
+        }
+
+        private sealed class LanguageItem
+        {
+            public LanguageItem(string text, string languageCode)
+            {
+                Text = text;
+                LanguageCode = languageCode;
+            }
+
+            public string Text { get; }
+            public string LanguageCode { get; }
+
+            public override string ToString()
+            {
+                return Text;
+            }
         }
 
         private sealed class LayoutItem

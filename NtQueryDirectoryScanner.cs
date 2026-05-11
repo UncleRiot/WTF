@@ -44,12 +44,12 @@ namespace WTF
         private long _scannedBytes;
         private int _scannedDirectories;
         private int _scannedFiles;
-        private int _skippedDirectories;
-        private ConcurrentQueue<string> _skippedDirectoryDetails;
         private long _lastProgressReportTickCount;
         private int _pendingDirectoryCount;
         private BlockingCollection<WorkItem> _workQueue;
         private FileSystemEntry _liveRootEntry;
+        private ConcurrentQueue<string> _skippedDirectoryDetails;
+        private int _skippedDirectories;
         private int _fileInformationClass;
         private int _fileNameOffset;
 
@@ -68,10 +68,10 @@ namespace WTF
                 _scannedBytes = 0;
                 _scannedDirectories = 1;
                 _scannedFiles = 0;
-                _skippedDirectories = 0;
-                _skippedDirectoryDetails = new ConcurrentQueue<string>();
                 _lastProgressReportTickCount = 0;
                 _pendingDirectoryCount = 1;
+                _skippedDirectories = 0;
+                _skippedDirectoryDetails = new ConcurrentQueue<string>();
                 _fileInformationClass = FileIdFullDirectoryInformationClass;
                 _fileNameOffset = FileIdFullDirectoryInformationFileNameOffset;
                 _workQueue = new BlockingCollection<WorkItem>();
@@ -172,10 +172,10 @@ namespace WTF
             {
                 if (workItem.IsRoot)
                 {
-                    throw new IOException("NT-API-Schnellscan konnte den Root-Pfad nicht öffnen: " + directoryEntry.FullPath);
+                    throw new IOException(LocalizationService.Format("Alert.NtQueryRootOpenFailed", directoryEntry.FullPath));
                 }
 
-                AddSkippedDirectory(directoryEntry.FullPath, "Ordner konnte nicht geöffnet werden. NTSTATUS: " + FormatNtStatus(openStatus));
+                AddSkippedDirectory(directoryEntry.FullPath, LocalizationService.Format("Alert.NtStatusOpen", FormatNtStatus(openStatus)));
                 return;
             }
 
@@ -219,10 +219,10 @@ namespace WTF
                 {
                     if (workItem.IsRoot)
                     {
-                        throw new IOException("NT-API-Schnellscan konnte den Root-Pfad nicht lesen: " + directoryEntry.FullPath);
+                        throw new IOException(LocalizationService.Format("Alert.NtQueryRootReadFailed", directoryEntry.FullPath));
                     }
 
-                    AddSkippedDirectory(directoryEntry.FullPath, "Ordner konnte nicht gelesen werden. NTSTATUS: " + FormatNtStatus(status));
+                    AddSkippedDirectory(directoryEntry.FullPath, LocalizationService.Format("Alert.NtStatusRead", FormatNtStatus(status)));
                     return;
                 }
 
@@ -538,10 +538,10 @@ namespace WTF
                 return;
 
             skippedDirectoryDetails.Enqueue(string.Format(
-                "{0}{1}Grund: {2}",
+                "{0}{1}{2}",
                 directoryPath,
                 Environment.NewLine,
-                string.IsNullOrWhiteSpace(reason) ? "Unbekannt" : reason));
+                LocalizationService.Format("Alert.Reason", string.IsNullOrWhiteSpace(reason) ? LocalizationService.GetText("Alert.UnknownReason") : reason)));
         }
 
         private List<string> GetSkippedDirectoryDetailsSnapshot()
@@ -558,7 +558,6 @@ namespace WTF
         {
             return "0x" + status.ToString("X8");
         }
-
 
         private void AddSizeToEntries(FileSystemEntry[] entries, long sizeBytes)
         {

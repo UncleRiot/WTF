@@ -22,10 +22,10 @@
 		<Product>WTF - Where’s The Filespace</Product>
 		<Copyright>Copyright © Daniel Capilla</Copyright>
 
-		<Version>0.3.2</Version>
-		<AssemblyVersion>0.3.2</AssemblyVersion>
-		<FileVersion>0.3.2</FileVersion>
-		<InformationalVersion>0.3.2</InformationalVersion>
+		<Version>0.3.2.2</Version>
+		<AssemblyVersion>0.3.2.2</AssemblyVersion>
+		<FileVersion>0.3.2.2</FileVersion>
+		<InformationalVersion>0.3.2.2</InformationalVersion>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 	</PropertyGroup>
 
@@ -44,6 +44,15 @@
 		<EmbeddedResource Include="Ressources\wtf.png" />
 		<EmbeddedResource Include="Ressources\ko-fi.png" />
 		<EmbeddedResource Include="Ressources\molotov.jpg" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Include="Settings\lang_de.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+		<Content Include="Settings\lang_en.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
 	</ItemGroup>
 
 </Project>

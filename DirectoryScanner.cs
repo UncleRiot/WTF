@@ -22,11 +22,11 @@ namespace WTF
         private long _scannedBytes;
         private int _scannedDirectories;
         private int _scannedFiles;
-        private int _skippedDirectories;
-        private List<string> _skippedDirectoryDetails;
         private long _lastProgressReportTickCount;
         private FileSystemEntry _liveRootEntry;
         private ScanCacheService _scanCacheService;
+        private int _skippedDirectories;
+        private List<string> _skippedDirectoryDetails;
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern IntPtr FindFirstFileEx(
@@ -101,27 +101,7 @@ namespace WTF
         {
             return Task.Run(() =>
             {
-                FileSystemEntry cachedRootEntry = ScanCacheService.TryLoadCachedTree(rootPath);
-
-                if (cachedRootEntry != null)
-                {
-                    progress?.Report(new ScanProgress
-                    {
-                        CurrentPath = "Cache geladen - überprüfe Änderungen...",
-                        ScannedBytes = cachedRootEntry.SizeBytes,
-                        ScannedDirectories = cachedRootEntry.DirectoryCount,
-                        ScannedFiles = cachedRootEntry.FileCount,
-                        LiveRootEntry = cachedRootEntry,
-                        IsCacheVerification = true,
-                        IsCacheSavePhase = false
-                    });
-                }
-
                 _scanCacheService = ScanCacheService.Load(rootPath);
-
-                _scannedBytes = 0;
-                _scannedDirectories = 0;
-                _scannedFiles = 0;
                 _skippedDirectories = 0;
                 _skippedDirectoryDetails = new List<string>();
 
@@ -136,10 +116,12 @@ namespace WTF
 
                 progress?.Report(new ScanProgress
                 {
-                    CurrentPath = "Scan abgeschlossen, Cache wird gespeichert...",
+                    CurrentPath = LocalizationService.GetText("Status.CacheSave"),
                     ScannedBytes = _scannedBytes,
                     ScannedDirectories = _scannedDirectories,
                     ScannedFiles = _scannedFiles,
+                    SkippedDirectories = _skippedDirectories,
+                    SkippedDirectoryDetails = GetSkippedDirectoryDetailsSnapshot(),
                     LiveRootEntry = CreateLiveSnapshot(_liveRootEntry, LiveSnapshotDepth),
                     IsCacheVerification = true,
                     IsCacheSavePhase = true
@@ -326,10 +308,10 @@ namespace WTF
                 return;
 
             _skippedDirectoryDetails.Add(string.Format(
-                "{0}{1}Grund: {2}",
+                "{0}{1}{2}",
                 directoryPath,
                 Environment.NewLine,
-                string.IsNullOrWhiteSpace(reason) ? "Unbekannt" : reason));
+                LocalizationService.Format("Alert.Reason", string.IsNullOrWhiteSpace(reason) ? LocalizationService.GetText("Alert.UnknownReason") : reason)));
         }
 
         private List<string> GetSkippedDirectoryDetailsSnapshot()
@@ -345,11 +327,10 @@ namespace WTF
             int errorCode = Marshal.GetLastWin32Error();
 
             if (errorCode == 0)
-                return "Unbekannt";
+                return LocalizationService.GetText("Alert.UnknownReason");
 
-            return "Win32-Fehler " + errorCode + ": " + new Win32Exception(errorCode).Message;
+            return LocalizationService.Format("Alert.Win32Error", errorCode, new Win32Exception(errorCode).Message);
         }
-
 
         private bool ShouldReportProgress()
         {

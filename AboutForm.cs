@@ -37,7 +37,7 @@ namespace WTF
 
         private void InitializeComponent()
         {
-            Text = "Über WTF";
+            Text = LocalizationService.GetText("About.Title");
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             StartPosition = FormStartPosition.CenterParent;
             ClientSize = new Size(475, 285);
@@ -61,7 +61,7 @@ namespace WTF
             labelTitle = new Label
             {
                 Name = "labelTitle",
-                Text = "WTF - Where’s The Filespace",
+                Text = LocalizationService.GetText("App.Title"),
                 Font = new Font(ModernTheme.FontFamilyName, 11F, FontStyle.Bold),
                 AutoSize = true,
                 Location = new Point(122, 26),
@@ -80,7 +80,7 @@ namespace WTF
             labelVersion = new Label
             {
                 Name = "labelVersion",
-                Text = "Version: " + GetApplicationVersionText(),
+                Text = LocalizationService.GetText("About.VersionPrefix") + GetApplicationVersionText(),
                 AutoSize = true,
                 Location = new Point(122, 82),
                 BackColor = Color.Transparent
@@ -89,7 +89,7 @@ namespace WTF
             linkLabelUpdate = new LinkLabel
             {
                 Name = "linkLabelUpdate",
-                Text = "Update wird geprüft...",
+                Text = LocalizationService.GetText("About.UpdateChecking"),
                 AutoSize = true,
                 Location = new Point(122, 106),
                 BackColor = Color.Transparent,
@@ -113,8 +113,8 @@ namespace WTF
             labelKoFiText = new Label
             {
                 Name = "labelKoFiText",
-                Text = "WTF ist kostenlos nutzbar." + Environment.NewLine +
-                       "Wenn dir dieses Tool hilft, kannst du die Entwicklung hier unterstützen:",
+                Text = LocalizationService.GetText("About.FreeText") + Environment.NewLine +
+                       LocalizationService.GetText("About.SupportText"),
                 AutoSize = false,
                 Location = new Point(20, 170),
                 Size = new Size(435, 38),
@@ -137,7 +137,7 @@ namespace WTF
             buttonOk = new Button
             {
                 Name = "buttonOk",
-                Text = "OK",
+                Text = LocalizationService.GetText("Common.OK"),
                 Size = new Size(90, 32),
                 Location = new Point(365, 230),
                 DialogResult = DialogResult.OK
@@ -236,7 +236,7 @@ namespace WTF
 
             if (version == null)
             {
-                return "unknown";
+                return LocalizationService.GetText("Common.Unknown");
             }
 
             return version.Major + "." + version.Minor + "." + version.Build;
@@ -244,7 +244,7 @@ namespace WTF
 
         private async void UpdateGitHubStatusAsync()
         {
-            linkLabelUpdate.Text = "Update wird geprüft...";
+            linkLabelUpdate.Text = LocalizationService.GetText("About.UpdateChecking");
             linkLabelUpdate.Tag = string.Empty;
             linkLabelUpdate.Links.Clear();
 
@@ -258,19 +258,19 @@ namespace WTF
 
             if (!result.CanConnectToGitHub)
             {
-                linkLabelUpdate.Text = "GitHub nicht erreichbar";
+                linkLabelUpdate.Text = LocalizationService.GetText("About.GitHubUnavailable");
                 linkLabelUpdate.LinkBehavior = LinkBehavior.NeverUnderline;
                 return;
             }
 
             if (!result.UpdateAvailable)
             {
-                linkLabelUpdate.Text = "Keine neue Version verfügbar";
+                linkLabelUpdate.Text = LocalizationService.GetText("About.NoNewVersion");
                 linkLabelUpdate.LinkBehavior = LinkBehavior.NeverUnderline;
                 return;
             }
 
-            linkLabelUpdate.Text = "Update verfügbar: " + result.LatestVersion;
+            linkLabelUpdate.Text = LocalizationService.Format("About.UpdateAvailable", result.LatestVersion);
             linkLabelUpdate.Tag = result.DownloadUrl;
             linkLabelUpdate.LinkBehavior = LinkBehavior.HoverUnderline;
             linkLabelUpdate.Links.Add(0, linkLabelUpdate.Text.Length);

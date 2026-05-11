@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows.Forms;
 
 namespace WTF
@@ -27,12 +27,11 @@ namespace WTF
         {
             using DialogForm dialogForm = new DialogForm(
                 settings,
-                "WTF",
-                "Möchten Sie WTF mit erhöhten Rechten ausführen, um die" + Environment.NewLine +
-                "Scangeschwindigkeit und Genauigkeit zu steigern?",
-                "Diese Meldung nicht mehr anzeigen",
-                "Ja",
-                "Nein");
+                LocalizationService.GetText("Elevation.Title"),
+                LocalizationService.GetText("Elevation.Message"),
+                LocalizationService.GetText("Elevation.DoNotShowAgain"),
+                LocalizationService.GetText("Common.Yes"),
+                LocalizationService.GetText("Common.No"));
 
             DialogResult dialogResult = dialogForm.ShowDialog();
 

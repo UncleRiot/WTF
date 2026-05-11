@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -324,7 +324,7 @@ namespace WTF
         {
             TextRenderer.DrawText(
                 graphics,
-                "Keine Daten vorhanden.",
+                LocalizationService.GetText("Chart.NoData"),
                 Font,
                 ClientRectangle,
                 ForeColor,
@@ -337,8 +337,8 @@ namespace WTF
                 return null;
 
             string cacheKey = entry.IsDirectory
-                ? "Directory"
-                : "File:" + Path.GetExtension(entry.Name);
+                ? LocalizationService.GetText("Chart.Directory")
+                : LocalizationService.GetText("Chart.FilePrefix") + Path.GetExtension(entry.Name);
 
             if (_systemIconCache.TryGetValue(cacheKey, out Bitmap cachedBitmap))
             {
@@ -414,7 +414,7 @@ namespace WTF
                 }
 
                 return string.Format(
-                    "Erstellt: {0}{1}Geändert: {2}{1}Letzter Zugriff: {3}",
+                    LocalizationService.GetText("Chart.TooltipDates"),
                     creationTime,
                     Environment.NewLine,
                     lastWriteTime,

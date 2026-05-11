@@ -36,7 +36,7 @@ namespace WTF
 
         private void InitializeComponent()
         {
-            Text = "Kurzprotokoll";
+            Text = LocalizationService.GetText("AlertHistory.Title");
             StartPosition = FormStartPosition.CenterParent;
             Size = new System.Drawing.Size(820, 500);
             MinimumSize = new System.Drawing.Size(640, 380);
@@ -59,7 +59,7 @@ namespace WTF
             dataGridViewAlerts.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnSeverity",
-                HeaderText = "Typ",
+                HeaderText = LocalizationService.GetText("AlertHistory.Type"),
                 DataPropertyName = "SeverityText",
                 Width = 90
             });
@@ -67,7 +67,7 @@ namespace WTF
             dataGridViewAlerts.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnCategory",
-                HeaderText = "Kategorie",
+                HeaderText = LocalizationService.GetText("AlertHistory.Category"),
                 DataPropertyName = "Category",
                 Width = 140
             });
@@ -75,7 +75,7 @@ namespace WTF
             dataGridViewAlerts.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnMessage",
-                HeaderText = "Meldung",
+                HeaderText = LocalizationService.GetText("AlertHistory.Message"),
                 DataPropertyName = "Message",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
             });
@@ -83,7 +83,7 @@ namespace WTF
             dataGridViewAlerts.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnCreatedAt",
-                HeaderText = "Datum und Zeit",
+                HeaderText = LocalizationService.GetText("AlertHistory.CreatedAt"),
                 DataPropertyName = "CreatedAtText",
                 Width = 140
             });
@@ -91,7 +91,7 @@ namespace WTF
             dataGridViewAlerts.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnConfirmed",
-                HeaderText = "Bestätigt",
+                HeaderText = LocalizationService.GetText("AlertHistory.Confirmed"),
                 DataPropertyName = "ConfirmedText",
                 Width = 80
             });
@@ -101,7 +101,7 @@ namespace WTF
             Label labelDetails = new Label
             {
                 Name = "labelDetails",
-                Text = "Details:",
+                Text = LocalizationService.GetText("AlertHistory.Details"),
                 Dock = DockStyle.Top,
                 Height = 20,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
@@ -130,35 +130,35 @@ namespace WTF
             buttonConfirm = new Button
             {
                 Name = "buttonConfirm",
-                Text = "Bestätigen",
+                Text = LocalizationService.GetText("AlertHistory.Confirm"),
                 Size = new System.Drawing.Size(95, 30)
             };
 
             buttonDelete = new Button
             {
                 Name = "buttonDelete",
-                Text = "Löschen",
+                Text = LocalizationService.GetText("AlertHistory.Delete"),
                 Size = new System.Drawing.Size(85, 30)
             };
 
             buttonConfirmAll = new Button
             {
                 Name = "buttonConfirmAll",
-                Text = "Alle bestätigen",
+                Text = LocalizationService.GetText("AlertHistory.ConfirmAll"),
                 Size = new System.Drawing.Size(110, 30)
             };
 
             buttonDeleteAll = new Button
             {
                 Name = "buttonDeleteAll",
-                Text = "Alle löschen",
+                Text = LocalizationService.GetText("AlertHistory.DeleteAll"),
                 Size = new System.Drawing.Size(95, 30)
             };
 
             buttonClose = new Button
             {
                 Name = "buttonClose",
-                Text = "Schließen",
+                Text = LocalizationService.GetText("Common.Close"),
                 Size = new System.Drawing.Size(90, 30),
                 DialogResult = DialogResult.OK
             };

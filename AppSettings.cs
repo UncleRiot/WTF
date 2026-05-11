@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text.Json;
 
@@ -30,6 +30,7 @@ namespace WTF
         public bool ShellContextMenuEnabled { get; set; }
         public AppLayout Layout { get; set; } = AppLayout.Modern;
         public ViewMode SelectedViewMode { get; set; } = ViewMode.Table;
+        public string LanguageCode { get; set; } = LocalizationService.GermanLanguageCode;
 
         public bool ExportPath { get; set; } = true;
         public bool ExportSizeGb { get; set; } = true;
@@ -79,7 +80,9 @@ namespace WTF
                 string json = System.IO.File.ReadAllText(SettingsFilePath);
                 AppSettings settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json);
 
-                return settings ?? new AppSettings();
+                settings = settings ?? new AppSettings();
+                settings.LanguageCode = LocalizationService.NormalizeLanguageCode(settings.LanguageCode);
+                return settings;
             }
             catch
             {

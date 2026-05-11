@@ -1,4 +1,4 @@
-﻿using Microsoft.Win32;
+using Microsoft.Win32;
 using System;
 using System.Windows.Forms;
 
@@ -44,7 +44,7 @@ namespace WTF
             string commandText = "\"" + executablePath + "\" " + (quotePathArgument ? "\"" + pathArgument + "\"" : pathArgument);
 
             using RegistryKey shellKey = Registry.CurrentUser.CreateSubKey(shellKeyPath);
-            shellKey.SetValue(string.Empty, "WTF: Start Size Scan");
+            shellKey.SetValue(string.Empty, LocalizationService.GetText("Shell.ContextMenuText"));
             shellKey.SetValue("Icon", executablePath + ",0");
 
             using RegistryKey commandKey = shellKey.CreateSubKey("command");

@@ -15,13 +15,13 @@ namespace WTF
                     continue;
 
                 string label = string.IsNullOrWhiteSpace(driveInfo.VolumeLabel)
-                    ? "Local Disk"
+                    ? LocalizationService.GetText("Drive.LocalDisk")
                     : driveInfo.VolumeLabel;
 
                 drives.Add(new DriveItem
                 {
                     RootPath = driveInfo.RootDirectory.FullName,
-                    DisplayName = string.Format("{0} ({1})", label, driveInfo.RootDirectory.FullName)
+                    DisplayName = LocalizationService.Format("Drive.Display", label, driveInfo.RootDirectory.FullName)
                 });
             }
 

@@ -23,7 +23,20 @@ namespace WTF
 
         public string SeverityText
         {
-            get { return Severity.ToString(); }
+            get
+            {
+                switch (Severity)
+                {
+                    case AppAlertSeverity.Information:
+                        return LocalizationService.GetText("Common.Information");
+                    case AppAlertSeverity.Warning:
+                        return LocalizationService.GetText("Common.Warning");
+                    case AppAlertSeverity.Error:
+                        return LocalizationService.GetText("Common.Error");
+                    default:
+                        return Severity.ToString();
+                }
+            }
         }
 
         public string CreatedAtText
@@ -33,7 +46,7 @@ namespace WTF
 
         public string ConfirmedText
         {
-            get { return IsConfirmed ? "Ja" : "Nein"; }
+            get { return IsConfirmed ? LocalizationService.GetText("Common.Yes") : LocalizationService.GetText("Common.No"); }
         }
     }
 
@@ -90,7 +103,7 @@ namespace WTF
                 {
                     Id = Guid.NewGuid(),
                     Severity = severity,
-                    Category = string.IsNullOrWhiteSpace(category) ? "Allgemein" : category,
+                    Category = string.IsNullOrWhiteSpace(category) ? LocalizationService.GetText("Common.General") : category,
                     Message = message,
                     Details = details,
                     CreatedAt = DateTime.Now,
