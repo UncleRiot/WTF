@@ -1,10 +1,20 @@
-<img width="726" height="515" alt="grafik" src="https://github.com/user-attachments/assets/aa00717f-b66a-41b2-bf4c-30a76ce35258" />
-
-
-
 # WTF – Where’s The Filespace
 
 WTF is a lightweight Windows disk space analyzer for quickly finding where storage is used.
+
+<br>
+
+
+<img width="726" height="515" alt="grafik" src="https://github.com/user-attachments/assets/aa00717f-b66a-41b2-bf4c-30a76ce35258" />
+<br>
+
+
+# Important
+
+Windows may show this message because the file was downloaded from the internet. Windows adds a security marker (“Mark of the Web”) to downloaded files, especially ZIP files or unsigned EXE files. This is normal Windows behavior and does not mean the application is malicious.
+
+<img width="373" height="473" alt="grafik" src="https://github.com/user-attachments/assets/516a166c-11fc-425c-9847-8b06831c5ae3" />
+<br>
 
 ## Core Features
 
