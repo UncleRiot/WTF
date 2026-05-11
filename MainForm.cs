@@ -127,6 +127,7 @@ namespace WTF
         private void MainForm_SizeChanged(object sender, EventArgs e)
         {
             UpdateRightViewBounds();
+            UpdateGitHubUpdateMenuItemVisual();
         }
         private void splitContainerMainPanel2_SizeChanged(object sender, EventArgs e)
         {
@@ -174,6 +175,7 @@ namespace WTF
             SetDoubleBuffered(barChartView, true);
 
             WindowsFormStyler.Apply(this, _settings.Layout);
+            ConfigureDriveComboBoxDrawing();
             UpdateGitHubUpdateMenuItemVisual();
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
             toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
@@ -345,6 +347,18 @@ namespace WTF
             toolStripComboBoxDrives.DropDownStyle = ComboBoxStyle.DropDownList;
             toolStripComboBoxDrives.ComboBox.DrawMode = DrawMode.OwnerDrawFixed;
             toolStripComboBoxDrives.ComboBox.ItemHeight = Math.Max(20, toolStripComboBoxDrives.ComboBox.ItemHeight);
+
+            if (_settings.Layout == AppLayout.WindowsDarkMode)
+            {
+                toolStripComboBoxDrives.ComboBox.BackColor = Color.FromArgb(32, 32, 32);
+                toolStripComboBoxDrives.ComboBox.ForeColor = Color.White;
+            }
+            else
+            {
+                toolStripComboBoxDrives.ComboBox.BackColor = SystemColors.Window;
+                toolStripComboBoxDrives.ComboBox.ForeColor = SystemColors.ControlText;
+            }
+
             toolStripComboBoxDrives.ComboBox.DrawItem -= toolStripComboBoxDrives_DrawItem;
             toolStripComboBoxDrives.ComboBox.DrawItem += toolStripComboBoxDrives_DrawItem;
             toolStripComboBoxDrives.SelectedIndexChanged -= toolStripComboBoxDrives_SelectedIndexChanged;
@@ -2606,27 +2620,30 @@ namespace WTF
 
         private void StartGitHubUpdateBlinkTimer()
         {
-            if (gitHubUpdateBlinkTimer == null)
+            if (gitHubUpdateBlinkTimer != null)
             {
-                gitHubUpdateBlinkTimer = new System.Windows.Forms.Timer();
-                gitHubUpdateBlinkTimer.Interval = 650;
-                gitHubUpdateBlinkTimer.Tick += gitHubUpdateBlinkTimer_Tick;
+                gitHubUpdateBlinkTimer.Stop();
             }
 
             _gitHubUpdateBlinkState = false;
-            gitHubUpdateBlinkTimer.Start();
+
+            if (menuItemGitHubUpdate != null)
+            {
+                menuItemGitHubUpdate.ForeColor = Color.Blue;
+            }
         }
 
         private void gitHubUpdateBlinkTimer_Tick(object sender, EventArgs e)
         {
-            if (menuItemGitHubUpdate == null)
-                return;
+            if (gitHubUpdateBlinkTimer != null)
+            {
+                gitHubUpdateBlinkTimer.Stop();
+            }
 
-            if (!menuItemGitHubUpdate.Visible)
-                return;
-
-            _gitHubUpdateBlinkState = !_gitHubUpdateBlinkState;
-            menuItemGitHubUpdate.ForeColor = _gitHubUpdateBlinkState ? Color.Blue : Color.DodgerBlue;
+            if (menuItemGitHubUpdate != null)
+            {
+                menuItemGitHubUpdate.ForeColor = Color.Blue;
+            }
         }
 
         private void UpdateGitHubUpdateMenuItemVisual()
@@ -2640,6 +2657,30 @@ namespace WTF
             menuItemGitHubUpdate.ToolTipText = string.IsNullOrWhiteSpace(_gitHubUpdateUrl)
                 ? GitHubRepositoryUrl
                 : _gitHubUpdateUrl;
+
+            if (menuStripMain != null)
+            {
+                menuStripMain.Stretch = true;
+                menuStripMain.Dock = DockStyle.Fill;
+                menuStripMain.PerformLayout();
+                menuStripMain.Invalidate();
+            }
+
+            if (menuStripMain != null && menuStripMain.Parent is TableLayoutPanel parentTableLayoutPanel)
+            {
+                if (parentTableLayoutPanel.ColumnStyles.Count == 0)
+                {
+                    parentTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+                }
+                else
+                {
+                    parentTableLayoutPanel.ColumnStyles[0].SizeType = SizeType.Percent;
+                    parentTableLayoutPanel.ColumnStyles[0].Width = 100F;
+                }
+
+                parentTableLayoutPanel.PerformLayout();
+                parentTableLayoutPanel.Invalidate();
+            }
         }
 
         private void menuItemGitHubUpdate_Click(object sender, EventArgs e)
@@ -2675,6 +2716,7 @@ namespace WTF
             ApplyLocalizedTexts();
             LoadDrives();
             WindowsFormStyler.Apply(this, _settings.Layout);
+            ConfigureDriveComboBoxDrawing();
             UpdateGitHubUpdateMenuItemVisual();
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
             toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;

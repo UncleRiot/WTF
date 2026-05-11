@@ -13,9 +13,7 @@ namespace WTF
 
     public sealed class AppSettings
     {
-        private static readonly string SettingsDirectoryPath = System.IO.Path.Combine(
-            System.AppContext.BaseDirectory,
-            "Settings");
+        private static readonly string SettingsDirectoryPath = System.AppContext.BaseDirectory;
 
         private static readonly string SettingsFilePath = System.IO.Path.Combine(
             SettingsDirectoryPath,
@@ -29,7 +27,7 @@ namespace WTF
         public bool ShellContextMenuEnabled { get; set; }
         public AppLayout Layout { get; set; } = AppLayout.WindowsDefault;
         public ViewMode SelectedViewMode { get; set; } = ViewMode.Table;
-        public string LanguageCode { get; set; } = LocalizationService.GermanLanguageCode;
+        public string LanguageCode { get; set; } = LocalizationService.EnglishLanguageCode;
 
         public bool ExportPath { get; set; } = true;
         public bool ExportSizeGb { get; set; } = true;
