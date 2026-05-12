@@ -67,6 +67,8 @@ Windows may show this message because the file was downloaded from the internet.
 - Reparse points / junctions can be skipped.
 - CSV export supports path, size in GB, size in MB, and maximum export depth.
 
-## Thanks
 
-Thanks to WinDirStat and TreeSize for the inspiration and ideas behind practical disk space visualization and analysis tools.
+## Acknowledgements
+
+WTF is an independently developed disk usage analyzer.
+Thanks to the open-source disk-usage-analyzer community, including WinDirStat, for showing how useful visual disk space analysis tools can be.
