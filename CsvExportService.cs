@@ -6,7 +6,7 @@ using System.Text;
 
 namespace WTF
 {
-    public sealed class CsvExportService : IExportService
+    public sealed class CsvExportService
     {
         public string FileFilter
         {

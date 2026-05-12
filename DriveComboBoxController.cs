@@ -209,5 +209,16 @@ namespace WTF
 
             return Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         }
+        private sealed class DriveItem
+        {
+            public string DisplayName { get; set; }
+            public string RootPath { get; set; }
+
+            public override string ToString()
+            {
+                return DisplayName;
+            }
+        }
+
     }
 }
