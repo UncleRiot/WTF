@@ -16,6 +16,7 @@ namespace WTF
         private readonly ExportEntryController _exportEntryController;
         private readonly LayoutMainFormController _layoutMainFormController;
         private readonly StatusMainFormController _statusMainFormController;
+        private readonly ScanExecutionController _scanExecutionController;
         private readonly ShellIconService _shellIconService;
         private readonly DriveComboBoxController _driveComboBoxController;
         private PartitionGridController _partitionGridController;
@@ -98,6 +99,7 @@ namespace WTF
                 toolStripAlertInformationLabel,
                 toolStripAlertWarningLabel,
                 toolStripAlertErrorLabel);
+            _scanExecutionController = new ScanExecutionController(_settings, _statusMainFormController);
             _exportEntryController = new ExportEntryController(
                 _csvExportService,
                 _settings,
@@ -761,75 +763,10 @@ namespace WTF
 
             try
             {
-                DirectoryScanner directoryScanner = new DirectoryScanner(_settings);
-                NtQueryDirectoryScanner ntQueryDirectoryScanner = new NtQueryDirectoryScanner(_settings);
-
-                string pathRoot = Path.GetPathRoot(rootPath);
-                bool scanRootDrive = !string.IsNullOrWhiteSpace(pathRoot) &&
-                    string.Equals(
-                        Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                        pathRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                        StringComparison.OrdinalIgnoreCase);
-
-                if (scanRootDrive && NtfsMftScanner.IsSupported(rootPath))
-                {
-                    try
-                    {
-                        _statusMainFormController.SetStatusTextByKey("Status.MftFastScanRunning");
-                        NtfsMftScanner ntfsMftScanner = new NtfsMftScanner(_settings);
-                        _currentRootEntry = await ntfsMftScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                    catch (Exception mftException)
-                    {
-                        AppAlertLog.AddWarning(
-                            LocalizationService.GetText("Alert.Scan"),
-                            LocalizationService.Format("Alert.MftUnavailable", mftException.Message));
-
-                        try
-                        {
-                            _statusMainFormController.SetStatusTextByKey("Status.MftUnavailableNtQuery");
-                            _currentRootEntry = await ntQueryDirectoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            throw;
-                        }
-                        catch (Exception ntQueryException)
-                        {
-                            AppAlertLog.AddWarning(
-                                LocalizationService.GetText("Alert.Scan"),
-                                LocalizationService.Format("Alert.NtQueryUnavailable", ntQueryException.Message));
-
-                            _statusMainFormController.SetStatusTextByKey("Status.NtQueryUnavailableNormal");
-                            _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
-                        }
-                    }
-                }
-                else
-                {
-                    try
-                    {
-                        _statusMainFormController.SetStatusTextByKey("Status.NtQueryRunning");
-                        _currentRootEntry = await ntQueryDirectoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                    catch (Exception ntQueryException)
-                    {
-                        AppAlertLog.AddWarning(
-                            LocalizationService.GetText("Alert.Scan"),
-                            LocalizationService.Format("Alert.NtQueryUnavailable", ntQueryException.Message));
-
-                        _statusMainFormController.SetStatusTextByKey("Status.NtQueryUnavailableNormal");
-                        _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
-                    }
-                }
+                _currentRootEntry = await _scanExecutionController.ScanAsync(
+                    rootPath,
+                    progress,
+                    _scanCancellationTokenSource.Token);
 
                 _treeEntryController.FlushPendingLiveTreeUpdate();
                 RenderScanResult(_currentRootEntry);
