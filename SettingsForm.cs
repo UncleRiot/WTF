@@ -47,6 +47,8 @@ namespace WTF
             MaximizeBox = false;
             MinimizeBox = false;
             ShowInTaskbar = false;
+            KeyPreview = true;
+            KeyDown += SettingsForm_KeyDown;
 
             tabControlSettings = new TabControl
             {
@@ -242,6 +244,19 @@ namespace WTF
 
             AcceptButton = buttonOk;
             CancelButton = buttonCancel;
+        }
+
+        private void SettingsForm_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Control && e.Shift && e.Alt && e.KeyCode == Keys.D)
+            {
+                e.SuppressKeyPress = true;
+
+                using (DebugClassForm debugClassForm = new DebugClassForm(_settings.Layout))
+                {
+                    debugClassForm.ShowDialog(this);
+                }
+            }
         }
 
         private void LoadSettings()

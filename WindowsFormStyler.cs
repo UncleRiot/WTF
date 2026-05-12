@@ -282,7 +282,7 @@ namespace WTF
                 listView.BorderStyle = BorderStyle.Fixed3D;
                 listView.Font = SystemFonts.MessageBoxFont;
             }
-            else if (control is PieChartView || control is BarChartView)
+            else if (control is Chart_PieChart || control is Chart_BarChart)
             {
                 control.BackColor = windowBackColor;
                 control.ForeColor = textColor;

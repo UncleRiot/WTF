@@ -55,6 +55,7 @@ namespace WTF
         public int SplitContainerLeftDistance { get; set; }
 
         public bool HasColumnLayout { get; set; }
+        public bool HasEntryColumnLayout { get; set; }
         public int PartitionColumnNameWidth { get; set; }
         public int PartitionColumnSizeWidth { get; set; }
         public int PartitionColumnFreeWidth { get; set; }

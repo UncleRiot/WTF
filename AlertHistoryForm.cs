@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -8,6 +9,9 @@ namespace WTF
     public sealed class AlertHistoryForm : Form
     {
         private readonly AppSettings _settings;
+        private readonly Image _informationSymbolImage = StatusSymbolRenderer.CreateBitmap(StatusSymbolKind.Information);
+        private readonly Image _warningSymbolImage = StatusSymbolRenderer.CreateBitmap(StatusSymbolKind.Warning);
+        private readonly Image _errorSymbolImage = StatusSymbolRenderer.CreateBitmap(StatusSymbolKind.Error);
 
         private DataGridView dataGridViewAlerts;
         private TextBox textBoxDetails;
@@ -26,6 +30,18 @@ namespace WTF
             LoadAlerts();
 
             AppAlertLog.Changed += AppAlertLog_Changed;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _informationSymbolImage.Dispose();
+                _warningSymbolImage.Dispose();
+                _errorSymbolImage.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
@@ -56,12 +72,16 @@ namespace WTF
                 MultiSelect = true
             };
 
-            dataGridViewAlerts.Columns.Add(new DataGridViewTextBoxColumn
+            dataGridViewAlerts.Columns.Add(new DataGridViewImageColumn
             {
                 Name = "ColumnSeverity",
                 HeaderText = LocalizationService.GetText("AlertHistory.Type"),
-                DataPropertyName = "SeverityText",
-                Width = 90
+                Width = 90,
+                ImageLayout = DataGridViewImageCellLayout.Normal,
+                DefaultCellStyle =
+                {
+                    Alignment = DataGridViewContentAlignment.MiddleCenter
+                }
             });
 
             dataGridViewAlerts.Columns.Add(new DataGridViewTextBoxColumn
@@ -96,6 +116,7 @@ namespace WTF
                 Width = 80
             });
 
+            dataGridViewAlerts.CellFormatting += dataGridViewAlerts_CellFormatting;
             dataGridViewAlerts.SelectionChanged += dataGridViewAlerts_SelectionChanged;
 
             Label labelDetails = new Label
@@ -237,6 +258,34 @@ namespace WTF
 
             UpdateButtonState();
             UpdateDetails();
+        }
+
+        private void dataGridViewAlerts_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (e.RowIndex < 0)
+                return;
+
+            if (dataGridViewAlerts.Columns[e.ColumnIndex].Name != "ColumnSeverity")
+                return;
+
+            if (dataGridViewAlerts.Rows[e.RowIndex].DataBoundItem is not AppAlertEntry entry)
+                return;
+
+            e.Value = GetAlertSeverityImage(entry.Severity);
+            e.FormattingApplied = true;
+        }
+
+        private Image GetAlertSeverityImage(AppAlertSeverity severity)
+        {
+            switch (severity)
+            {
+                case AppAlertSeverity.Warning:
+                    return _warningSymbolImage;
+                case AppAlertSeverity.Error:
+                    return _errorSymbolImage;
+                default:
+                    return _informationSymbolImage;
+            }
         }
 
         private void dataGridViewAlerts_SelectionChanged(object sender, EventArgs e)

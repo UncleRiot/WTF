@@ -7,7 +7,7 @@ using System.Windows.Forms;
 
 namespace WTF
 {
-    public sealed class BarChartView : Control
+    public sealed class Chart_BarChart : Control
     {
         private static readonly Color[] ChartColors =
 {
@@ -36,7 +36,7 @@ namespace WTF
         private FileSystemEntry _entry;
         private string _currentToolTipText;
 
-        public BarChartView()
+        public Chart_BarChart()
         {
             DoubleBuffered = true;
             _toolTip = new ToolTip();

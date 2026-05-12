@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,6 +8,8 @@ namespace WTF
 {
     public sealed class Chart_TableGridChart : DataGridView
     {
+        private bool _applyingColumnWidths;
+
         public Chart_TableGridChart()
         {
             ConfigureTableGridChart();
@@ -16,6 +18,7 @@ namespace WTF
             SizeChanged += Chart_TableGridChart_SizeChanged;
             CellPainting += Chart_TableGridChart_CellPainting;
             CellToolTipTextNeeded += Chart_TableGridChart_CellToolTipTextNeeded;
+            ColumnWidthChanged += Chart_TableGridChart_ColumnWidthChanged;
         }
 
         public void SetEntry(FileSystemEntry entry)
@@ -42,7 +45,9 @@ namespace WTF
                 })
                 .ToList();
 
+            AutoGenerateColumns = false;
             DataSource = rows;
+            RemoveUnexpectedColumns();
             FitToCurrentBounds();
             Invalidate();
         }
@@ -55,6 +60,8 @@ namespace WTF
 
         private void ConfigureTableGridChart()
         {
+            Columns.Clear();
+
             Dock = DockStyle.Fill;
             AutoSize = false;
             MinimumSize = System.Drawing.Size.Empty;
@@ -62,6 +69,7 @@ namespace WTF
             AllowUserToAddRows = false;
             AllowUserToDeleteRows = false;
             AllowUserToResizeRows = false;
+            AllowUserToResizeColumns = true;
             AutoGenerateColumns = false;
             ReadOnly = true;
             RowHeadersVisible = false;
@@ -84,7 +92,8 @@ namespace WTF
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
                 Width = 2,
                 MinimumWidth = 2,
-                SortMode = DataGridViewColumnSortMode.NotSortable
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                Resizable = DataGridViewTriState.True
             });
 
             Columns.Add(new DataGridViewTextBoxColumn
@@ -95,30 +104,20 @@ namespace WTF
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
                 Width = 2,
                 MinimumWidth = 2,
-                SortMode = DataGridViewColumnSortMode.NotSortable
-            });
-
-            Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "ColumnSizeBytes",
-                HeaderText = LocalizationService.GetText("Common.Bytes"),
-                DataPropertyName = "SizeBytes",
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-                Width = 2,
-                MinimumWidth = 2,
-                Visible = false,
-                SortMode = DataGridViewColumnSortMode.NotSortable
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                Resizable = DataGridViewTriState.True
             });
 
             Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnPercent",
-                HeaderText = LocalizationService.GetText("Common.Percent"),
+                HeaderText = LocalizationService.GetText("Chart.TableUsage"),
                 DataPropertyName = "Percent",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
                 Width = 2,
                 MinimumWidth = 2,
-                SortMode = DataGridViewColumnSortMode.NotSortable
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                Resizable = DataGridViewTriState.True
             });
 
             Columns.Add(new DataGridViewTextBoxColumn
@@ -129,10 +128,37 @@ namespace WTF
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
                 Width = 2,
                 MinimumWidth = 2,
-                SortMode = DataGridViewColumnSortMode.NotSortable
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                Resizable = DataGridViewTriState.True
             });
 
             ConfigureEntryGridColumns();
+            RemoveUnexpectedColumns();
+        }
+
+        public void ApplyLocalizedTexts()
+        {
+            if (Columns.Contains("ColumnName"))
+            {
+                Columns["ColumnName"].HeaderText = LocalizationService.GetText("Common.Name");
+            }
+
+            if (Columns.Contains("ColumnSize"))
+            {
+                Columns["ColumnSize"].HeaderText = LocalizationService.GetText("Common.Size");
+            }
+
+            if (Columns.Contains("ColumnPercent"))
+            {
+                Columns["ColumnPercent"].HeaderText = LocalizationService.GetText("Chart.TableUsage");
+            }
+
+            if (Columns.Contains("ColumnPath"))
+            {
+                Columns["ColumnPath"].HeaderText = LocalizationService.GetText("Common.Path");
+            }
+
+            FitToCurrentBounds();
         }
 
         private void ConfigureEntryGridColumns()
@@ -142,14 +168,6 @@ namespace WTF
             MaximumSize = System.Drawing.Size.Empty;
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
             ScrollBars = ScrollBars.Vertical;
-
-            if (Columns.Contains("ColumnSizeBytes"))
-            {
-                Columns["ColumnSizeBytes"].Visible = false;
-                Columns["ColumnSizeBytes"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-                Columns["ColumnSizeBytes"].Width = 2;
-                Columns["ColumnSizeBytes"].MinimumWidth = 2;
-            }
 
             if (Columns.Contains("ColumnName"))
             {
@@ -182,6 +200,45 @@ namespace WTF
             FitToCurrentBounds();
         }
 
+
+        private void RemoveUnexpectedColumns()
+        {
+            for (int index = Columns.Count - 1; index >= 0; index--)
+            {
+                string columnName = Columns[index].Name;
+
+                if (columnName == "ColumnName" ||
+                    columnName == "ColumnSize" ||
+                    columnName == "ColumnPercent" ||
+                    columnName == "ColumnPath")
+                {
+                    continue;
+                }
+
+                Columns.RemoveAt(index);
+            }
+
+            if (Columns.Contains("ColumnName"))
+            {
+                Columns["ColumnName"].DisplayIndex = 0;
+            }
+
+            if (Columns.Contains("ColumnSize"))
+            {
+                Columns["ColumnSize"].DisplayIndex = 1;
+            }
+
+            if (Columns.Contains("ColumnPercent"))
+            {
+                Columns["ColumnPercent"].DisplayIndex = 2;
+            }
+
+            if (Columns.Contains("ColumnPath"))
+            {
+                Columns["ColumnPath"].DisplayIndex = 3;
+            }
+        }
+
         private void FitToCurrentBounds()
         {
             Dock = DockStyle.Fill;
@@ -190,6 +247,8 @@ namespace WTF
             MaximumSize = System.Drawing.Size.Empty;
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
             ScrollBars = ScrollBars.Vertical;
+
+            RemoveUnexpectedColumns();
 
             if (!Columns.Contains("ColumnName"))
                 return;
@@ -203,6 +262,9 @@ namespace WTF
             if (!Columns.Contains("ColumnPath"))
                 return;
 
+            if (TryApplySavedColumnWidths())
+                return;
+
             int availableWidth = ClientSize.Width - 2;
 
             if (RowCount > 0 && DisplayedRowCount(false) < RowCount)
@@ -214,7 +276,7 @@ namespace WTF
 
             int nameWidth = CalculateTextColumnWidth("ColumnName", 40);
             int sizeWidth = CalculateTextColumnWidth("ColumnSize", 40);
-            int percentWidth = 200;
+            int percentWidth = CalculatePercentColumnDefaultWidth();
 
             int pathWidth = availableWidth - nameWidth - sizeWidth - percentWidth;
 
@@ -223,7 +285,41 @@ namespace WTF
                 pathWidth = 2;
             }
 
+            ApplyColumnWidths(nameWidth, sizeWidth, percentWidth, pathWidth);
+        }
+
+        private bool TryApplySavedColumnWidths()
+        {
+            AppSettings settings = AppSettings.Load();
+
+            if (!settings.HasEntryColumnLayout)
+                return false;
+
+            if (settings.EntryColumnNameWidth <= 0)
+                return false;
+
+            if (settings.EntryColumnSizeWidth <= 0)
+                return false;
+
+            if (settings.EntryColumnPercentWidth <= 0)
+                return false;
+
+            if (settings.EntryColumnPathWidth <= 0)
+                return false;
+
+            ApplyColumnWidths(
+                settings.EntryColumnNameWidth,
+                settings.EntryColumnSizeWidth,
+                settings.EntryColumnPercentWidth,
+                settings.EntryColumnPathWidth);
+
+            return true;
+        }
+
+        private void ApplyColumnWidths(int nameWidth, int sizeWidth, int percentWidth, int pathWidth)
+        {
             SuspendLayout();
+            _applyingColumnWidths = true;
 
             try
             {
@@ -234,21 +330,38 @@ namespace WTF
                 Columns["ColumnPercent"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
                 Columns["ColumnPath"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
 
-                Columns["ColumnName"].MinimumWidth = 2;
-                Columns["ColumnSize"].MinimumWidth = 2;
-                Columns["ColumnPercent"].MinimumWidth = 200;
+                int minimumNameWidth = CalculateTextColumnWidth("ColumnName", 2);
+                int minimumSizeWidth = CalculateTextColumnWidth("ColumnSize", 2);
+                int minimumPercentWidth = CalculatePercentColumnDefaultWidth();
+
+                Columns["ColumnName"].MinimumWidth = minimumNameWidth;
+                Columns["ColumnSize"].MinimumWidth = minimumSizeWidth;
+                Columns["ColumnPercent"].MinimumWidth = minimumPercentWidth;
                 Columns["ColumnPath"].MinimumWidth = 2;
 
-                Columns["ColumnName"].Width = nameWidth;
-                Columns["ColumnSize"].Width = sizeWidth;
-                Columns["ColumnPercent"].Width = percentWidth;
-                Columns["ColumnPath"].Width = pathWidth;
+                Columns["ColumnName"].Width = Math.Max(minimumNameWidth, nameWidth);
+                Columns["ColumnSize"].Width = Math.Max(minimumSizeWidth, sizeWidth);
+                Columns["ColumnPercent"].Width = Math.Max(minimumPercentWidth, percentWidth);
+                Columns["ColumnPath"].Width = Math.Max(2, pathWidth);
             }
             finally
             {
+                _applyingColumnWidths = false;
                 ResumeLayout();
             }
         }
+
+        private int CalculatePercentColumnDefaultWidth()
+        {
+            int headerWidth = TextRenderer.MeasureText(
+                LocalizationService.GetText("Chart.TableUsage"),
+                Font).Width + 15;
+
+            int textWidth = TextRenderer.MeasureText("100.0 %", Font).Width + 15;
+
+            return Math.Max(48, Math.Max(headerWidth, textWidth));
+        }
+
         private int CalculateTextColumnWidth(string columnName, int fallbackWidth)
         {
             if (!Columns.Contains(columnName))
@@ -256,7 +369,7 @@ namespace WTF
 
             DataGridViewColumn column = Columns[columnName];
 
-            int width = TextRenderer.MeasureText(column.HeaderText ?? string.Empty, Font).Width + 24;
+            int width = TextRenderer.MeasureText(column.HeaderText ?? string.Empty, Font).Width + 15;
 
             foreach (DataGridViewRow row in Rows)
             {
@@ -266,7 +379,7 @@ namespace WTF
                 object value = row.Cells[column.Index].Value;
                 string text = value == null ? string.Empty : value.ToString();
 
-                int textWidth = TextRenderer.MeasureText(text, Font).Width + 24;
+                int textWidth = TextRenderer.MeasureText(text, Font).Width + 15;
 
                 if (textWidth > width)
                 {
@@ -276,6 +389,7 @@ namespace WTF
 
             return Math.Max(fallbackWidth, width);
         }
+
         private void Chart_TableGridChart_ParentChanged(object sender, EventArgs e)
         {
             FitToCurrentBounds();
@@ -285,6 +399,41 @@ namespace WTF
         {
             FitToCurrentBounds();
             Invalidate();
+        }
+
+        private void Chart_TableGridChart_ColumnWidthChanged(object sender, DataGridViewColumnEventArgs e)
+        {
+            if (_applyingColumnWidths)
+                return;
+
+            SaveEntryGridColumnWidths();
+        }
+
+        private void SaveEntryGridColumnWidths()
+        {
+            RemoveUnexpectedColumns();
+
+            if (!Columns.Contains("ColumnName"))
+                return;
+
+            if (!Columns.Contains("ColumnSize"))
+                return;
+
+            if (!Columns.Contains("ColumnPercent"))
+                return;
+
+            if (!Columns.Contains("ColumnPath"))
+                return;
+
+            AppSettings settings = AppSettings.Load();
+
+            settings.HasEntryColumnLayout = true;
+            settings.EntryColumnNameWidth = Columns["ColumnName"].Width;
+            settings.EntryColumnSizeWidth = Columns["ColumnSize"].Width;
+            settings.EntryColumnPercentWidth = Columns["ColumnPercent"].Width;
+            settings.EntryColumnPathWidth = Columns["ColumnPath"].Width;
+
+            settings.Save();
         }
 
         private void Chart_TableGridChart_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)

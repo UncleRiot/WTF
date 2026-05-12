@@ -8,7 +8,7 @@ using System.Windows.Forms;
 
 namespace WTF
 {
-    public sealed class PieChartView : Control
+    public sealed class Chart_PieChart : Control
     {
         private static readonly Color[] ChartColors =
 {
@@ -30,7 +30,7 @@ namespace WTF
         private FileSystemEntry _entry;
         private string _currentToolTipText;
 
-        public PieChartView()
+        public Chart_PieChart()
         {
             DoubleBuffered = true;
             _toolTip = new ToolTip();
