@@ -11,18 +11,15 @@ namespace WTF
         private readonly ToolStripComboBox _toolStripComboBoxDrives;
         private readonly ShellIconService _shellIconService;
         private readonly Action<string> _updateStatusStripForDrive;
-        private readonly Action<string> _scanPathSelectionCommitted;
 
         public DriveComboBoxController(
             ToolStripComboBox toolStripComboBoxDrives,
             ShellIconService shellIconService,
-            Action<string> updateStatusStripForDrive,
-            Action<string> scanPathSelectionCommitted)
+            Action<string> updateStatusStripForDrive)
         {
             _toolStripComboBoxDrives = toolStripComboBoxDrives;
             _shellIconService = shellIconService;
             _updateStatusStripForDrive = updateStatusStripForDrive;
-            _scanPathSelectionCommitted = scanPathSelectionCommitted;
         }
 
         public void Configure()
@@ -35,8 +32,6 @@ namespace WTF
             _toolStripComboBoxDrives.ComboBox.ItemHeight = Math.Max(20, _toolStripComboBoxDrives.ComboBox.ItemHeight);
             _toolStripComboBoxDrives.ComboBox.DrawItem -= toolStripComboBoxDrives_DrawItem;
             _toolStripComboBoxDrives.ComboBox.DrawItem += toolStripComboBoxDrives_DrawItem;
-            _toolStripComboBoxDrives.ComboBox.SelectionChangeCommitted -= toolStripComboBoxDrives_SelectionChangeCommitted;
-            _toolStripComboBoxDrives.ComboBox.SelectionChangeCommitted += toolStripComboBoxDrives_SelectionChangeCommitted;
         }
 
         public void LoadDrives()
@@ -110,6 +105,12 @@ namespace WTF
             if (_toolStripComboBoxDrives == null)
                 return;
 
+            if (_toolStripComboBoxDrives.IsDisposed)
+                return;
+
+            if (_toolStripComboBoxDrives.ComboBox == null || _toolStripComboBoxDrives.ComboBox.IsDisposed)
+                return;
+
             _toolStripComboBoxDrives.Enabled = enabled;
         }
 
@@ -134,17 +135,6 @@ namespace WTF
             }
 
             return drives;
-        }
-
-        private void toolStripComboBoxDrives_SelectionChangeCommitted(object sender, EventArgs e)
-        {
-            string scanPath = GetSelectedScanPath();
-
-            if (string.IsNullOrWhiteSpace(scanPath))
-                return;
-
-            _updateStatusStripForDrive?.Invoke(scanPath);
-            _scanPathSelectionCommitted?.Invoke(scanPath);
         }
 
         private void toolStripComboBoxDrives_DrawItem(object sender, DrawItemEventArgs e)

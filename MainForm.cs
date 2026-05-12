@@ -24,6 +24,7 @@ namespace WTF
         private CancellationTokenSource _scanCancellationTokenSource;
         private FileSystemEntry _currentRootEntry;
         private readonly string _startupScanPath;
+        private bool _isClosing;
 
         private MenuStrip menuStripMain;
         private ToolStripMenuItem menuItemFile;
@@ -123,8 +124,7 @@ namespace WTF
             _driveComboBoxController = new DriveComboBoxController(
                 toolStripComboBoxDrives,
                 _shellIconService,
-                _statusMainFormController.UpdateStatusStripForDrive,
-                DriveComboBoxScanPathSelectionCommitted);
+                _statusMainFormController.UpdateStatusStripForDrive);
             _partitionGridController = new PartitionGridController(
                 _settings,
                 splitContainerLeft,
@@ -690,25 +690,6 @@ namespace WTF
 
 
 
-        private async void DriveComboBoxScanPathSelectionCommitted(string rootPath)
-        {
-            if (_scanCancellationTokenSource != null)
-                return;
-
-            if (string.IsNullOrWhiteSpace(rootPath))
-                return;
-
-            if (!Directory.Exists(rootPath))
-            {
-                MessageBox.Show(this, LocalizationService.GetText("Message.PathNotFoundPrefix") + rootPath, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            await StartScanAsync(rootPath);
-        }
-
-
-
         private async void toolStripButtonScan_Click(object sender, EventArgs e)
         {
             if (_scanCancellationTokenSource != null)
@@ -742,6 +723,7 @@ namespace WTF
             dataGridViewEntries.DataSource = null;
             _currentRootEntry = null;
             _treeEntryController.ClearPendingLiveTreeUpdate();
+            _treeEntryController.ClearEntries();
 
             long scanTargetBytes = GetUsedSpaceBytes(rootPath);
             _statusMainFormController.SetStatusProgressText(0D);
@@ -753,6 +735,9 @@ namespace WTF
 
             Progress<ScanProgress> progress = new Progress<ScanProgress>(scanProgress =>
             {
+                if (!IsMainFormUiAvailable())
+                    return;
+
                 double percent = scanTargetBytes <= 0 ? 0D : (double)scanProgress.ScannedBytes * 100D / scanTargetBytes;
                 skippedDirectories = Math.Max(skippedDirectories, scanProgress.SkippedDirectories);
 
@@ -872,6 +857,9 @@ namespace WTF
                     }
                 }
 
+                if (!IsMainFormUiAvailable())
+                    return;
+
                 _treeEntryController.FlushPendingLiveTreeUpdate();
                 RenderScanResult(_currentRootEntry);
                 _partitionGridController.LoadPartitionList();
@@ -882,16 +870,27 @@ namespace WTF
             }
             catch (OperationCanceledException)
             {
-                toolStripStatusLabel.Text = LocalizationService.GetText("Status.ScanCanceled");
-                _statusMainFormController.SetStatusProgressText(null);
+                if (IsMainFormUiAvailable())
+                {
+                    toolStripStatusLabel.Text = LocalizationService.GetText("Status.ScanCanceled");
+                    _statusMainFormController.SetStatusProgressText(null);
+                }
             }
             finally
             {
-                _treeEntryController.StopLiveTreeUpdateTimer();
-                _treeEntryController.ClearPendingLiveTreeUpdate();
+                if (IsMainFormUiAvailable())
+                {
+                    _treeEntryController.StopLiveTreeUpdateTimer();
+                    _treeEntryController.ClearPendingLiveTreeUpdate();
+                }
+
                 _scanCancellationTokenSource.Dispose();
                 _scanCancellationTokenSource = null;
-                SetScanningState(false);
+
+                if (IsMainFormUiAvailable())
+                {
+                    SetScanningState(false);
+                }
             }
         }
 
@@ -926,8 +925,16 @@ namespace WTF
         }
 
 
+        private bool IsMainFormUiAvailable()
+        {
+            return !_isClosing && !IsDisposed && !Disposing;
+        }
+
         private void SetScanningState(bool scanning)
         {
+            if (!IsMainFormUiAvailable())
+                return;
+
             toolStripButtonScan.Text = scanning ? "■" : "▶";
             toolStripButtonScan.ToolTipText = scanning ? LocalizationService.GetText("Toolbar.ScanCancel") : LocalizationService.GetText("Toolbar.ScanStart");
             _driveComboBoxController.SetEnabled(!scanning);
@@ -1031,6 +1038,8 @@ namespace WTF
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            _isClosing = true;
+
             if (_scanCancellationTokenSource != null)
             {
                 _scanCancellationTokenSource.Cancel();
