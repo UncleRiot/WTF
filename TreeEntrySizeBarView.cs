@@ -22,7 +22,7 @@ namespace WTF
         private readonly HashSet<string> _expandedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, bool> _systemDirectoryByFullPath = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
-        private TreeEntrySizeBarNode _rootNode;
+        private readonly List<TreeEntrySizeBarNode> _rootNodes = new List<TreeEntrySizeBarNode>();
         private TreeEntrySizeBarNode _selectedNode;
         private int _virtualWidth;
         private int _virtualHeight;
@@ -82,7 +82,7 @@ namespace WTF
 
         public void ClearEntries()
         {
-            _rootNode = null;
+            _rootNodes.Clear();
             _selectedNode = null;
             _visibleNodes.Clear();
             _expandedKeys.Clear();
@@ -289,21 +289,25 @@ namespace WTF
 
             string previousSelectedKey = _selectedNode == null ? null : _selectedNode.Key;
             string rootKey = GetEntryKey(rootEntry, null);
-            bool rootChanged = _rootNode == null || !string.Equals(_rootNode.Key, rootKey, StringComparison.OrdinalIgnoreCase);
+            TreeEntrySizeBarNode rootNode = FindRootNodeByKey(rootKey);
 
-            if (rootChanged)
+            if (rootNode == null)
             {
-                _expandedKeys.Clear();
-                _rootNode = new TreeEntrySizeBarNode(rootEntry, null, 0, rootKey)
+                rootNode = new TreeEntrySizeBarNode(rootEntry, null, 0, rootKey)
                 {
                     Expanded = true
                 };
 
+                _rootNodes.Add(rootNode);
                 _expandedKeys.Add(rootKey);
-                previousSelectedKey = null;
+
+                if (_selectedNode == null)
+                {
+                    previousSelectedKey = null;
+                }
             }
 
-            SynchronizeNode(_rootNode, rootEntry);
+            SynchronizeNode(rootNode, rootEntry);
             RebuildVisibleNodes(false);
 
             TreeEntrySizeBarNode newSelectedNode = null;
@@ -315,12 +319,28 @@ namespace WTF
 
             if (newSelectedNode == null)
             {
-                newSelectedNode = _rootNode;
+                newSelectedNode = rootNode;
             }
 
             SelectNode(newSelectedNode, forceSelectionToRoot || newSelectedNode != _selectedNode);
             EnsureNodeVisible(newSelectedNode);
             Invalidate();
+        }
+
+        private TreeEntrySizeBarNode FindRootNodeByKey(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+                return null;
+
+            foreach (TreeEntrySizeBarNode rootNode in _rootNodes)
+            {
+                if (string.Equals(rootNode.Key, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    return rootNode;
+                }
+            }
+
+            return null;
         }
 
         private void SynchronizeNode(TreeEntrySizeBarNode node, FileSystemEntry entry)
@@ -378,9 +398,9 @@ namespace WTF
         {
             _visibleNodes.Clear();
 
-            if (_rootNode != null)
+            foreach (TreeEntrySizeBarNode rootNode in _rootNodes)
             {
-                AddVisibleNode(_rootNode);
+                AddVisibleNode(rootNode);
             }
 
             RecalculateVirtualSize();
