@@ -23,8 +23,7 @@ namespace WTF
             ToolStripMenuItem contextMenuItemOpenInExplorer,
             ToolStripMenuItem contextMenuItemExport,
             ToolStripMenuItem contextMenuItemCopyToClipboard,
-            Action<FileSystemEntry> selectedEntryChanged,
-            Func<FileSystemEntry> currentRootEntryProvider)
+            Action<FileSystemEntry> selectedEntryChanged)
         {
             _treeViewEntries = treeViewEntries;
             _contextMenuStripTreeEntries = contextMenuStripTreeEntries;

@@ -24,7 +24,6 @@ namespace WTF
         private CancellationTokenSource _scanCancellationTokenSource;
         private FileSystemEntry _currentRootEntry;
         private readonly string _startupScanPath;
-        private bool _isClosing;
 
         private MenuStrip menuStripMain;
         private ToolStripMenuItem menuItemFile;
@@ -91,11 +90,19 @@ namespace WTF
             _startupScanPath = startupScanPath;
 
             InitializeComponent();
+            _statusMainFormController = new StatusMainFormController(
+                _settings,
+                this,
+                toolStripStatusLabel,
+                statusStripMain,
+                toolStripAlertInformationLabel,
+                toolStripAlertWarningLabel,
+                toolStripAlertErrorLabel);
             _exportEntryController = new ExportEntryController(
                 _csvExportService,
                 _settings,
                 this,
-                statusText => toolStripStatusLabel.Text = statusText);
+                _statusMainFormController.SetStatusText);
             _layoutMainFormController = new LayoutMainFormController(
                 _settings,
                 this,
@@ -113,18 +120,11 @@ namespace WTF
                 toolStripButtonPieChart,
                 toolStripButtonBarChart,
                 _settings.SelectedViewMode);
-            _statusMainFormController = new StatusMainFormController(
-                _settings,
-                this,
-                toolStripStatusLabel,
-                statusStripMain,
-                toolStripAlertInformationLabel,
-                toolStripAlertWarningLabel,
-                toolStripAlertErrorLabel);
             _driveComboBoxController = new DriveComboBoxController(
                 toolStripComboBoxDrives,
                 _shellIconService,
-                _statusMainFormController.UpdateStatusStripForDrive);
+                _statusMainFormController.UpdateStatusStripForDrive,
+                DriveComboBoxScanPathSelectionCommitted);
             _partitionGridController = new PartitionGridController(
                 _settings,
                 splitContainerLeft,
@@ -139,8 +139,7 @@ namespace WTF
                 contextMenuItemOpenInExplorer,
                 contextMenuItemExport,
                 contextMenuItemCopyToClipboard,
-                entry => _layoutMainFormController.BindGrid(entry),
-                () => _currentRootEntry);
+                entry => _layoutMainFormController.BindGrid(entry));
             AppAlertLog.Changed += _statusMainFormController.AppAlertLogChanged;
             _statusMainFormController.ConfigureAlertStatusStrip();
             _driveComboBoxController.Configure();
@@ -230,16 +229,37 @@ namespace WTF
 
                 System.Drawing.Point[] points =
                 {
-            new System.Drawing.Point(4, 2),
-            new System.Drawing.Point(13, 8),
-            new System.Drawing.Point(4, 14)
-        };
+                    new System.Drawing.Point(4, 2),
+                    new System.Drawing.Point(13, 8),
+                    new System.Drawing.Point(4, 14)
+                };
 
                 using System.Drawing.SolidBrush brush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(0, 120, 215));
                 graphics.FillPolygon(brush, points);
 
                 using System.Drawing.Pen pen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0, 84, 153));
                 graphics.DrawPolygon(pen, points);
+            }
+
+            return bitmap;
+        }
+
+        private System.Drawing.Bitmap CreateStopButtonImage()
+        {
+            System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(16, 16, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+            using (System.Drawing.Graphics graphics = System.Drawing.Graphics.FromImage(bitmap))
+            {
+                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                graphics.Clear(System.Drawing.Color.Transparent);
+
+                System.Drawing.Rectangle rectangle = new System.Drawing.Rectangle(4, 4, 8, 8);
+
+                using System.Drawing.SolidBrush brush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(196, 43, 28));
+                graphics.FillRectangle(brush, rectangle);
+
+                using System.Drawing.Pen pen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(135, 24, 15));
+                graphics.DrawRectangle(pen, rectangle);
             }
 
             return bitmap;
@@ -427,49 +447,6 @@ namespace WTF
             listViewPartitions.RowHeadersVisible = false;
             listViewPartitions.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
 
-            listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "PartitionColumnName",
-                HeaderText = LocalizationService.GetText("Common.Name"),
-                Width = 120,
-                SortMode = DataGridViewColumnSortMode.NotSortable
-            });
-
-            listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "PartitionColumnSize",
-                HeaderText = LocalizationService.GetText("Common.Size"),
-                Width = 80,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
-                DefaultCellStyle = new DataGridViewCellStyle
-                {
-                    Alignment = DataGridViewContentAlignment.MiddleRight
-                }
-            });
-
-            listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "PartitionColumnFree",
-                HeaderText = LocalizationService.GetText("Common.Free"),
-                Width = 80,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
-                DefaultCellStyle = new DataGridViewCellStyle
-                {
-                    Alignment = DataGridViewContentAlignment.MiddleRight
-                }
-            });
-
-            listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "PartitionColumnFreePercent",
-                HeaderText = LocalizationService.GetText("Common.FreePercent"),
-                Width = 70,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
-                DefaultCellStyle = new DataGridViewCellStyle
-                {
-                    Alignment = DataGridViewContentAlignment.MiddleRight
-                }
-            });
 
             dataGridViewEntries = new Chart_TableGridChart();
             dataGridViewEntries.Dock = DockStyle.Fill;
@@ -615,25 +592,7 @@ namespace WTF
 
             _statusMainFormController?.ApplyLocalizedTexts();
 
-            if (listViewPartitions.Columns.Contains("PartitionColumnName"))
-            {
-                listViewPartitions.Columns["PartitionColumnName"].HeaderText = LocalizationService.GetText("Common.Name");
-            }
-
-            if (listViewPartitions.Columns.Contains("PartitionColumnSize"))
-            {
-                listViewPartitions.Columns["PartitionColumnSize"].HeaderText = LocalizationService.GetText("Common.Size");
-            }
-
-            if (listViewPartitions.Columns.Contains("PartitionColumnFree"))
-            {
-                listViewPartitions.Columns["PartitionColumnFree"].HeaderText = LocalizationService.GetText("Common.Free");
-            }
-
-            if (listViewPartitions.Columns.Contains("PartitionColumnFreePercent"))
-            {
-                listViewPartitions.Columns["PartitionColumnFreePercent"].HeaderText = LocalizationService.GetText("Common.FreePercent");
-            }
+            _partitionGridController?.ApplyLocalizedTexts();
 
             dataGridViewEntries.ApplyLocalizedTexts();
         }
@@ -690,6 +649,25 @@ namespace WTF
 
 
 
+        private async void DriveComboBoxScanPathSelectionCommitted(string rootPath)
+        {
+            if (_scanCancellationTokenSource != null)
+                return;
+
+            if (string.IsNullOrWhiteSpace(rootPath))
+                return;
+
+            if (!Directory.Exists(rootPath))
+            {
+                MessageBox.Show(this, LocalizationService.GetText("Message.PathNotFoundPrefix") + rootPath, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            await StartScanAsync(rootPath);
+        }
+
+
+
         private async void toolStripButtonScan_Click(object sender, EventArgs e)
         {
             if (_scanCancellationTokenSource != null)
@@ -723,7 +701,6 @@ namespace WTF
             dataGridViewEntries.DataSource = null;
             _currentRootEntry = null;
             _treeEntryController.ClearPendingLiveTreeUpdate();
-            _treeEntryController.ClearEntries();
 
             long scanTargetBytes = GetUsedSpaceBytes(rootPath);
             _statusMainFormController.SetStatusProgressText(0D);
@@ -735,9 +712,6 @@ namespace WTF
 
             Progress<ScanProgress> progress = new Progress<ScanProgress>(scanProgress =>
             {
-                if (!IsMainFormUiAvailable())
-                    return;
-
                 double percent = scanTargetBytes <= 0 ? 0D : (double)scanProgress.ScannedBytes * 100D / scanTargetBytes;
                 skippedDirectories = Math.Max(skippedDirectories, scanProgress.SkippedDirectories);
 
@@ -756,8 +730,8 @@ namespace WTF
 
                 if (scanProgress.IsCacheSavePhase)
                 {
-                    toolStripStatusLabel.Text = string.Format(
-                        LocalizationService.GetText("Status.ScanCacheSave"),
+                    _statusMainFormController.SetFormattedStatusText(
+                        "Status.ScanCacheSave",
                         scanProgress.CurrentPath,
                         SizeFormatter.Format(scanProgress.ScannedBytes),
                         scanProgress.ScannedDirectories,
@@ -765,8 +739,8 @@ namespace WTF
                 }
                 else if (scanProgress.IsCacheVerification)
                 {
-                    toolStripStatusLabel.Text = string.Format(
-                        LocalizationService.GetText("Status.CacheVerification"),
+                    _statusMainFormController.SetFormattedStatusText(
+                        "Status.CacheVerification",
                         scanProgress.CurrentPath,
                         SizeFormatter.Format(scanProgress.ScannedBytes),
                         scanProgress.ScannedDirectories,
@@ -774,8 +748,8 @@ namespace WTF
                 }
                 else
                 {
-                    toolStripStatusLabel.Text = string.Format(
-                        LocalizationService.GetText("Status.FastScan"),
+                    _statusMainFormController.SetFormattedStatusText(
+                        "Status.FastScan",
                         scanProgress.CurrentPath,
                         SizeFormatter.Format(scanProgress.ScannedBytes),
                         scanProgress.ScannedDirectories,
@@ -801,7 +775,7 @@ namespace WTF
                 {
                     try
                     {
-                        toolStripStatusLabel.Text = LocalizationService.GetText("Status.MftFastScanRunning");
+                        _statusMainFormController.SetStatusTextByKey("Status.MftFastScanRunning");
                         NtfsMftScanner ntfsMftScanner = new NtfsMftScanner(_settings);
                         _currentRootEntry = await ntfsMftScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
                     }
@@ -817,7 +791,7 @@ namespace WTF
 
                         try
                         {
-                            toolStripStatusLabel.Text = LocalizationService.GetText("Status.MftUnavailableNtQuery");
+                            _statusMainFormController.SetStatusTextByKey("Status.MftUnavailableNtQuery");
                             _currentRootEntry = await ntQueryDirectoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
                         }
                         catch (OperationCanceledException)
@@ -830,7 +804,7 @@ namespace WTF
                                 LocalizationService.GetText("Alert.Scan"),
                                 LocalizationService.Format("Alert.NtQueryUnavailable", ntQueryException.Message));
 
-                            toolStripStatusLabel.Text = LocalizationService.GetText("Status.NtQueryUnavailableNormal");
+                            _statusMainFormController.SetStatusTextByKey("Status.NtQueryUnavailableNormal");
                             _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
                         }
                     }
@@ -839,7 +813,7 @@ namespace WTF
                 {
                     try
                     {
-                        toolStripStatusLabel.Text = LocalizationService.GetText("Status.NtQueryRunning");
+                        _statusMainFormController.SetStatusTextByKey("Status.NtQueryRunning");
                         _currentRootEntry = await ntQueryDirectoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
                     }
                     catch (OperationCanceledException)
@@ -852,13 +826,10 @@ namespace WTF
                             LocalizationService.GetText("Alert.Scan"),
                             LocalizationService.Format("Alert.NtQueryUnavailable", ntQueryException.Message));
 
-                        toolStripStatusLabel.Text = LocalizationService.GetText("Status.NtQueryUnavailableNormal");
+                        _statusMainFormController.SetStatusTextByKey("Status.NtQueryUnavailableNormal");
                         _currentRootEntry = await directoryScanner.ScanAsync(rootPath, progress, _scanCancellationTokenSource.Token);
                     }
                 }
-
-                if (!IsMainFormUiAvailable())
-                    return;
 
                 _treeEntryController.FlushPendingLiveTreeUpdate();
                 RenderScanResult(_currentRootEntry);
@@ -870,27 +841,16 @@ namespace WTF
             }
             catch (OperationCanceledException)
             {
-                if (IsMainFormUiAvailable())
-                {
-                    toolStripStatusLabel.Text = LocalizationService.GetText("Status.ScanCanceled");
-                    _statusMainFormController.SetStatusProgressText(null);
-                }
+                _statusMainFormController.SetStatusTextByKey("Status.ScanCanceled");
+                _statusMainFormController.SetStatusProgressText(null);
             }
             finally
             {
-                if (IsMainFormUiAvailable())
-                {
-                    _treeEntryController.StopLiveTreeUpdateTimer();
-                    _treeEntryController.ClearPendingLiveTreeUpdate();
-                }
-
+                _treeEntryController.StopLiveTreeUpdateTimer();
+                _treeEntryController.ClearPendingLiveTreeUpdate();
                 _scanCancellationTokenSource.Dispose();
                 _scanCancellationTokenSource = null;
-
-                if (IsMainFormUiAvailable())
-                {
-                    SetScanningState(false);
-                }
+                SetScanningState(false);
             }
         }
 
@@ -925,17 +885,14 @@ namespace WTF
         }
 
 
-        private bool IsMainFormUiAvailable()
-        {
-            return !_isClosing && !IsDisposed && !Disposing;
-        }
-
         private void SetScanningState(bool scanning)
         {
-            if (!IsMainFormUiAvailable())
-                return;
+            Image oldImage = toolStripButtonScan.Image;
+            toolStripButtonScan.Image = scanning ? CreateStopButtonImage() : CreateScanButtonImage();
+            oldImage?.Dispose();
 
-            toolStripButtonScan.Text = scanning ? "■" : "▶";
+            toolStripButtonScan.Text = string.Empty;
+            toolStripButtonScan.DisplayStyle = ToolStripItemDisplayStyle.Image;
             toolStripButtonScan.ToolTipText = scanning ? LocalizationService.GetText("Toolbar.ScanCancel") : LocalizationService.GetText("Toolbar.ScanStart");
             _driveComboBoxController.SetEnabled(!scanning);
             toolStripButtonOpenFolder.Enabled = !scanning;
@@ -1038,8 +995,6 @@ namespace WTF
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            _isClosing = true;
-
             if (_scanCancellationTokenSource != null)
             {
                 _scanCancellationTokenSource.Cancel();

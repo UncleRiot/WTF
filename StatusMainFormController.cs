@@ -116,6 +116,21 @@ namespace WTF
             alertHistoryForm.ShowDialog(_owner);
         }
 
+        public void SetStatusText(string text)
+        {
+            _statusLabel.Text = text;
+        }
+
+        public void SetStatusTextByKey(string localizationKey)
+        {
+            _statusLabel.Text = LocalizationService.GetText(localizationKey);
+        }
+
+        public void SetFormattedStatusText(string localizationKey, params object[] args)
+        {
+            _statusLabel.Text = string.Format(LocalizationService.GetText(localizationKey), args);
+        }
+
         public void UpdateStatusStripForDrive(string rootPath)
         {
             try

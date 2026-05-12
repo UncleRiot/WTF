@@ -32,8 +32,82 @@ namespace WTF
 
         public void Configure()
         {
+            ConfigureColumns();
             _listViewPartitions.CellPainting += listViewPartitions_CellPainting;
             _listViewPartitions.SizeChanged += listViewPartitions_SizeChanged;
+        }
+
+        public void ApplyLocalizedTexts()
+        {
+            if (_listViewPartitions.Columns.Contains("PartitionColumnName"))
+            {
+                _listViewPartitions.Columns["PartitionColumnName"].HeaderText = LocalizationService.GetText("Common.Name");
+            }
+
+            if (_listViewPartitions.Columns.Contains("PartitionColumnSize"))
+            {
+                _listViewPartitions.Columns["PartitionColumnSize"].HeaderText = LocalizationService.GetText("Common.Size");
+            }
+
+            if (_listViewPartitions.Columns.Contains("PartitionColumnFree"))
+            {
+                _listViewPartitions.Columns["PartitionColumnFree"].HeaderText = LocalizationService.GetText("Common.Free");
+            }
+
+            if (_listViewPartitions.Columns.Contains("PartitionColumnFreePercent"))
+            {
+                _listViewPartitions.Columns["PartitionColumnFreePercent"].HeaderText = LocalizationService.GetText("Common.FreePercent");
+            }
+        }
+
+        private void ConfigureColumns()
+        {
+            if (_listViewPartitions.Columns.Count > 0)
+                return;
+
+            _listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "PartitionColumnName",
+                HeaderText = LocalizationService.GetText("Common.Name"),
+                Width = 120,
+                SortMode = DataGridViewColumnSortMode.NotSortable
+            });
+
+            _listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "PartitionColumnSize",
+                HeaderText = LocalizationService.GetText("Common.Size"),
+                Width = 80,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Alignment = DataGridViewContentAlignment.MiddleRight
+                }
+            });
+
+            _listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "PartitionColumnFree",
+                HeaderText = LocalizationService.GetText("Common.Free"),
+                Width = 80,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Alignment = DataGridViewContentAlignment.MiddleRight
+                }
+            });
+
+            _listViewPartitions.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "PartitionColumnFreePercent",
+                HeaderText = LocalizationService.GetText("Common.FreePercent"),
+                Width = 70,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    Alignment = DataGridViewContentAlignment.MiddleRight
+                }
+            });
         }
 
         public void LoadPartitionList()
