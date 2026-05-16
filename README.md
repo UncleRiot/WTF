@@ -49,10 +49,10 @@ Windows may show this message because the file was downloaded from the internet.
   - Windows light mode
   - Windows dark mode
 
-## Differences to TreeSize Professional and WinDirStat
+## Differences to others
 
-- Simpler than TreeSize Professional: no enterprise reporting, scheduled scans, duplicate search, advanced file search, or broad remote-storage feature set.
-- More focused than WinDirStat: no treemap or extension statistics; instead it offers table, pie, and bar views.
+- Simpler than professional software: No enterprise reporting, scheduled scans, duplicate search, advanced file search, or broad remote-storage feature set.
+- More focused: No treemap or extension statistics; instead it offers table, pie, and bar views.
 - Faster-first design: tries NTFS MFT scanning, then NT API scanning, then standard scanning.
 - Smaller scope: built for quick local Windows storage inspection, not full storage management.
 
