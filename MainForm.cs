@@ -23,6 +23,7 @@ namespace WTF
         private TreeEntryController _treeEntryController;
 
         private CancellationTokenSource _scanCancellationTokenSource;
+        private PauseTokenSource _scanPauseTokenSource;
         private FileSystemEntry _currentRootEntry;
         private readonly string _startupScanPath;
 
@@ -30,6 +31,9 @@ namespace WTF
         private ToolStripMenuItem menuItemFile;
         private ToolStripMenuItem menuItemExportCsv;
         private ToolStripMenuItem menuItemSettings;
+        private ToolStripMenuItem menuItemSaveScanResult;
+        private ToolStripMenuItem menuItemLoadScanResult;
+        private ToolStripMenuItem menuItemAdvancedFeatures;
         private ToolStripMenuItem menuItemExit;
         private ToolStripMenuItem menuItemHelp;
         private ToolStripMenuItem menuItemAbout;
@@ -38,6 +42,7 @@ namespace WTF
         private ToolStripLabel toolStripLabelDrive;
         private ToolStripComboBox toolStripComboBoxDrives;
         private ToolStripButton toolStripButtonScan;
+        private ToolStripButton toolStripButtonPause;
         private ToolStripButton toolStripButtonOpenFolder;
         private ToolStrip toolStripViewMode;
         private ToolStrip toolStripExport;
@@ -52,6 +57,7 @@ namespace WTF
         private ToolStripMenuItem contextMenuItemOpenInExplorer;
         private ToolStripMenuItem contextMenuItemExport;
         private ToolStripMenuItem contextMenuItemCopyToClipboard;
+        private ToolStripMenuItem contextMenuItemCopyPath;
         private ImageList imageListEntries;
         private DataGridView listViewPartitions;
         private ImageList imageListPartitions;
@@ -289,11 +295,17 @@ namespace WTF
             menuItemFile = new ToolStripMenuItem(LocalizationService.GetText("Menu.File"));
             menuItemExportCsv = new ToolStripMenuItem(LocalizationService.GetText("Menu.ExportCsv"));
             menuItemSettings = new ToolStripMenuItem(LocalizationService.GetText("Menu.Settings"));
+            menuItemSaveScanResult = new ToolStripMenuItem(LocalizationService.GetText("Menu.SaveScanResult"));
+            menuItemLoadScanResult = new ToolStripMenuItem(LocalizationService.GetText("Menu.LoadScanResult"));
+            menuItemAdvancedFeatures = new ToolStripMenuItem(LocalizationService.GetText("Menu.Analysis"));
             menuItemExit = new ToolStripMenuItem(LocalizationService.GetText("Menu.Exit"));
             menuItemHelp = new ToolStripMenuItem(LocalizationService.GetText("Menu.Help"));
             menuItemAbout = new ToolStripMenuItem(LocalizationService.GetText("Menu.About"));
 
             menuItemFile.DropDownItems.Add(menuItemExportCsv);
+            menuItemFile.DropDownItems.Add(menuItemSaveScanResult);
+            menuItemFile.DropDownItems.Add(menuItemLoadScanResult);
+            menuItemFile.DropDownItems.Add(menuItemAdvancedFeatures);
             menuItemFile.DropDownItems.Add(new ToolStripSeparator());
             menuItemFile.DropDownItems.Add(menuItemSettings);
             menuItemFile.DropDownItems.Add(new ToolStripSeparator());
@@ -304,6 +316,9 @@ namespace WTF
 
             menuItemExportCsv.Click += menuItemExportCsv_Click;
             menuItemSettings.Click += menuItemSettings_Click;
+            menuItemSaveScanResult.Click += menuItemSaveScanResult_Click;
+            menuItemLoadScanResult.Click += menuItemLoadScanResult_Click;
+            menuItemAdvancedFeatures.Click += menuItemAdvancedFeatures_Click;
             menuItemExit.Click += menuItemExit_Click;
             menuItemAbout.Click += menuItemAbout_Click;
 
@@ -324,6 +339,7 @@ namespace WTF
             toolStripLabelDrive = new ToolStripLabel(LocalizationService.GetText("Toolbar.Drive"));
             toolStripComboBoxDrives = new ToolStripComboBox();
             toolStripButtonScan = new ToolStripButton("▶");
+            toolStripButtonPause = new ToolStripButton("⏸");
             toolStripButtonOpenFolder = new ToolStripButton(LocalizationService.GetText("Toolbar.Open"));
 
             toolStripLabelDrive.Margin = new Padding(0, 1, 0, 2);
@@ -333,6 +349,10 @@ namespace WTF
             toolStripButtonScan.DisplayStyle = ToolStripItemDisplayStyle.Text;
             toolStripButtonScan.ToolTipText = LocalizationService.GetText("Toolbar.ScanStart");
             toolStripButtonScan.Click += toolStripButtonScan_Click;
+            toolStripButtonPause.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            toolStripButtonPause.ToolTipText = LocalizationService.GetText("Toolbar.PauseResume");
+            toolStripButtonPause.Enabled = false;
+            toolStripButtonPause.Click += toolStripButtonPause_Click;
             toolStripButtonOpenFolder.DisplayStyle = ToolStripItemDisplayStyle.Text;
             toolStripButtonOpenFolder.ToolTipText = LocalizationService.GetText("Toolbar.SelectFolderAndScan");
             toolStripButtonOpenFolder.Click += toolStripButtonOpenFolder_Click;
@@ -340,6 +360,7 @@ namespace WTF
             toolStripMain.Items.Add(toolStripLabelDrive);
             toolStripMain.Items.Add(toolStripComboBoxDrives);
             toolStripMain.Items.Add(toolStripButtonScan);
+            toolStripMain.Items.Add(toolStripButtonPause);
             toolStripMain.Items.Add(toolStripButtonOpenFolder);
 
             toolStripViewMode = new ToolStrip();
@@ -420,12 +441,15 @@ namespace WTF
             contextMenuItemOpenInExplorer = new ToolStripMenuItem(LocalizationService.GetText("Context.OpenInExplorer"));
             contextMenuItemExport = new ToolStripMenuItem(LocalizationService.GetText("Context.Export"));
             contextMenuItemCopyToClipboard = new ToolStripMenuItem(LocalizationService.GetText("Context.CopyToClipboard"));
+            contextMenuItemCopyPath = new ToolStripMenuItem(LocalizationService.GetText("Context.CopyPath"));
             contextMenuItemOpenInExplorer.Click += contextMenuItemOpenInExplorer_Click;
             contextMenuItemExport.Click += contextMenuItemExport_Click;
             contextMenuItemCopyToClipboard.Click += contextMenuItemCopyToClipboard_Click;
-            contextMenuStripTreeEntries.Items.Add(contextMenuItemOpenInExplorer);
+            contextMenuItemCopyPath.Click += contextMenuItemCopyPath_Click;
             contextMenuStripTreeEntries.Items.Add(contextMenuItemExport);
             contextMenuStripTreeEntries.Items.Add(contextMenuItemCopyToClipboard);
+            contextMenuStripTreeEntries.Items.Add(contextMenuItemCopyPath);
+            contextMenuStripTreeEntries.Items.Add(contextMenuItemOpenInExplorer);
 
             imageListPartitions = new ImageList();
             imageListPartitions.ColorDepth = ColorDepth.Depth32Bit;
@@ -571,6 +595,9 @@ namespace WTF
 
             menuItemFile.Text = LocalizationService.GetText("Menu.File");
             menuItemExportCsv.Text = LocalizationService.GetText("Menu.ExportCsv");
+            menuItemSaveScanResult.Text = LocalizationService.GetText("Menu.SaveScanResult");
+            menuItemLoadScanResult.Text = LocalizationService.GetText("Menu.LoadScanResult");
+            menuItemAdvancedFeatures.Text = LocalizationService.GetText("Menu.Analysis");
             menuItemSettings.Text = LocalizationService.GetText("Menu.Settings");
             menuItemExit.Text = LocalizationService.GetText("Menu.Exit");
             menuItemHelp.Text = LocalizationService.GetText("Menu.Help");
@@ -582,6 +609,7 @@ namespace WTF
                 ? LocalizationService.GetText("Toolbar.ScanCancel")
                 : LocalizationService.GetText("Toolbar.ScanStart");
             toolStripButtonOpenFolder.ToolTipText = LocalizationService.GetText("Toolbar.SelectFolderAndScan");
+            toolStripButtonPause.ToolTipText = LocalizationService.GetText("Toolbar.PauseResume");
             toolStripButtonTable.Text = LocalizationService.GetText("Toolbar.Table");
             toolStripButtonPieChart.Text = LocalizationService.GetText("Toolbar.PieChart");
             toolStripButtonBarChart.Text = LocalizationService.GetText("Toolbar.BarChart");
@@ -591,6 +619,7 @@ namespace WTF
             contextMenuItemOpenInExplorer.Text = LocalizationService.GetText("Context.OpenInExplorer");
             contextMenuItemExport.Text = LocalizationService.GetText("Context.Export");
             contextMenuItemCopyToClipboard.Text = LocalizationService.GetText("Context.CopyToClipboard");
+            contextMenuItemCopyPath.Text = LocalizationService.GetText("Context.CopyPath");
 
             _statusMainFormController?.ApplyLocalizedTexts();
 
@@ -708,6 +737,7 @@ namespace WTF
             _statusMainFormController.SetStatusProgressText(0D);
 
             _scanCancellationTokenSource = new CancellationTokenSource();
+            _scanPauseTokenSource = new PauseTokenSource();
             int skippedDirectories = 0;
             HashSet<string> skippedDirectoryDetailSet = new HashSet<string>();
             List<string> skippedDirectoryDetails = new List<string>();
@@ -766,7 +796,8 @@ namespace WTF
                 _currentRootEntry = await _scanExecutionController.ScanAsync(
                     rootPath,
                     progress,
-                    _scanCancellationTokenSource.Token);
+                    _scanCancellationTokenSource.Token,
+                    _scanPauseTokenSource.Token);
 
                 _treeEntryController.FlushPendingLiveTreeUpdate();
                 RenderScanResult(_currentRootEntry);
@@ -785,6 +816,8 @@ namespace WTF
             {
                 _treeEntryController.StopLiveTreeUpdateTimer();
                 _treeEntryController.ClearPendingLiveTreeUpdate();
+                _scanPauseTokenSource?.Dispose();
+                _scanPauseTokenSource = null;
                 _scanCancellationTokenSource.Dispose();
                 _scanCancellationTokenSource = null;
                 SetScanningState(false);
@@ -833,7 +866,14 @@ namespace WTF
             toolStripButtonScan.ToolTipText = scanning ? LocalizationService.GetText("Toolbar.ScanCancel") : LocalizationService.GetText("Toolbar.ScanStart");
             _driveComboBoxController.SetEnabled(!scanning);
             toolStripButtonOpenFolder.Enabled = !scanning;
+            toolStripButtonPause.Enabled = scanning;
+            if (!scanning)
+            {
+                toolStripButtonPause.Text = "⏸";
+            }
             menuItemExportCsv.Enabled = !scanning && _currentRootEntry != null;
+            menuItemSaveScanResult.Enabled = !scanning && _currentRootEntry != null;
+            menuItemAdvancedFeatures.Enabled = !scanning && _currentRootEntry != null;
             toolStripButtonExportCsv.Enabled = !scanning && _currentRootEntry != null;
             splitContainerMain.IsSplitterFixed = scanning;
             splitContainerLeft.IsSplitterFixed = scanning;
@@ -841,8 +881,10 @@ namespace WTF
 
         private void RenderScanResult(FileSystemEntry rootEntry)
         {
+            TreeSortService.Sort(rootEntry, _settings.TreeSortMode);
             _treeEntryController.RenderScanResult(rootEntry);
             _layoutMainFormController.BindGrid(rootEntry);
+            ApplyEntryColumnVisibility();
         }
 
         private void toolStripButtonTable_Click(object sender, EventArgs e)
@@ -876,12 +918,14 @@ namespace WTF
             if (contextMenuEntry == null || string.IsNullOrWhiteSpace(contextMenuEntry.FullPath))
                 return;
 
-            if (!Directory.Exists(contextMenuEntry.FullPath))
-                return;
+            string arguments = File.Exists(contextMenuEntry.FullPath)
+                ? "/select,\"" + contextMenuEntry.FullPath + "\""
+                : "\"" + contextMenuEntry.FullPath + "\"";
 
             Process.Start(new ProcessStartInfo
             {
-                FileName = contextMenuEntry.FullPath,
+                FileName = "explorer.exe",
+                Arguments = arguments,
                 UseShellExecute = true
             });
         }
@@ -894,6 +938,98 @@ namespace WTF
         private void contextMenuItemCopyToClipboard_Click(object sender, EventArgs e)
         {
             _exportEntryController.CopyEntryExportToClipboard(_treeEntryController.ContextMenuEntry);
+        }
+
+        private void toolStripButtonPause_Click(object sender, EventArgs e)
+        {
+            if (_scanPauseTokenSource == null)
+                return;
+
+            if (_scanPauseTokenSource.IsPaused)
+            {
+                _scanPauseTokenSource.Resume();
+                toolStripButtonPause.Text = "⏸";
+                _statusMainFormController.SetStatusTextByKey("Status.NtQueryRunning");
+            }
+            else
+            {
+                _scanPauseTokenSource.Pause();
+                toolStripButtonPause.Text = "▶";
+                _statusMainFormController.SetStatusTextByKey("Status.ScanPaused");
+            }
+        }
+
+        private void contextMenuItemCopyPath_Click(object sender, EventArgs e)
+        {
+            FileSystemEntry entry = _treeEntryController.ContextMenuEntry;
+
+            if (entry == null || string.IsNullOrWhiteSpace(entry.FullPath))
+                return;
+
+            Clipboard.SetText(entry.FullPath);
+        }
+
+        private void menuItemSaveScanResult_Click(object sender, EventArgs e)
+        {
+            if (_currentRootEntry == null)
+                return;
+
+            using SaveFileDialog dialog = new SaveFileDialog
+            {
+                Filter = "WTF Scan (*.wtfscan)|*.wtfscan|JSON (*.json)|*.json",
+                DefaultExt = "wtfscan",
+                FileName = "scan-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".wtfscan"
+            };
+
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                ScanResultFileService.Save(dialog.FileName, _currentRootEntry);
+            }
+        }
+
+        private void menuItemLoadScanResult_Click(object sender, EventArgs e)
+        {
+            using OpenFileDialog dialog = new OpenFileDialog
+            {
+                Filter = "WTF Scan (*.wtfscan;*.json)|*.wtfscan;*.json"
+            };
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            FileSystemEntry loadedEntry = ScanResultFileService.Load(dialog.FileName);
+
+            if (loadedEntry == null)
+                return;
+
+            _currentRootEntry = loadedEntry;
+            RenderScanResult(_currentRootEntry);
+            SetScanningState(false);
+        }
+
+        private void menuItemAdvancedFeatures_Click(object sender, EventArgs e)
+        {
+            if (_currentRootEntry == null)
+                return;
+
+            using AdvancedFeaturesForm form = new AdvancedFeaturesForm(_currentRootEntry, _settings, dataGridViewEntries);
+            form.ShowDialog(this);
+            RenderScanResult(_currentRootEntry);
+        }
+
+        private void ApplyEntryColumnVisibility()
+        {
+            if (dataGridViewEntries.Columns.Contains("ColumnName"))
+                dataGridViewEntries.Columns["ColumnName"].Visible = _settings.EntryColumnNameVisible;
+
+            if (dataGridViewEntries.Columns.Contains("ColumnSize"))
+                dataGridViewEntries.Columns["ColumnSize"].Visible = _settings.EntryColumnSizeVisible;
+
+            if (dataGridViewEntries.Columns.Contains("ColumnPercent"))
+                dataGridViewEntries.Columns["ColumnPercent"].Visible = _settings.EntryColumnPercentVisible;
+
+            if (dataGridViewEntries.Columns.Contains("ColumnPath"))
+                dataGridViewEntries.Columns["ColumnPath"].Visible = _settings.EntryColumnPathVisible;
         }
 
         private void menuItemSettings_Click(object sender, EventArgs e)

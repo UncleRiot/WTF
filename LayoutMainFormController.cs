@@ -137,9 +137,18 @@ namespace WTF
 
         public void ApplyDefaultToolStripLayout()
         {
-            _toolStripPanelMain.Join(_toolStripMain, 0, 0);
-            _toolStripPanelMain.Join(_toolStripViewMode, 390, 0);
-            _toolStripPanelMain.Join(_toolStripExport, 610, 0);
+            _toolStripPanelMain.SuspendLayout();
+
+            try
+            {
+                _toolStripPanelMain.Join(_toolStripExport, 0, 0);
+                _toolStripPanelMain.Join(_toolStripViewMode, 0, 0);
+                _toolStripPanelMain.Join(_toolStripMain, 0, 0);
+            }
+            finally
+            {
+                _toolStripPanelMain.ResumeLayout(true);
+            }
         }
 
         public void ApplyToolStripLayout()
@@ -147,7 +156,7 @@ namespace WTF
             if (!_settings.HasToolStripLayout)
                 return;
 
-            if (_settings.ToolStripLayoutVersion != 1)
+            if (_settings.ToolStripLayoutVersion != 3)
                 return;
 
             _toolStripPanelMain.Join(
@@ -169,7 +178,7 @@ namespace WTF
         public void SaveToolStripLayout()
         {
             _settings.HasToolStripLayout = true;
-            _settings.ToolStripLayoutVersion = 1;
+            _settings.ToolStripLayoutVersion = 3;
 
             _settings.ToolStripMainLeft = _toolStripMain.Left;
             _settings.ToolStripMainTop = _toolStripMain.Top;

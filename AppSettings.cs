@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Text.Json;
 
 namespace WTF
@@ -25,6 +26,12 @@ namespace WTF
         public bool ShowElevationPromptOnStartup { get; set; } = true;
         public bool StartElevatedOnStartup { get; set; }
         public bool ShellContextMenuEnabled { get; set; }
+        public List<string> ExcludedPaths { get; set; } = new List<string>();
+        public bool EntryColumnNameVisible { get; set; } = true;
+        public bool EntryColumnSizeVisible { get; set; } = true;
+        public bool EntryColumnPercentVisible { get; set; } = true;
+        public bool EntryColumnPathVisible { get; set; } = true;
+        public TreeSortMode TreeSortMode { get; set; } = TreeSortMode.SizeDescending;
         public AppLayout Layout { get; set; } = AppLayout.WindowsDefault;
         public ViewMode SelectedViewMode { get; set; } = ViewMode.Table;
         public string LanguageCode { get; set; } = LocalizationService.EnglishLanguageCode;

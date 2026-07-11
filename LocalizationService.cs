@@ -134,6 +134,27 @@ namespace WTF
 
             bool changed = false;
 
+            if (string.Equals(languageCode, GermanLanguageCode, StringComparison.OrdinalIgnoreCase))
+            {
+                changed |= ReplaceLegacyTranslation(
+                    fileTexts,
+                    "Menu.SaveScanResult",
+                    "Save scan...",
+                    defaultTexts["Menu.SaveScanResult"]);
+
+                changed |= ReplaceLegacyTranslation(
+                    fileTexts,
+                    "Menu.LoadScanResult",
+                    "Load scan...",
+                    defaultTexts["Menu.LoadScanResult"]);
+
+                changed |= ReplaceLegacyTranslation(
+                    fileTexts,
+                    "Menu.Analysis",
+                    "Analysis",
+                    defaultTexts["Menu.Analysis"]);
+            }
+
             foreach (KeyValuePair<string, string> defaultText in defaultTexts)
             {
                 if (!fileTexts.ContainsKey(defaultText.Key))
@@ -152,6 +173,22 @@ namespace WTF
 
                 File.WriteAllText(languageFilePath, JsonSerializer.Serialize(fileTexts, options));
             }
+        }
+
+        private static bool ReplaceLegacyTranslation(
+            Dictionary<string, string> texts,
+            string key,
+            string legacyValue,
+            string correctedValue)
+        {
+            if (!texts.TryGetValue(key, out string currentValue))
+                return false;
+
+            if (!string.Equals(currentValue, legacyValue, StringComparison.Ordinal))
+                return false;
+
+            texts[key] = correctedValue;
+            return true;
         }
 
         private static Dictionary<string, string> LoadLanguageFile(string languageCode)
@@ -204,6 +241,9 @@ namespace WTF
                 ["Common.General"] = "Allgemein",
                 ["Menu.File"] = "Datei",
                 ["Menu.ExportCsv"] = "Export CSV",
+                ["Menu.SaveScanResult"] = "Scan speichern...",
+                ["Menu.LoadScanResult"] = "Scan laden...",
+                ["Menu.Analysis"] = "Analyse",
                 ["Menu.Settings"] = "Einstellungen",
                 ["Menu.Exit"] = "Beenden",
                 ["Menu.Help"] = "Hilfe",
@@ -218,9 +258,11 @@ namespace WTF
                 ["Toolbar.BarChart"] = "▥ Balkenchart",
                 ["Toolbar.Export"] = "Export",
                 ["Toolbar.ExportCsv"] = "CSV exportieren",
+                ["Toolbar.PauseResume"] = "Scan pausieren/fortsetzen",
                 ["Context.OpenInExplorer"] = "Im Explorer öffnen",
                 ["Context.Export"] = "Export",
                 ["Context.CopyToClipboard"] = "In Zwischenablage kopieren",
+                ["Context.CopyPath"] = "Pfad kopieren",
                 ["Dialog.SelectFolder"] = "Ordner zum Scannen auswählen",
                 ["Message.NoPathSelected"] = "Kein Pfad ausgewählt.",
                 ["Message.PathNotFoundPrefix"] = "Pfad nicht gefunden: ",
@@ -311,6 +353,24 @@ namespace WTF
                 ["Chart.ItemLabel"] = "{0} - {1} ({2:0.0} %)",
                 ["Chart.Directory"] = "Directory",
                 ["Chart.FilePrefix"] = "File:",
+                ["Status.ScanPaused"] = "Scan pausiert",
+                ["Advanced.Title"] = "Analyse",
+                ["Advanced.FileTypes"] = "Dateitypen",
+                ["Advanced.LargestFiles"] = "Größte Dateien",
+                ["Advanced.FileType"] = "Dateityp",
+                ["Advanced.Files"] = "Dateien",
+                ["Advanced.Bytes"] = "Bytes",
+                ["Advanced.Modified"] = "Geändert",
+                ["Advanced.NoExtension"] = "(ohne Erweiterung)",
+                ["Status.ScanPaused"] = "Scan paused",
+                ["Advanced.Title"] = "Analysis",
+                ["Advanced.FileTypes"] = "File types",
+                ["Advanced.LargestFiles"] = "Largest files",
+                ["Advanced.FileType"] = "File type",
+                ["Advanced.Files"] = "Files",
+                ["Advanced.Bytes"] = "Bytes",
+                ["Advanced.Modified"] = "Modified",
+                ["Advanced.NoExtension"] = "(no extension)",
                 ["Csv.FileFilter"] = "CSV files (*.csv)|*.csv",
                 ["Csv.Path"] = "Path",
                 ["Csv.Level"] = "Ebene",
@@ -353,6 +413,9 @@ namespace WTF
                 ["Common.General"] = "General",
                 ["Menu.File"] = "File",
                 ["Menu.ExportCsv"] = "Export CSV",
+                ["Menu.SaveScanResult"] = "Save scan...",
+                ["Menu.LoadScanResult"] = "Load scan...",
+                ["Menu.Analysis"] = "Analysis",
                 ["Menu.Settings"] = "Settings",
                 ["Menu.Exit"] = "Exit",
                 ["Menu.Help"] = "Help",
@@ -367,9 +430,11 @@ namespace WTF
                 ["Toolbar.BarChart"] = "▥ Bar chart",
                 ["Toolbar.Export"] = "Export",
                 ["Toolbar.ExportCsv"] = "Export CSV",
+                ["Toolbar.PauseResume"] = "Pause/resume scan",
                 ["Context.OpenInExplorer"] = "Open in Explorer",
                 ["Context.Export"] = "Export",
                 ["Context.CopyToClipboard"] = "Copy to clipboard",
+                ["Context.CopyPath"] = "Copy path",
                 ["Dialog.SelectFolder"] = "Select folder to scan",
                 ["Message.NoPathSelected"] = "No path selected.",
                 ["Message.PathNotFoundPrefix"] = "Path not found: ",

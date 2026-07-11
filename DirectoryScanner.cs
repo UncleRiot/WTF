@@ -97,7 +97,7 @@ namespace WTF
             _settings = settings;
         }
 
-        public Task<FileSystemEntry> ScanAsync(string rootPath, IProgress<ScanProgress> progress, CancellationToken cancellationToken)
+        public Task<FileSystemEntry> ScanAsync(string rootPath, IProgress<ScanProgress> progress, CancellationToken cancellationToken, PauseToken pauseToken)
         {
             return Task.Run(() =>
             {
@@ -110,7 +110,7 @@ namespace WTF
                 _scannedDirectories++;
 
                 ReportProgress(rootPath, progress, true);
-                ScanDirectoryContents(rootEntry, progress, cancellationToken, null);
+                ScanDirectoryContents(rootEntry, progress, cancellationToken, pauseToken, null);
                 SortChildrenRecursive(rootEntry);
                 ReportProgress(rootPath, progress, true);
 
@@ -133,13 +133,18 @@ namespace WTF
             }, cancellationToken);
         }
 
-        private void ScanDirectoryContents(FileSystemEntry entry, IProgress<ScanProgress> progress, CancellationToken cancellationToken, Action<long> addSizeToAncestors)
+        private void ScanDirectoryContents(FileSystemEntry entry, IProgress<ScanProgress> progress, CancellationToken cancellationToken, PauseToken pauseToken, Action<long> addSizeToAncestors)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            pauseToken.WaitWhilePaused(cancellationToken);
 
             foreach (Win32FileSystemEntry fileSystemEntry in EnumerateFileSystemEntries(entry.FullPath))
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                pauseToken.WaitWhilePaused(cancellationToken);
+
+                if (ScanPathFilter.IsExcluded(fileSystemEntry.FullPath, _settings.ExcludedPaths))
+                    continue;
 
                 if (fileSystemEntry.IsDirectory)
                 {
@@ -162,6 +167,7 @@ namespace WTF
                         childEntry,
                         progress,
                         cancellationToken,
+                        pauseToken,
                         sizeDelta =>
                         {
                             entry.SizeBytes += sizeDelta;
@@ -183,15 +189,22 @@ namespace WTF
                 entry.SizeBytes += fileLength;
                 addSizeToAncestors?.Invoke(fileLength);
 
+                FileSystemEntry fileEntry = new FileSystemEntry
+                {
+                    Name = fileSystemEntry.Name,
+                    FullPath = fileSystemEntry.FullPath,
+                    SizeBytes = fileLength,
+                    IsDirectory = false,
+                    LastWriteTimeUtc = fileSystemEntry.LastWriteTimeUtcTicks > 0
+                        ? DateTime.FromFileTimeUtc(fileSystemEntry.LastWriteTimeUtcTicks)
+                        : DateTime.MinValue
+                };
+
+                _liveRootEntry.AllFiles.Add(fileEntry);
+
                 if (_settings.ShowFilesInTree)
                 {
-                    entry.Children.Add(new FileSystemEntry
-                    {
-                        Name = fileSystemEntry.Name,
-                        FullPath = fileSystemEntry.FullPath,
-                        SizeBytes = fileLength,
-                        IsDirectory = false
-                    });
+                    entry.Children.Add(fileEntry);
                 }
 
                 ReportProgress(fileSystemEntry.FullPath, progress, false);

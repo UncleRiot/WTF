@@ -57,11 +57,12 @@ namespace WTF
                 return false;
             }
         }
-        public Task<FileSystemEntry> ScanAsync(string rootPath, IProgress<ScanProgress> progress, CancellationToken cancellationToken)
+        public Task<FileSystemEntry> ScanAsync(string rootPath, IProgress<ScanProgress> progress, CancellationToken cancellationToken, PauseToken pauseToken)
         {
             return Task.Run(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                pauseToken.WaitWhilePaused(cancellationToken);
 
                 string driveRoot = Path.GetPathRoot(rootPath);
 
@@ -88,6 +89,7 @@ namespace WTF
                 foreach (INode node in nodes)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    pauseToken.WaitWhilePaused(cancellationToken);
 
                     if (node == null || string.IsNullOrWhiteSpace(node.FullName))
                         continue;
@@ -98,6 +100,9 @@ namespace WTF
                         continue;
 
                     if (!fullPath.StartsWith(rootEntry.FullPath, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    if (ScanPathFilter.IsExcluded(fullPath, _settings.ExcludedPaths))
                         continue;
 
                     bool isDirectory = node.Attributes.HasFlag(System.IO.Filesystem.Ntfs.Attributes.Directory);
@@ -128,15 +133,19 @@ namespace WTF
                             {
                                 parentEntry.SizeBytes += nodeSize;
 
+                                FileSystemEntry fileEntry = new FileSystemEntry
+                                {
+                                    Name = Path.GetFileName(fullPath),
+                                    FullPath = fullPath,
+                                    SizeBytes = nodeSize,
+                                    IsDirectory = false
+                                };
+
+                                rootEntry.AllFiles.Add(fileEntry);
+
                                 if (_settings.ShowFilesInTree)
                                 {
-                                    parentEntry.Children.Add(new FileSystemEntry
-                                    {
-                                        Name = Path.GetFileName(fullPath),
-                                        FullPath = fullPath,
-                                        SizeBytes = nodeSize,
-                                        IsDirectory = false
-                                    });
+                                    parentEntry.Children.Add(fileEntry);
                                 }
                             }
                         }

@@ -9,6 +9,9 @@ namespace WTF
     public sealed class Chart_TableGridChart : DataGridView
     {
         private bool _applyingColumnWidths;
+        private List<EntryChartItem> _rows = new List<EntryChartItem>();
+        private string _sortProperty = nameof(EntryChartItem.SizeBytes);
+        private bool _sortAscending;
 
         public Chart_TableGridChart()
         {
@@ -19,6 +22,7 @@ namespace WTF
             CellPainting += Chart_TableGridChart_CellPainting;
             CellToolTipTextNeeded += Chart_TableGridChart_CellToolTipTextNeeded;
             ColumnWidthChanged += Chart_TableGridChart_ColumnWidthChanged;
+            ColumnHeaderMouseClick += Chart_TableGridChart_ColumnHeaderMouseClick;
         }
 
         public void SetEntry(FileSystemEntry entry)
@@ -33,8 +37,7 @@ namespace WTF
 
             long totalSize = entry.Children.Sum(child => child.SizeBytes);
 
-            List<EntryChartItem> rows = entry.Children
-                .OrderByDescending(child => child.SizeBytes)
+            _rows = entry.Children
                 .Select(child => new EntryChartItem
                 {
                     Name = child.Name,
@@ -46,10 +49,52 @@ namespace WTF
                 .ToList();
 
             AutoGenerateColumns = false;
-            DataSource = rows;
+            BindSortedRows();
             RemoveUnexpectedColumns();
             FitToCurrentBounds();
             Invalidate();
+        }
+
+        private void Chart_TableGridChart_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.ColumnIndex < 0)
+                return;
+
+            string propertyName = Columns[e.ColumnIndex].DataPropertyName;
+            _sortAscending = _sortProperty == propertyName && !_sortAscending;
+            _sortProperty = propertyName;
+            BindSortedRows();
+            FitToCurrentBounds();
+            Invalidate();
+        }
+
+        private void BindSortedRows()
+        {
+            IEnumerable<EntryChartItem> sortedRows = _sortProperty switch
+            {
+                nameof(EntryChartItem.Name) => _sortAscending
+                    ? _rows.OrderBy(row => row.Name, StringComparer.CurrentCultureIgnoreCase)
+                    : _rows.OrderByDescending(row => row.Name, StringComparer.CurrentCultureIgnoreCase),
+                nameof(EntryChartItem.FormattedSize) or nameof(EntryChartItem.SizeBytes) => _sortAscending
+                    ? _rows.OrderBy(row => row.SizeBytes)
+                    : _rows.OrderByDescending(row => row.SizeBytes),
+                nameof(EntryChartItem.Percent) => _sortAscending
+                    ? _rows.OrderBy(row => row.Percent)
+                    : _rows.OrderByDescending(row => row.Percent),
+                nameof(EntryChartItem.FullPath) => _sortAscending
+                    ? _rows.OrderBy(row => row.FullPath, StringComparer.CurrentCultureIgnoreCase)
+                    : _rows.OrderByDescending(row => row.FullPath, StringComparer.CurrentCultureIgnoreCase),
+                _ => _rows.OrderByDescending(row => row.SizeBytes)
+            };
+
+            DataSource = sortedRows.ToList();
+
+            foreach (DataGridViewColumn column in Columns)
+            {
+                column.HeaderCell.SortGlyphDirection = column.DataPropertyName == _sortProperty
+                    ? _sortAscending ? SortOrder.Ascending : SortOrder.Descending
+                    : SortOrder.None;
+            }
         }
 
         public void ApplyEntryGridColumnWidths()
@@ -92,7 +137,7 @@ namespace WTF
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
                 Width = 2,
                 MinimumWidth = 2,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
+                SortMode = DataGridViewColumnSortMode.Programmatic,
                 Resizable = DataGridViewTriState.True
             });
 
@@ -104,7 +149,7 @@ namespace WTF
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
                 Width = 2,
                 MinimumWidth = 2,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
+                SortMode = DataGridViewColumnSortMode.Programmatic,
                 Resizable = DataGridViewTriState.True
             });
 
@@ -116,7 +161,7 @@ namespace WTF
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
                 Width = 2,
                 MinimumWidth = 2,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
+                SortMode = DataGridViewColumnSortMode.Programmatic,
                 Resizable = DataGridViewTriState.True
             });
 
@@ -128,7 +173,7 @@ namespace WTF
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
                 Width = 2,
                 MinimumWidth = 2,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
+                SortMode = DataGridViewColumnSortMode.Programmatic,
                 Resizable = DataGridViewTriState.True
             });
 

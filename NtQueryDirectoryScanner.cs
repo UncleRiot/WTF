@@ -52,17 +52,19 @@ namespace WTF
         private int _skippedDirectories;
         private int _fileInformationClass;
         private int _fileNameOffset;
+        private PauseToken _pauseToken;
 
         public NtQueryDirectoryScanner(AppSettings settings)
         {
             _settings = settings;
         }
 
-        public Task<FileSystemEntry> ScanAsync(string rootPath, IProgress<ScanProgress> progress, CancellationToken cancellationToken)
+        public Task<FileSystemEntry> ScanAsync(string rootPath, IProgress<ScanProgress> progress, CancellationToken cancellationToken, PauseToken pauseToken)
         {
             return Task.Run(() =>
             {
                 FileSystemEntry rootEntry = CreateDirectoryEntry(rootPath);
+                _pauseToken = pauseToken;
 
                 _liveRootEntry = rootEntry;
                 _scannedBytes = 0;
@@ -129,6 +131,7 @@ namespace WTF
                 foreach (WorkItem workItem in _workQueue.GetConsumingEnumerable(cancellationToken))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    _pauseToken.WaitWhilePaused(cancellationToken);
 
                     try
                     {
@@ -184,6 +187,7 @@ namespace WTF
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                _pauseToken.WaitWhilePaused(cancellationToken);
 
                 IO_STATUS_BLOCK ioStatusBlock = new IO_STATUS_BLOCK();
 
@@ -279,6 +283,9 @@ namespace WTF
             bool isDirectory = attributes.HasFlag(FileAttributes.Directory);
             string fullPath = Path.Combine(directoryEntry.FullPath, name);
 
+            if (ScanPathFilter.IsExcluded(fullPath, _settings.ExcludedPaths))
+                return;
+
             if (isDirectory)
             {
                 if (_settings.SkipReparsePoints && attributes.HasFlag(FileAttributes.ReparsePoint))
@@ -321,17 +328,22 @@ namespace WTF
             Interlocked.Increment(ref _scannedFiles);
             Interlocked.Add(ref _scannedBytes, normalizedSizeBytes);
 
+            FileSystemEntry fileEntry = new FileSystemEntry
+            {
+                Name = name,
+                FullPath = fullPath,
+                SizeBytes = normalizedSizeBytes,
+                IsDirectory = false
+            };
+
+            lock (_liveRootEntry.AllFiles)
+            {
+                _liveRootEntry.AllFiles.Add(fileEntry);
+            }
+
             if (_settings.ShowFilesInTree)
             {
-                AddChildEntry(
-                    directoryEntry,
-                    new FileSystemEntry
-                    {
-                        Name = name,
-                        FullPath = fullPath,
-                        SizeBytes = normalizedSizeBytes,
-                        IsDirectory = false
-                    });
+                AddChildEntry(directoryEntry, fileEntry);
             }
 
             ReportProgress(fullPath, progress, false);

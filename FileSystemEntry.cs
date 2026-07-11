@@ -9,6 +9,8 @@ namespace WTF
         public string FullPath { get; set; }
         public long SizeBytes { get; set; }
         public bool IsDirectory { get; set; }
+        public System.DateTime LastWriteTimeUtc { get; set; }
+        public List<FileSystemEntry> AllFiles { get; set; } = new List<FileSystemEntry>();
         public List<FileSystemEntry> Children { get; } = new List<FileSystemEntry>();
 
         public int DirectoryCount
