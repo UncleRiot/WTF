@@ -3,22 +3,35 @@
 WTF is a lightweight Windows disk space analyzer for quickly finding where storage is used.
 Multilingual support comming, when requested - (Now: English/German)
 
-<br>
-<img width="726" height="518" alt="grafik" src="https://github.com/user-attachments/assets/fbbd4af5-99ba-43e4-9cec-cd536f2566ed" />
-<br>
 
-# Contextmenu
+# Table-Chart
 
 <br>
-<img width="266" height="275" alt="grafik" src="https://github.com/user-attachments/assets/25af2abe-ea05-4de2-8fa8-b0064a7b6eb7" />
+<img width="1158" height="819" alt="grafik" src="https://github.com/user-attachments/assets/3c260bdc-be9b-4fa0-9e53-f409df33c3be" />
+<br>
+
+# Bar Chart
+
+<br>
+<img width="1158" height="819" alt="grafik" src="https://github.com/user-attachments/assets/bbb4cc3b-ab20-4912-be07-91e089463234" />
 <br>
 
 
-# Export
+# Export and more
 
 <br>
-<img width="334" height="192" alt="grafik" src="https://github.com/user-attachments/assets/12950fc2-d2e4-4984-9c84-9522e1f927f1" />
+<img width="381" height="227" alt="grafik" src="https://github.com/user-attachments/assets/22c7b85d-8baf-4f42-90d9-8be73c0f2705" />
 <br>
+
+
+
+# Options 
+
+<br>
+<img width="462" height="453" alt="grafik" src="https://github.com/user-attachments/assets/2f8baf67-a8cc-4265-91e1-4cabb755c76f" />
+<br>
+
+
 
 # Important
 
@@ -49,10 +62,10 @@ Windows may show this message because the file was downloaded from the internet.
   - Windows light mode
   - Windows dark mode
 
-## Differences to TreeSize Professional and WinDirStat
+## Differences to others
 
-- Simpler than TreeSize Professional: no enterprise reporting, scheduled scans, duplicate search, advanced file search, or broad remote-storage feature set.
-- More focused than WinDirStat: no treemap or extension statistics; instead it offers table, pie, and bar views.
+- Simpler than professional software: No enterprise reporting, scheduled scans, duplicate search, advanced file search, or broad remote-storage feature set.
+- More focused: No treemap or extension statistics; instead it offers table, pie, and bar views.
 - Faster-first design: tries NTFS MFT scanning, then NT API scanning, then standard scanning.
 - Smaller scope: built for quick local Windows storage inspection, not full storage management.
 
