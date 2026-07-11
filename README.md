@@ -3,14 +3,17 @@
 WTF is a lightweight Windows disk space analyzer for quickly finding where storage is used.
 Multilingual support comming, when requested - (Now: English/German)
 
-<br>
-<img width="726" height="518" alt="grafik" src="https://github.com/user-attachments/assets/fbbd4af5-99ba-43e4-9cec-cd536f2566ed" />
-<br>
 
-# Contextmenu
+# Main-Windows
 
 <br>
-<img width="266" height="275" alt="grafik" src="https://github.com/user-attachments/assets/25af2abe-ea05-4de2-8fa8-b0064a7b6eb7" />
+<img width="1158" height="819" alt="grafik" src="https://github.com/user-attachments/assets/3c260bdc-be9b-4fa0-9e53-f409df33c3be" />
+<br>
+
+# Bar Chart
+
+<br>
+<img width="1158" height="819" alt="grafik" src="https://github.com/user-attachments/assets/bbb4cc3b-ab20-4912-be07-91e089463234" />
 <br>
 
 
