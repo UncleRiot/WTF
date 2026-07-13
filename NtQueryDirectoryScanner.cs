@@ -61,7 +61,7 @@ namespace WTF
 
         public Task<FileSystemEntry> ScanAsync(string rootPath, IProgress<ScanProgress> progress, CancellationToken cancellationToken, PauseToken pauseToken)
         {
-            return Task.Run(() =>
+            return Task.Factory.StartNew(() =>
             {
                 FileSystemEntry rootEntry = CreateDirectoryEntry(rootPath);
                 _pauseToken = pauseToken;
@@ -119,7 +119,7 @@ namespace WTF
                 ReportProgress(rootPath, progress, true);
 
                 return rootEntry;
-            }, cancellationToken);
+            }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         private void WorkerLoop(IProgress<ScanProgress> progress, CancellationToken cancellationToken)

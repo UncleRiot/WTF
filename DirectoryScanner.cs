@@ -99,7 +99,7 @@ namespace WTF
 
         public Task<FileSystemEntry> ScanAsync(string rootPath, IProgress<ScanProgress> progress, CancellationToken cancellationToken, PauseToken pauseToken)
         {
-            return Task.Run(() =>
+            return Task.Factory.StartNew(() =>
             {
                 _scanCacheService = ScanCacheService.Load(rootPath);
                 _skippedDirectories = 0;
@@ -130,7 +130,7 @@ namespace WTF
                 _scanCacheService.Save(rootEntry);
 
                 return rootEntry;
-            }, cancellationToken);
+            }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         private void ScanDirectoryContents(FileSystemEntry entry, IProgress<ScanProgress> progress, CancellationToken cancellationToken, PauseToken pauseToken, Action<long> addSizeToAncestors)

@@ -287,6 +287,8 @@ namespace WTF
                 return;
             }
 
+            int previousVerticalScrollValue = _verticalScrollBar.Value;
+            int previousHorizontalScrollValue = _horizontalScrollBar.Value;
             string previousSelectedKey = _selectedNode == null ? null : _selectedNode.Key;
             string rootKey = GetEntryKey(rootEntry, null);
             TreeEntrySizeBarNode rootNode = FindRootNodeByKey(rootKey);
@@ -323,8 +325,27 @@ namespace WTF
             }
 
             SelectNode(newSelectedNode, forceSelectionToRoot || newSelectedNode != _selectedNode);
-            EnsureNodeVisible(newSelectedNode);
+
+            if (forceSelectionToRoot)
+            {
+                EnsureNodeVisible(newSelectedNode);
+            }
+            else
+            {
+                RestoreScrollBarValue(_verticalScrollBar, previousVerticalScrollValue);
+                RestoreScrollBarValue(_horizontalScrollBar, previousHorizontalScrollValue);
+            }
+
             Invalidate();
+        }
+
+        private static void RestoreScrollBarValue(ScrollBar scrollBar, int value)
+        {
+            if (scrollBar == null || !scrollBar.Visible)
+                return;
+
+            int maximumValue = Math.Max(scrollBar.Minimum, scrollBar.Maximum - scrollBar.LargeChange + 1);
+            scrollBar.Value = Math.Max(scrollBar.Minimum, Math.Min(maximumValue, value));
         }
 
         private TreeEntrySizeBarNode FindRootNodeByKey(string key)

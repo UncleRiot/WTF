@@ -244,6 +244,7 @@ namespace WTF
                 ["Menu.SaveScanResult"] = "Scan speichern...",
                 ["Menu.LoadScanResult"] = "Scan laden...",
                 ["Menu.Analysis"] = "Analyse",
+                ["Menu.StorageHistory"] = "Speicherverlauf",
                 ["Menu.Settings"] = "Einstellungen",
                 ["Menu.Exit"] = "Beenden",
                 ["Menu.Help"] = "Hilfe",
@@ -380,6 +381,18 @@ namespace WTF
                 ["Drive.LocalDisk"] = "Local Disk",
                 ["Drive.Display"] = "{0} ({1})",
                 ["Shell.ContextMenuText"] = "WTF: Start Size Scan",
+                ["StorageHistory.Title"] = "Speicherverlauf",
+                ["StorageHistory.Path"] = "Scanpfad:",
+                ["StorageHistory.Display"] = "Anzeige:",
+                ["StorageHistory.Used"] = "Belegter Speicher",
+                ["StorageHistory.Free"] = "Freier Speicher",
+                ["StorageHistory.Date"] = "Datum",
+                ["StorageHistory.Size"] = "Größe",
+                ["StorageHistory.Change"] = "Änderung",
+                ["StorageHistory.NoData"] = "Keine Verlaufsdaten vorhanden.",
+                ["StorageHistory.Graph"] = "Speicherplatzentwicklung",
+                ["StorageHistory.Delete"] = "Verlauf löschen",
+                ["StorageHistory.DeleteConfirm"] = "Soll der Verlauf für diesen Scanpfad gelöscht werden?",
                 ["Status.ScanTitlePrefix"] = "Scan: "
             };
         }
@@ -416,6 +429,7 @@ namespace WTF
                 ["Menu.SaveScanResult"] = "Save scan...",
                 ["Menu.LoadScanResult"] = "Load scan...",
                 ["Menu.Analysis"] = "Analysis",
+                ["Menu.StorageHistory"] = "Storage history",
                 ["Menu.Settings"] = "Settings",
                 ["Menu.Exit"] = "Exit",
                 ["Menu.Help"] = "Help",
@@ -534,6 +548,18 @@ namespace WTF
                 ["Drive.LocalDisk"] = "Local Disk",
                 ["Drive.Display"] = "{0} ({1})",
                 ["Shell.ContextMenuText"] = "WTF: Start Size Scan",
+                ["StorageHistory.Title"] = "Storage history",
+                ["StorageHistory.Path"] = "Scan path:",
+                ["StorageHistory.Display"] = "Display:",
+                ["StorageHistory.Used"] = "Used space",
+                ["StorageHistory.Free"] = "Free space",
+                ["StorageHistory.Date"] = "Date",
+                ["StorageHistory.Size"] = "Size",
+                ["StorageHistory.Change"] = "Change",
+                ["StorageHistory.NoData"] = "No history data available.",
+                ["StorageHistory.Graph"] = "Storage usage development",
+                ["StorageHistory.Delete"] = "Delete history",
+                ["StorageHistory.DeleteConfirm"] = "Delete the history for this scan path?",
                 ["Status.ScanTitlePrefix"] = "Scan: "
             };
         }

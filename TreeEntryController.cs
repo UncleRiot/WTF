@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows.Forms;
 
 namespace WTF
@@ -12,7 +13,7 @@ namespace WTF
         private readonly ToolStripMenuItem _contextMenuItemCopyToClipboard;
         private readonly Action<FileSystemEntry> _selectedEntryChanged;
         private System.Windows.Forms.Timer _liveTreeUpdateTimer;
-        private ScanProgress _pendingLiveTreeScanProgress;
+        private readonly Dictionary<string, ScanProgress> _pendingLiveTreeScanProgressByRootPath = new Dictionary<string, ScanProgress>(StringComparer.OrdinalIgnoreCase);
         private bool _liveTreeUpdateInProgress;
 
         public TreeEntryController(
@@ -50,7 +51,15 @@ namespace WTF
 
         public void ClearPendingLiveTreeUpdate()
         {
-            _pendingLiveTreeScanProgress = null;
+            _pendingLiveTreeScanProgressByRootPath.Clear();
+        }
+
+        public void ClearPendingLiveTreeUpdate(string rootPath)
+        {
+            if (string.IsNullOrWhiteSpace(rootPath))
+                return;
+
+            _pendingLiveTreeScanProgressByRootPath.Remove(rootPath);
         }
 
         public void FlushPendingLiveTreeUpdate()
@@ -58,17 +67,19 @@ namespace WTF
             if (_liveTreeUpdateInProgress)
                 return;
 
-            ScanProgress scanProgress = _pendingLiveTreeScanProgress;
-
-            if (scanProgress == null)
+            if (_pendingLiveTreeScanProgressByRootPath.Count == 0)
                 return;
 
-            _pendingLiveTreeScanProgress = null;
+            List<ScanProgress> pendingScanProgress = new List<ScanProgress>(_pendingLiveTreeScanProgressByRootPath.Values);
+            _pendingLiveTreeScanProgressByRootPath.Clear();
             _liveTreeUpdateInProgress = true;
 
             try
             {
-                ApplyScanProgressToLiveTree(scanProgress);
+                foreach (ScanProgress scanProgress in pendingScanProgress)
+                {
+                    ApplyScanProgressToLiveTree(scanProgress);
+                }
             }
             finally
             {
@@ -84,7 +95,12 @@ namespace WTF
             if (scanProgress.LiveRootEntry == null)
                 return;
 
-            _pendingLiveTreeScanProgress = scanProgress;
+            string rootPath = scanProgress.LiveRootEntry.FullPath;
+
+            if (string.IsNullOrWhiteSpace(rootPath))
+                return;
+
+            _pendingLiveTreeScanProgressByRootPath[rootPath] = scanProgress;
 
             if (_liveTreeUpdateTimer != null && !_liveTreeUpdateTimer.Enabled)
             {
@@ -109,6 +125,14 @@ namespace WTF
                 return;
 
             _treeViewEntries.UpdateRootEntry(scanProgress.LiveRootEntry);
+        }
+
+        public void UpdateScanResult(FileSystemEntry rootEntry)
+        {
+            if (rootEntry == null)
+                return;
+
+            _treeViewEntries.UpdateRootEntry(rootEntry);
         }
 
         public void RenderScanResult(FileSystemEntry rootEntry)

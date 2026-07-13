@@ -59,7 +59,7 @@ namespace WTF
         }
         public Task<FileSystemEntry> ScanAsync(string rootPath, IProgress<ScanProgress> progress, CancellationToken cancellationToken, PauseToken pauseToken)
         {
-            return Task.Run(() =>
+            return Task.Factory.StartNew(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 pauseToken.WaitWhilePaused(cancellationToken);
@@ -179,7 +179,7 @@ namespace WTF
                 });
 
                 return rootEntry;
-            }, cancellationToken);
+            }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         private FileSystemEntry CreateRootEntry(string rootPath)

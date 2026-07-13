@@ -22,8 +22,7 @@ namespace WTF
         private PartitionGridController _partitionGridController;
         private TreeEntryController _treeEntryController;
 
-        private CancellationTokenSource _scanCancellationTokenSource;
-        private PauseTokenSource _scanPauseTokenSource;
+        private readonly Dictionary<string, ScanSession> _scanSessions = new Dictionary<string, ScanSession>(StringComparer.OrdinalIgnoreCase);
         private FileSystemEntry _currentRootEntry;
         private readonly string _startupScanPath;
 
@@ -34,6 +33,7 @@ namespace WTF
         private ToolStripMenuItem menuItemSaveScanResult;
         private ToolStripMenuItem menuItemLoadScanResult;
         private ToolStripMenuItem menuItemAdvancedFeatures;
+        private ToolStripMenuItem menuItemStorageHistory;
         private ToolStripMenuItem menuItemExit;
         private ToolStripMenuItem menuItemHelp;
         private ToolStripMenuItem menuItemAbout;
@@ -198,9 +198,6 @@ namespace WTF
                 if (!Directory.Exists(_startupScanPath))
                     return;
 
-                if (_scanCancellationTokenSource != null)
-                    return;
-
                 _driveComboBoxController.AddOrSelectPath(_startupScanPath);
                 await StartScanAsync(_startupScanPath);
             }));
@@ -298,6 +295,7 @@ namespace WTF
             menuItemSaveScanResult = new ToolStripMenuItem(LocalizationService.GetText("Menu.SaveScanResult"));
             menuItemLoadScanResult = new ToolStripMenuItem(LocalizationService.GetText("Menu.LoadScanResult"));
             menuItemAdvancedFeatures = new ToolStripMenuItem(LocalizationService.GetText("Menu.Analysis"));
+            menuItemStorageHistory = new ToolStripMenuItem(LocalizationService.GetText("Menu.StorageHistory"));
             menuItemExit = new ToolStripMenuItem(LocalizationService.GetText("Menu.Exit"));
             menuItemHelp = new ToolStripMenuItem(LocalizationService.GetText("Menu.Help"));
             menuItemAbout = new ToolStripMenuItem(LocalizationService.GetText("Menu.About"));
@@ -306,6 +304,7 @@ namespace WTF
             menuItemFile.DropDownItems.Add(menuItemSaveScanResult);
             menuItemFile.DropDownItems.Add(menuItemLoadScanResult);
             menuItemFile.DropDownItems.Add(menuItemAdvancedFeatures);
+            menuItemFile.DropDownItems.Add(menuItemStorageHistory);
             menuItemFile.DropDownItems.Add(new ToolStripSeparator());
             menuItemFile.DropDownItems.Add(menuItemSettings);
             menuItemFile.DropDownItems.Add(new ToolStripSeparator());
@@ -319,6 +318,7 @@ namespace WTF
             menuItemSaveScanResult.Click += menuItemSaveScanResult_Click;
             menuItemLoadScanResult.Click += menuItemLoadScanResult_Click;
             menuItemAdvancedFeatures.Click += menuItemAdvancedFeatures_Click;
+            menuItemStorageHistory.Click += menuItemStorageHistory_Click;
             menuItemExit.Click += menuItemExit_Click;
             menuItemAbout.Click += menuItemAbout_Click;
 
@@ -598,6 +598,7 @@ namespace WTF
             menuItemSaveScanResult.Text = LocalizationService.GetText("Menu.SaveScanResult");
             menuItemLoadScanResult.Text = LocalizationService.GetText("Menu.LoadScanResult");
             menuItemAdvancedFeatures.Text = LocalizationService.GetText("Menu.Analysis");
+            menuItemStorageHistory.Text = LocalizationService.GetText("Menu.StorageHistory");
             menuItemSettings.Text = LocalizationService.GetText("Menu.Settings");
             menuItemExit.Text = LocalizationService.GetText("Menu.Exit");
             menuItemHelp.Text = LocalizationService.GetText("Menu.Help");
@@ -605,7 +606,10 @@ namespace WTF
 
             toolStripLabelDrive.Text = LocalizationService.GetText("Toolbar.Drive");
             toolStripButtonOpenFolder.Text = LocalizationService.GetText("Toolbar.Open");
-            toolStripButtonScan.ToolTipText = _scanCancellationTokenSource != null
+            string selectedScanPath = NormalizeScanPath(_driveComboBoxController.GetSelectedScanPath());
+            bool selectedScanIsRunning = _scanSessions.TryGetValue(selectedScanPath, out ScanSession selectedScanSession) &&
+                selectedScanSession.IsRunning;
+            toolStripButtonScan.ToolTipText = selectedScanIsRunning
                 ? LocalizationService.GetText("Toolbar.ScanCancel")
                 : LocalizationService.GetText("Toolbar.ScanStart");
             toolStripButtonOpenFolder.ToolTipText = LocalizationService.GetText("Toolbar.SelectFolderAndScan");
@@ -678,13 +682,8 @@ namespace WTF
             await StartScanAsync(folderBrowserDialog.SelectedPath);
         }
 
-
-
         private async void DriveComboBoxScanPathSelectionCommitted(string rootPath)
         {
-            if (_scanCancellationTokenSource != null)
-                return;
-
             if (string.IsNullOrWhiteSpace(rootPath))
                 return;
 
@@ -697,21 +696,21 @@ namespace WTF
             await StartScanAsync(rootPath);
         }
 
-
-
         private async void toolStripButtonScan_Click(object sender, EventArgs e)
         {
-            if (_scanCancellationTokenSource != null)
-            {
-                _scanCancellationTokenSource.Cancel();
-                return;
-            }
-
             string rootPath = _driveComboBoxController.GetSelectedScanPath();
 
             if (string.IsNullOrWhiteSpace(rootPath))
             {
                 MessageBox.Show(this, LocalizationService.GetText("Message.NoPathSelected"), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string normalizedRootPath = NormalizeScanPath(rootPath);
+
+            if (_scanSessions.TryGetValue(normalizedRootPath, out ScanSession existingSession) && existingSession.IsRunning)
+            {
+                existingSession.CancellationTokenSource.Cancel();
                 return;
             }
 
@@ -722,105 +721,253 @@ namespace WTF
             }
 
             _driveComboBoxController.AddOrSelectPath(rootPath);
-
             await StartScanAsync(rootPath);
         }
 
         private async Task StartScanAsync(string rootPath)
         {
+            string normalizedRootPath = NormalizeScanPath(rootPath);
+
+            if (_scanSessions.TryGetValue(normalizedRootPath, out ScanSession existingSession) && existingSession.IsRunning)
+            {
+                existingSession.CancellationTokenSource.Cancel();
+            }
+
+            ScanSession session = new ScanSession
+            {
+                RootPath = normalizedRootPath,
+                CancellationTokenSource = new CancellationTokenSource(),
+                PauseTokenSource = new PauseTokenSource(),
+                IsRunning = true,
+                ScanTargetBytes = GetUsedSpaceBytes(rootPath)
+            };
+
+            _scanSessions[normalizedRootPath] = session;
+            _treeEntryController.ClearPendingLiveTreeUpdate(normalizedRootPath);
+
+            FileSystemEntry initialRootEntry = new FileSystemEntry
+            {
+                Name = normalizedRootPath,
+                FullPath = normalizedRootPath,
+                IsDirectory = true
+            };
+
+            session.RootEntry = initialRootEntry;
+            _currentRootEntry = initialRootEntry;
+            RenderScanResult(initialRootEntry);
             SetScanningState(true);
-            dataGridViewEntries.DataSource = null;
-            _currentRootEntry = null;
-            _treeEntryController.ClearPendingLiveTreeUpdate();
-
-            long scanTargetBytes = GetUsedSpaceBytes(rootPath);
-            _statusMainFormController.SetStatusProgressText(0D);
-
-            _scanCancellationTokenSource = new CancellationTokenSource();
-            _scanPauseTokenSource = new PauseTokenSource();
-            int skippedDirectories = 0;
-            HashSet<string> skippedDirectoryDetailSet = new HashSet<string>();
-            List<string> skippedDirectoryDetails = new List<string>();
 
             Progress<ScanProgress> progress = new Progress<ScanProgress>(scanProgress =>
             {
-                double percent = scanTargetBytes <= 0 ? 0D : (double)scanProgress.ScannedBytes * 100D / scanTargetBytes;
-                skippedDirectories = Math.Max(skippedDirectories, scanProgress.SkippedDirectories);
+                if (!IsCurrentScanSession(session))
+                    return;
+
+                session.LatestProgress = scanProgress;
+                session.SkippedDirectories = Math.Max(session.SkippedDirectories, scanProgress.SkippedDirectories);
 
                 if (scanProgress.SkippedDirectoryDetails != null)
                 {
                     foreach (string skippedDirectoryDetail in scanProgress.SkippedDirectoryDetails)
                     {
-                        if (skippedDirectoryDetailSet.Add(skippedDirectoryDetail))
+                        if (session.SkippedDirectoryDetailSet.Add(skippedDirectoryDetail))
                         {
-                            skippedDirectoryDetails.Add(skippedDirectoryDetail);
+                            session.SkippedDirectoryDetails.Add(skippedDirectoryDetail);
                         }
                     }
                 }
 
                 _treeEntryController.QueueLiveTreeUpdate(scanProgress);
 
-                if (scanProgress.IsCacheSavePhase)
+                if (IsSelectedScanPath(session.RootPath))
                 {
-                    _statusMainFormController.SetFormattedStatusText(
-                        "Status.ScanCacheSave",
-                        scanProgress.CurrentPath,
-                        SizeFormatter.Format(scanProgress.ScannedBytes),
-                        scanProgress.ScannedDirectories,
-                        scanProgress.ScannedFiles);
+                    UpdateSelectedScanStatus(session, scanProgress);
                 }
-                else if (scanProgress.IsCacheVerification)
-                {
-                    _statusMainFormController.SetFormattedStatusText(
-                        "Status.CacheVerification",
-                        scanProgress.CurrentPath,
-                        SizeFormatter.Format(scanProgress.ScannedBytes),
-                        scanProgress.ScannedDirectories,
-                        scanProgress.ScannedFiles);
-                }
-                else
-                {
-                    _statusMainFormController.SetFormattedStatusText(
-                        "Status.FastScan",
-                        scanProgress.CurrentPath,
-                        SizeFormatter.Format(scanProgress.ScannedBytes),
-                        scanProgress.ScannedDirectories,
-                        scanProgress.ScannedFiles);
-                }
-
-                _statusMainFormController.SetStatusProgressText(percent);
             });
 
             try
             {
-                _currentRootEntry = await _scanExecutionController.ScanAsync(
+                FileSystemEntry rootEntry = await _scanExecutionController.ScanAsync(
                     rootPath,
                     progress,
-                    _scanCancellationTokenSource.Token,
-                    _scanPauseTokenSource.Token);
+                    session.CancellationTokenSource.Token,
+                    session.PauseTokenSource.Token,
+                    statusKey =>
+                    {
+                        if (IsCurrentScanSession(session) && IsSelectedScanPath(session.RootPath))
+                        {
+                            _statusMainFormController.SetStatusTextByKey(statusKey);
+                        }
+                    });
+
+                if (!IsCurrentScanSession(session))
+                    return;
+
+                session.RootEntry = rootEntry;
+                session.LatestProgress = null;
+                StorageHistoryService.AddRecord(rootEntry.FullPath, rootEntry.SizeBytes);
 
                 _treeEntryController.FlushPendingLiveTreeUpdate();
-                RenderScanResult(_currentRootEntry);
+                _treeEntryController.UpdateScanResult(rootEntry);
                 _partitionGridController.LoadPartitionList();
-                _statusMainFormController.UpdateStatusStripForDrive(rootPath);
-                _statusMainFormController.SetStatusProgressText(100D);
 
-                _statusMainFormController.ReportSkippedDirectories(skippedDirectories, skippedDirectoryDetails);
+                if (IsSelectedScanPath(session.RootPath))
+                {
+                    _currentRootEntry = rootEntry;
+                    _layoutMainFormController.BindGrid(rootEntry);
+                    ApplyEntryColumnVisibility();
+                    _statusMainFormController.UpdateStatusStripForDrive(rootPath);
+                    _statusMainFormController.SetStatusProgressText(100D);
+                    _statusMainFormController.ReportSkippedDirectories(session.SkippedDirectories, session.SkippedDirectoryDetails);
+                }
             }
             catch (OperationCanceledException)
             {
-                _statusMainFormController.SetStatusTextByKey("Status.ScanCanceled");
-                _statusMainFormController.SetStatusProgressText(null);
+                session.WasCanceled = true;
+
+                if (IsCurrentScanSession(session) && IsSelectedScanPath(session.RootPath))
+                {
+                    _statusMainFormController.SetStatusTextByKey("Status.ScanCanceled");
+                    _statusMainFormController.SetStatusProgressText(null);
+                }
             }
             finally
             {
-                _treeEntryController.StopLiveTreeUpdateTimer();
-                _treeEntryController.ClearPendingLiveTreeUpdate();
-                _scanPauseTokenSource?.Dispose();
-                _scanPauseTokenSource = null;
-                _scanCancellationTokenSource.Dispose();
-                _scanCancellationTokenSource = null;
+                session.IsRunning = false;
+                session.PauseTokenSource.Dispose();
+                session.CancellationTokenSource.Dispose();
+
+                if (IsCurrentScanSession(session) && IsSelectedScanPath(session.RootPath))
+                {
+                    SetScanningState(false);
+                }
+            }
+        }
+
+        private bool IsCurrentScanSession(ScanSession session)
+        {
+            return session != null &&
+                _scanSessions.TryGetValue(session.RootPath, out ScanSession currentSession) &&
+                ReferenceEquals(currentSession, session);
+        }
+
+
+
+        private void ShowScanSession(string rootPath)
+        {
+            string normalizedRootPath = NormalizeScanPath(rootPath);
+            _treeEntryController.StopLiveTreeUpdateTimer();
+            _treeEntryController.ClearPendingLiveTreeUpdate();
+
+            if (!_scanSessions.TryGetValue(normalizedRootPath, out ScanSession session))
+            {
+                _currentRootEntry = null;
+                _treeEntryController.ClearEntries();
+                _layoutMainFormController.BindGrid(null);
                 SetScanningState(false);
+                _statusMainFormController.UpdateStatusStripForDrive(rootPath);
+                return;
+            }
+
+            _currentRootEntry = session.RootEntry;
+
+            if (session.RootEntry != null)
+            {
+                RenderScanResult(session.RootEntry);
+            }
+            else if (session.LatestProgress?.LiveRootEntry != null)
+            {
+                _treeEntryController.RenderScanResult(session.LatestProgress.LiveRootEntry);
+                _layoutMainFormController.BindGrid(session.LatestProgress.LiveRootEntry);
+                ApplyEntryColumnVisibility();
+            }
+            else
+            {
+                _treeEntryController.ClearEntries();
+                _layoutMainFormController.BindGrid(null);
+            }
+
+            SetScanningState(session.IsRunning);
+
+            if (session.IsRunning && session.LatestProgress != null)
+            {
+                UpdateSelectedScanStatus(session, session.LatestProgress);
+                _treeEntryController.QueueLiveTreeUpdate(session.LatestProgress);
+            }
+            else
+            {
+                _statusMainFormController.UpdateStatusStripForDrive(rootPath);
+            }
+        }
+
+        private void UpdateSelectedScanStatus(ScanSession session, ScanProgress scanProgress)
+        {
+            double percent = session.ScanTargetBytes <= 0
+                ? 0D
+                : (double)scanProgress.ScannedBytes * 100D / session.ScanTargetBytes;
+
+            if (scanProgress.IsCacheSavePhase)
+            {
+                _statusMainFormController.SetFormattedStatusText(
+                    "Status.ScanCacheSave",
+                    scanProgress.CurrentPath,
+                    SizeFormatter.Format(scanProgress.ScannedBytes),
+                    scanProgress.ScannedDirectories,
+                    scanProgress.ScannedFiles);
+            }
+            else if (scanProgress.IsCacheVerification)
+            {
+                _statusMainFormController.SetFormattedStatusText(
+                    "Status.CacheVerification",
+                    scanProgress.CurrentPath,
+                    SizeFormatter.Format(scanProgress.ScannedBytes),
+                    scanProgress.ScannedDirectories,
+                    scanProgress.ScannedFiles);
+            }
+            else
+            {
+                _statusMainFormController.SetFormattedStatusText(
+                    "Status.FastScan",
+                    scanProgress.CurrentPath,
+                    SizeFormatter.Format(scanProgress.ScannedBytes),
+                    scanProgress.ScannedDirectories,
+                    scanProgress.ScannedFiles);
+            }
+
+            _statusMainFormController.SetStatusProgressText(percent);
+        }
+
+        private bool IsSelectedScanPath(string rootPath)
+        {
+            return string.Equals(
+                NormalizeScanPath(_driveComboBoxController.GetSelectedScanPath()),
+                NormalizeScanPath(rootPath),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeScanPath(string rootPath)
+        {
+            if (string.IsNullOrWhiteSpace(rootPath))
+                return string.Empty;
+
+            try
+            {
+                string fullPath = Path.GetFullPath(rootPath);
+                string pathRoot = Path.GetPathRoot(fullPath);
+
+                if (!string.IsNullOrWhiteSpace(pathRoot) &&
+                    string.Equals(
+                        fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                        pathRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return pathRoot;
+                }
+
+                return fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+            catch
+            {
+                return rootPath.Trim();
             }
         }
 
@@ -854,7 +1001,6 @@ namespace WTF
             propertyInfo.SetValue(control, enabled, null);
         }
 
-
         private void SetScanningState(bool scanning)
         {
             Image oldImage = toolStripButtonScan.Image;
@@ -864,19 +1010,21 @@ namespace WTF
             toolStripButtonScan.Text = string.Empty;
             toolStripButtonScan.DisplayStyle = ToolStripItemDisplayStyle.Image;
             toolStripButtonScan.ToolTipText = scanning ? LocalizationService.GetText("Toolbar.ScanCancel") : LocalizationService.GetText("Toolbar.ScanStart");
-            _driveComboBoxController.SetEnabled(!scanning);
+            _driveComboBoxController.SetEnabled(true);
             toolStripButtonOpenFolder.Enabled = !scanning;
             toolStripButtonPause.Enabled = scanning;
+
             if (!scanning)
             {
                 toolStripButtonPause.Text = "⏸";
             }
+
             menuItemExportCsv.Enabled = !scanning && _currentRootEntry != null;
             menuItemSaveScanResult.Enabled = !scanning && _currentRootEntry != null;
             menuItemAdvancedFeatures.Enabled = !scanning && _currentRootEntry != null;
             toolStripButtonExportCsv.Enabled = !scanning && _currentRootEntry != null;
-            splitContainerMain.IsSplitterFixed = scanning;
-            splitContainerLeft.IsSplitterFixed = scanning;
+            splitContainerMain.IsSplitterFixed = false;
+            splitContainerLeft.IsSplitterFixed = false;
         }
 
         private void RenderScanResult(FileSystemEntry rootEntry)
@@ -942,18 +1090,20 @@ namespace WTF
 
         private void toolStripButtonPause_Click(object sender, EventArgs e)
         {
-            if (_scanPauseTokenSource == null)
+            string rootPath = NormalizeScanPath(_driveComboBoxController.GetSelectedScanPath());
+
+            if (!_scanSessions.TryGetValue(rootPath, out ScanSession session) || !session.IsRunning)
                 return;
 
-            if (_scanPauseTokenSource.IsPaused)
+            if (session.PauseTokenSource.IsPaused)
             {
-                _scanPauseTokenSource.Resume();
+                session.PauseTokenSource.Resume();
                 toolStripButtonPause.Text = "⏸";
                 _statusMainFormController.SetStatusTextByKey("Status.NtQueryRunning");
             }
             else
             {
-                _scanPauseTokenSource.Pause();
+                session.PauseTokenSource.Pause();
                 toolStripButtonPause.Text = "▶";
                 _statusMainFormController.SetStatusTextByKey("Status.ScanPaused");
             }
@@ -1017,6 +1167,12 @@ namespace WTF
             RenderScanResult(_currentRootEntry);
         }
 
+        private void menuItemStorageHistory_Click(object sender, EventArgs e)
+        {
+            using StorageHistoryForm storageHistoryForm = new StorageHistoryForm(_settings);
+            storageHistoryForm.ShowDialog(this);
+        }
+
         private void ApplyEntryColumnVisibility()
         {
             if (dataGridViewEntries.Columns.Contains("ColumnName"))
@@ -1066,11 +1222,30 @@ namespace WTF
             aboutForm.ShowDialog(this);
         }
 
+
+        private sealed class ScanSession
+        {
+            public string RootPath { get; set; }
+            public CancellationTokenSource CancellationTokenSource { get; set; }
+            public PauseTokenSource PauseTokenSource { get; set; }
+            public FileSystemEntry RootEntry { get; set; }
+            public ScanProgress LatestProgress { get; set; }
+            public long ScanTargetBytes { get; set; }
+            public bool IsRunning { get; set; }
+            public bool WasCanceled { get; set; }
+            public int SkippedDirectories { get; set; }
+            public HashSet<string> SkippedDirectoryDetailSet { get; } = new HashSet<string>();
+            public List<string> SkippedDirectoryDetails { get; } = new List<string>();
+        }
+
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            if (_scanCancellationTokenSource != null)
+            foreach (ScanSession session in _scanSessions.Values)
             {
-                _scanCancellationTokenSource.Cancel();
+                if (session.IsRunning)
+                {
+                    session.CancellationTokenSource.Cancel();
+                }
             }
 
             _layoutMainFormController.SaveMainWindowSettings();

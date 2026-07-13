@@ -20,7 +20,8 @@ namespace WTF
             string rootPath,
             IProgress<ScanProgress> progress,
             CancellationToken cancellationToken,
-            PauseToken pauseToken)
+            PauseToken pauseToken,
+            Action<string> statusKeyChanged = null)
         {
             DirectoryScanner directoryScanner = new DirectoryScanner(_settings);
             NtQueryDirectoryScanner ntQueryDirectoryScanner = new NtQueryDirectoryScanner(_settings);
@@ -29,7 +30,7 @@ namespace WTF
             {
                 try
                 {
-                    _statusMainFormController.SetStatusTextByKey("Status.MftFastScanRunning");
+                    SetStatusTextByKey("Status.MftFastScanRunning", statusKeyChanged);
                     NtfsMftScanner ntfsMftScanner = new NtfsMftScanner(_settings);
                     return await ntfsMftScanner.ScanAsync(rootPath, progress, cancellationToken, pauseToken);
                 }
@@ -50,7 +51,8 @@ namespace WTF
                         ntQueryDirectoryScanner,
                         directoryScanner,
                         "Status.MftUnavailableNtQuery",
-                        pauseToken);
+                        pauseToken,
+                        statusKeyChanged);
                 }
             }
 
@@ -61,7 +63,8 @@ namespace WTF
                 ntQueryDirectoryScanner,
                 directoryScanner,
                 "Status.NtQueryRunning",
-                pauseToken);
+                pauseToken,
+                statusKeyChanged);
         }
 
         private async Task<FileSystemEntry> ScanWithNtQueryFallbackAsync(
@@ -71,11 +74,12 @@ namespace WTF
             NtQueryDirectoryScanner ntQueryDirectoryScanner,
             DirectoryScanner directoryScanner,
             string ntQueryStatusKey,
-            PauseToken pauseToken)
+            PauseToken pauseToken,
+            Action<string> statusKeyChanged)
         {
             try
             {
-                _statusMainFormController.SetStatusTextByKey(ntQueryStatusKey);
+                SetStatusTextByKey(ntQueryStatusKey, statusKeyChanged);
                 return await ntQueryDirectoryScanner.ScanAsync(rootPath, progress, cancellationToken, pauseToken);
             }
             catch (OperationCanceledException)
@@ -88,11 +92,23 @@ namespace WTF
                     LocalizationService.GetText("Alert.Scan"),
                     LocalizationService.Format("Alert.NtQueryUnavailable", ntQueryException.Message));
 
-                _statusMainFormController.SetStatusTextByKey("Status.NtQueryUnavailableNormal");
+                SetStatusTextByKey("Status.NtQueryUnavailableNormal", statusKeyChanged);
                 return await directoryScanner.ScanAsync(rootPath, progress, cancellationToken, pauseToken);
             }
         }
 
+
+
+        private void SetStatusTextByKey(string statusKey, Action<string> statusKeyChanged)
+        {
+            if (statusKeyChanged != null)
+            {
+                statusKeyChanged(statusKey);
+                return;
+            }
+
+            _statusMainFormController.SetStatusTextByKey(statusKey);
+        }
         private static bool IsRootDrivePath(string rootPath)
         {
             string pathRoot = Path.GetPathRoot(rootPath);
