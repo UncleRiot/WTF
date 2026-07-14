@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using Lucid.Controls;
 
 namespace WTF
 {
@@ -16,8 +17,8 @@ namespace WTF
         private const int TextLeftOffset = 40;
         private const int RightPadding = 1;
 
-        private readonly VScrollBar _verticalScrollBar;
-        private readonly HScrollBar _horizontalScrollBar;
+        private readonly LucidScrollBar _verticalScrollBar;
+        private readonly LucidScrollBar _horizontalScrollBar;
         private readonly List<TreeEntrySizeBarNode> _visibleNodes = new List<TreeEntrySizeBarNode>();
         private readonly HashSet<string> _expandedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, bool> _systemDirectoryByFullPath = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
@@ -42,18 +43,22 @@ namespace WTF
             ForeColor = SystemColors.WindowText;
             TabStop = true;
 
-            _verticalScrollBar = new VScrollBar
+            _verticalScrollBar = new LucidScrollBar
             {
+                ScrollOrientation = LucidScrollOrientation.Vertical,
+                Width = SystemInformation.VerticalScrollBarWidth,
                 Visible = false
             };
 
-            _horizontalScrollBar = new HScrollBar
+            _horizontalScrollBar = new LucidScrollBar
             {
+                ScrollOrientation = LucidScrollOrientation.Horizontal,
+                Height = SystemInformation.HorizontalScrollBarHeight,
                 Visible = false
             };
 
-            _verticalScrollBar.Scroll += scrollBar_Scroll;
-            _horizontalScrollBar.Scroll += scrollBar_Scroll;
+            _verticalScrollBar.ValueChanged += scrollBar_ValueChanged;
+            _horizontalScrollBar.ValueChanged += scrollBar_ValueChanged;
 
             Controls.Add(_verticalScrollBar);
             Controls.Add(_horizontalScrollBar);
@@ -339,12 +344,12 @@ namespace WTF
             Invalidate();
         }
 
-        private static void RestoreScrollBarValue(ScrollBar scrollBar, int value)
+        private static void RestoreScrollBarValue(LucidScrollBar scrollBar, int value)
         {
             if (scrollBar == null || !scrollBar.Visible)
                 return;
 
-            int maximumValue = Math.Max(scrollBar.Minimum, scrollBar.Maximum - scrollBar.LargeChange + 1);
+            int maximumValue = Math.Max(scrollBar.Minimum, scrollBar.Maximum - scrollBar.ViewSize);
             scrollBar.Value = Math.Max(scrollBar.Minimum, Math.Min(maximumValue, value));
         }
 
@@ -520,22 +525,22 @@ namespace WTF
             }
         }
 
-        private void ConfigureScrollBar(ScrollBar scrollBar, int virtualSize, int viewportSize, int smallChange)
+        private void ConfigureScrollBar(LucidScrollBar scrollBar, int virtualSize, int viewportSize, int smallChange)
         {
-            int largeChange = Math.Max(1, viewportSize);
-            int maxValue = Math.Max(0, virtualSize - viewportSize);
+            int maximum = Math.Max(1, virtualSize);
+            int viewSize = Math.Max(1, Math.Min(viewportSize, maximum));
+            int maxValue = Math.Max(0, maximum - viewSize);
             int value = Math.Max(0, Math.Min(maxValue, scrollBar.Value));
 
             scrollBar.Minimum = 0;
-            scrollBar.SmallChange = Math.Max(1, smallChange);
-            scrollBar.LargeChange = largeChange;
-            scrollBar.Maximum = Math.Max(0, maxValue + largeChange - 1);
+            scrollBar.Maximum = maximum;
+            scrollBar.ViewSize = viewSize;
             scrollBar.Value = value;
         }
 
-        private int GetScrollBarMaxValue(ScrollBar scrollBar)
+        private int GetScrollBarMaxValue(LucidScrollBar scrollBar)
         {
-            return Math.Max(0, scrollBar.Maximum - scrollBar.LargeChange + 1);
+            return Math.Max(0, scrollBar.Maximum - scrollBar.ViewSize);
         }
 
         private Rectangle GetContentBounds()
@@ -933,7 +938,7 @@ namespace WTF
             return parentKey + "\\" + entry.Name;
         }
 
-        private void scrollBar_Scroll(object sender, ScrollEventArgs e)
+        private void scrollBar_ValueChanged(object sender, ScrollValueEventArgs e)
         {
             Invalidate();
         }

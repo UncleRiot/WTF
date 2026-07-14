@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using Lucid.Controls.GridView;
+using Lucid.Theming;
 
 namespace WTF
 {
@@ -27,8 +30,8 @@ namespace WTF
         }
 
         private readonly FileSystemEntry _rootEntry;
-        private readonly DataGridView _fileTypeGrid = new DataGridView();
-        private readonly DataGridView _largestFilesGrid = new DataGridView();
+        private readonly LucidDataGridView _fileTypeGrid = new LucidDataGridView();
+        private readonly LucidDataGridView _largestFilesGrid = new LucidDataGridView();
         private List<FileTypeRow> _fileTypeRows = new List<FileTypeRow>();
         private List<LargestFileRow> _largestFileRows = new List<LargestFileRow>();
         private string _fileTypeSortProperty = nameof(FileTypeRow.SizeBytes);
@@ -40,17 +43,27 @@ namespace WTF
         {
             _rootEntry = rootEntry ?? throw new ArgumentNullException(nameof(rootEntry));
 
+            LucidThemeService.Apply(settings.Layout);
+
             Text = LocalizationService.GetText("Advanced.Title");
             Icon = AppResources.ApplicationIcon;
             Width = 1050;
             Height = 700;
             StartPosition = FormStartPosition.CenterParent;
+            BackColor = ThemeProvider.Theme.Colors.BackgroundPrimary;
+            ForeColor = ThemeProvider.Theme.Colors.TextPrimary;
 
-            TabControl tabs = new TabControl { Dock = DockStyle.Fill };
+            AnalysisTabControl tabs = new AnalysisTabControl
+            {
+                Dock = DockStyle.Fill
+            };
             tabs.TabPages.Add(CreateFileTypesPage());
             tabs.TabPages.Add(CreateLargestFilesPage());
 
             Controls.Add(tabs);
+
+            WindowsFormStyler.Apply(this, settings.Layout);
+            ApplyTheme();
             RefreshData();
         }
 
@@ -231,7 +244,7 @@ namespace WTF
             };
         }
 
-        private static void ApplySortGlyph(DataGridView grid, string propertyName, bool ascending)
+        private static void ApplySortGlyph(LucidDataGridView grid, string propertyName, bool ascending)
         {
             foreach (DataGridViewColumn column in grid.Columns)
             {
@@ -265,7 +278,7 @@ namespace WTF
             }
         }
 
-        private static void ConfigureGrid(DataGridView grid)
+        private static void ConfigureGrid(LucidDataGridView grid)
         {
             grid.Dock = DockStyle.Fill;
             grid.ReadOnly = true;
@@ -275,14 +288,110 @@ namespace WTF
             grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells;
             grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             grid.MultiSelect = false;
+            grid.RowHeadersVisible = false;
+            grid.BorderStyle = BorderStyle.None;
+            grid.BackgroundColor = ThemeProvider.Theme.Colors.BackgroundPrimary;
+            grid.BackColor = ThemeProvider.Theme.Colors.BackgroundPrimary;
+            grid.ForeColor = ThemeProvider.Theme.Colors.TextPrimary;
         }
 
         private static TabPage CreatePage(string title, Control control)
         {
-            TabPage page = new TabPage(title);
+            TabPage page = new TabPage(title)
+            {
+                BackColor = ThemeProvider.Theme.Colors.BackgroundPrimary,
+                ForeColor = ThemeProvider.Theme.Colors.TextPrimary,
+                Padding = Padding.Empty
+            };
+
             control.Dock = DockStyle.Fill;
             page.Controls.Add(control);
             return page;
+        }
+
+        private void ApplyTheme()
+        {
+            BackColor = ThemeProvider.Theme.Colors.BackgroundPrimary;
+            ForeColor = ThemeProvider.Theme.Colors.TextPrimary;
+
+            ApplyGridTheme(_fileTypeGrid);
+            ApplyGridTheme(_largestFilesGrid);
+        }
+
+        private static void ApplyGridTheme(LucidDataGridView grid)
+        {
+            Color backgroundColor = ThemeProvider.Theme.Colors.BackgroundPrimary;
+            Color headerColor = ThemeProvider.Theme.Colors.BackgroundSecondary;
+            Color textColor = ThemeProvider.Theme.Colors.TextPrimary;
+            Color borderColor = ThemeProvider.Theme.Colors.SurfaceHighlight;
+
+            grid.BackgroundColor = backgroundColor;
+            grid.BackColor = backgroundColor;
+            grid.ForeColor = textColor;
+            grid.GridColor = borderColor;
+            grid.EnableHeadersVisualStyles = false;
+
+        }
+
+        private sealed class AnalysisTabControl : TabControl
+        {
+            public AnalysisTabControl()
+            {
+                DrawMode = TabDrawMode.OwnerDrawFixed;
+                Appearance = TabAppearance.FlatButtons;
+                SizeMode = TabSizeMode.Fixed;
+                ItemSize = new Size(120, 30);
+                Padding = new Point(12, 4);
+            }
+
+            protected override void OnDrawItem(DrawItemEventArgs e)
+            {
+                Rectangle tabBounds = GetTabRect(e.Index);
+                bool selected = SelectedIndex == e.Index;
+
+                Color backColor = selected
+                    ? ThemeProvider.Theme.Colors.BackgroundTertiary
+                    : ThemeProvider.Theme.Colors.BackgroundSecondary;
+                Color textColor = ThemeProvider.Theme.Colors.TextPrimary;
+                Color borderColor = ThemeProvider.Theme.Colors.SurfaceHighlight;
+
+                using (SolidBrush backBrush = new SolidBrush(backColor))
+                using (Pen borderPen = new Pen(borderColor))
+                {
+                    e.Graphics.FillRectangle(backBrush, tabBounds);
+                    e.Graphics.DrawRectangle(
+                        borderPen,
+                        tabBounds.Left,
+                        tabBounds.Top,
+                        tabBounds.Width - 1,
+                        tabBounds.Height - 1);
+
+                    TextRenderer.DrawText(
+                        e.Graphics,
+                        TabPages[e.Index].Text,
+                        Font,
+                        tabBounds,
+                        textColor,
+                        TextFormatFlags.HorizontalCenter |
+                        TextFormatFlags.VerticalCenter |
+                        TextFormatFlags.EndEllipsis);
+
+                    if (selected)
+                    {
+                        using (Pen accentPen = new Pen(
+                            ThemeProvider.Theme.Colors.Accent,
+                            2F))
+                        {
+                            e.Graphics.DrawLine(
+                                accentPen,
+                                tabBounds.Left + 1,
+                                tabBounds.Bottom - 2,
+                                tabBounds.Right - 2,
+                                tabBounds.Bottom - 2);
+                        }
+                    }
+                }
+            }
         }
 
         private void OpenSelectedFile(object sender, DataGridViewCellEventArgs e)

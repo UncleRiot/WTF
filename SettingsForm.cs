@@ -1,5 +1,8 @@
 using System;
+using System.Drawing;
 using System.Windows.Forms;
+using Lucid.Controls;
+using Lucid.Theming;
 
 namespace WTF
 {
@@ -7,243 +10,316 @@ namespace WTF
     {
         private readonly AppSettings _settings;
 
-        private TabControl tabControlSettings;
-        private TabPage tabPageGeneral;
-        private TabPage tabPageExport;
-        private CheckBox checkBoxShowFilesInTree;
-        private CheckBox checkBoxSkipReparsePoints;
-        private CheckBox checkBoxShowPartitionPanel;
-        private CheckBox checkBoxStartElevatedOnStartup;
-        private CheckBox checkBoxShowElevationPromptOnStartup;
-        private CheckBox checkBoxShellContextMenuEnabled;
-        private Label labelLanguage;
-        private ComboBox comboBoxLanguage;
-        private Label labelLayout;
-        private ComboBox comboBoxLayout;
-        private CheckBox checkBoxExportPath;
-        private CheckBox checkBoxExportSizeGb;
-        private CheckBox checkBoxExportSizeMb;
-        private Label labelExportMaxDepth;
-        private TextBox textBoxExportMaxDepth;
-        private Button buttonOk;
-        private Button buttonCancel;
+        private LucidButton buttonGeneralTab;
+        private LucidButton buttonExportTab;
+        private Panel panelPageHost;
+        private Panel panelGeneral;
+        private Panel panelExport;
+        private LucidCheckBox checkBoxShowFilesInTree;
+        private LucidCheckBox checkBoxSkipReparsePoints;
+        private LucidCheckBox checkBoxShowPartitionPanel;
+        private LucidCheckBox checkBoxStartElevatedOnStartup;
+        private LucidCheckBox checkBoxShowElevationPromptOnStartup;
+        private LucidCheckBox checkBoxShellContextMenuEnabled;
+        private LucidLabel labelLanguage;
+        private LucidComboBox comboBoxLanguage;
+        private LucidLabel labelLayout;
+        private LucidComboBox comboBoxLayout;
+        private LucidCheckBox checkBoxExportPath;
+        private LucidCheckBox checkBoxExportSizeGb;
+        private LucidCheckBox checkBoxExportSizeMb;
+        private LucidLabel labelExportMaxDepth;
+        private LucidTextBox textBoxExportMaxDepth;
+        private LucidButton buttonOk;
+        private LucidButton buttonCancel;
 
         public SettingsForm(AppSettings settings)
         {
             _settings = settings;
 
-            InitializeComponent();
+            LucidThemeService.Apply(_settings.Layout);
             WindowsFormStyler.Apply(this, _settings.Layout);
+            InitializeComponent();
             LoadSettings();
+            ShowPage(panelGeneral);
         }
 
         private void InitializeComponent()
         {
+            Color backgroundPrimary = ThemeProvider.Theme.Colors.BackgroundPrimary;
+            Color backgroundSecondary = ThemeProvider.Theme.Colors.BackgroundSecondary;
+            Color borderColor = ThemeProvider.Theme.Colors.SurfaceHighlight;
+
             Text = LocalizationService.GetText("Settings.Title");
+            Icon = AppResources.ApplicationIcon;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new System.Drawing.Size(460, 414);
+            ClientSize = new Size(520, 454);
             MinimumSize = Size;
             MaximumSize = Size;
             MaximizeBox = false;
             MinimizeBox = false;
             ShowInTaskbar = false;
             KeyPreview = true;
+            BackColor = backgroundPrimary;
+            ForeColor = ThemeProvider.Theme.Colors.TextPrimary;
             KeyDown += SettingsForm_KeyDown;
 
-            tabControlSettings = new TabControl
+            buttonGeneralTab = new LucidButton
             {
-                Name = "tabControlSettings",
-                Location = new System.Drawing.Point(12, 12),
-                Size = new System.Drawing.Size(436, 342)
+                Name = "buttonGeneralTab",
+                Text = LocalizationService.GetText("Settings.General"),
+                Location = new Point(18, 16),
+                Size = new Size(116, 32),
+                ButtonStyle = LucidButtonStyle.Normal
+            };
+            buttonGeneralTab.Click += buttonGeneralTab_Click;
+
+            buttonExportTab = new LucidButton
+            {
+                Name = "buttonExportTab",
+                Text = LocalizationService.GetText("Settings.Export"),
+                Location = new Point(140, 16),
+                Size = new Size(116, 32),
+                ButtonStyle = LucidButtonStyle.Normal
+            };
+            buttonExportTab.Click += buttonExportTab_Click;
+
+            panelPageHost = new Panel
+            {
+                Name = "panelPageHost",
+                Location = new Point(18, 54),
+                Size = new Size(484, 338),
+                BackColor = backgroundSecondary,
+                BorderStyle = BorderStyle.FixedSingle
             };
 
-            tabPageGeneral = new TabPage
+            panelGeneral = new Panel
             {
-                Name = "tabPageGeneral",
-                Text = LocalizationService.GetText("Settings.General")
+                Name = "panelGeneral",
+                Dock = DockStyle.Fill,
+                BackColor = backgroundSecondary
             };
 
-            tabPageExport = new TabPage
+            panelExport = new Panel
             {
-                Name = "tabPageExport",
-                Text = LocalizationService.GetText("Settings.Export")
+                Name = "panelExport",
+                Dock = DockStyle.Fill,
+                BackColor = backgroundSecondary,
+                Visible = false
             };
 
-            checkBoxShowFilesInTree = new CheckBox
-            {
-                Name = "checkBoxShowFilesInTree",
-                Text = LocalizationService.GetText("Settings.ShowFilesInTree"),
-                Location = new System.Drawing.Point(12, 18),
-                AutoSize = true
-            };
+            checkBoxShowFilesInTree = CreateCheckBox(
+                "checkBoxShowFilesInTree",
+                LocalizationService.GetText("Settings.ShowFilesInTree"),
+                24,
+                backgroundSecondary);
 
-            checkBoxSkipReparsePoints = new CheckBox
-            {
-                Name = "checkBoxSkipReparsePoints",
-                Text = LocalizationService.GetText("Settings.SkipReparsePoints"),
-                Location = new System.Drawing.Point(12, 50),
-                AutoSize = true
-            };
+            checkBoxSkipReparsePoints = CreateCheckBox(
+                "checkBoxSkipReparsePoints",
+                LocalizationService.GetText("Settings.SkipReparsePoints"),
+                60,
+                backgroundSecondary);
 
-            checkBoxShowPartitionPanel = new CheckBox
-            {
-                Name = "checkBoxShowPartitionPanel",
-                Text = LocalizationService.GetText("Settings.ShowPartitionPanel"),
-                Location = new System.Drawing.Point(12, 82),
-                AutoSize = true
-            };
+            checkBoxShowPartitionPanel = CreateCheckBox(
+                "checkBoxShowPartitionPanel",
+                LocalizationService.GetText("Settings.ShowPartitionPanel"),
+                96,
+                backgroundSecondary);
 
-            checkBoxStartElevatedOnStartup = new CheckBox
-            {
-                Name = "checkBoxStartElevatedOnStartup",
-                Text = LocalizationService.GetText("Settings.StartElevated"),
-                Location = new System.Drawing.Point(12, 114),
-                AutoSize = true
-            };
+            checkBoxStartElevatedOnStartup = CreateCheckBox(
+                "checkBoxStartElevatedOnStartup",
+                LocalizationService.GetText("Settings.StartElevated"),
+                132,
+                backgroundSecondary);
 
-            checkBoxShowElevationPromptOnStartup = new CheckBox
-            {
-                Name = "checkBoxShowElevationPromptOnStartup",
-                Text = LocalizationService.GetText("Settings.ShowElevationPrompt"),
-                Location = new System.Drawing.Point(12, 146),
-                AutoSize = true
-            };
+            checkBoxShowElevationPromptOnStartup = CreateCheckBox(
+                "checkBoxShowElevationPromptOnStartup",
+                LocalizationService.GetText("Settings.ShowElevationPrompt"),
+                168,
+                backgroundSecondary);
 
-            checkBoxShellContextMenuEnabled = new CheckBox
-            {
-                Name = "checkBoxShellContextMenuEnabled",
-                Text = LocalizationService.GetText("Settings.ShellContextMenu"),
-                Location = new System.Drawing.Point(12, 178),
-                AutoSize = true
-            };
+            checkBoxShellContextMenuEnabled = CreateCheckBox(
+                "checkBoxShellContextMenuEnabled",
+                LocalizationService.GetText("Settings.ShellContextMenu"),
+                204,
+                backgroundSecondary);
 
-            labelLanguage = new Label
-            {
-                Name = "labelLanguage",
-                Text = LocalizationService.GetText("Settings.Language"),
-                Location = new System.Drawing.Point(12, 218),
-                Size = new System.Drawing.Size(120, 23),
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
-            };
+            labelLanguage = CreateLabel(
+                "labelLanguage",
+                LocalizationService.GetText("Settings.Language"),
+                250);
 
-            comboBoxLanguage = new ComboBox
+            comboBoxLanguage = new LucidComboBox
             {
                 Name = "comboBoxLanguage",
-                Location = new System.Drawing.Point(138, 218),
-                Size = new System.Drawing.Size(205, 23),
+                Location = new Point(174, 250),
+                Size = new Size(268, 28),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
 
-            comboBoxLanguage.Items.Add(new LanguageItem(LocalizationService.GetText("Settings.LanguageGerman"), LocalizationService.GermanLanguageCode));
-            comboBoxLanguage.Items.Add(new LanguageItem(LocalizationService.GetText("Settings.LanguageEnglish"), LocalizationService.EnglishLanguageCode));
+            comboBoxLanguage.Items.Add(new LanguageItem(
+                LocalizationService.GetText("Settings.LanguageGerman"),
+                LocalizationService.GermanLanguageCode));
+            comboBoxLanguage.Items.Add(new LanguageItem(
+                LocalizationService.GetText("Settings.LanguageEnglish"),
+                LocalizationService.EnglishLanguageCode));
 
-            labelLayout = new Label
-            {
-                Name = "labelLayout",
-                Text = LocalizationService.GetText("Settings.Layout"),
-                Location = new System.Drawing.Point(12, 252),
-                Size = new System.Drawing.Size(120, 23),
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
-            };
+            labelLayout = CreateLabel(
+                "labelLayout",
+                LocalizationService.GetText("Settings.Layout"),
+                290);
 
-            comboBoxLayout = new ComboBox
+            comboBoxLayout = new LucidComboBox
             {
                 Name = "comboBoxLayout",
-                Location = new System.Drawing.Point(138, 252),
-                Size = new System.Drawing.Size(205, 23),
+                Location = new Point(174, 290),
+                Size = new Size(268, 28),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
 
-            comboBoxLayout.Items.Add(new LayoutItem(LocalizationService.GetText("Settings.LayoutWindowsDefault"), AppLayout.WindowsDefault));
-            comboBoxLayout.Items.Add(new LayoutItem(LocalizationService.GetText("Settings.LayoutWindowsLight"), AppLayout.WindowsLightMode));
-            comboBoxLayout.Items.Add(new LayoutItem(LocalizationService.GetText("Settings.LayoutWindowsDark"), AppLayout.WindowsDarkMode));
+            comboBoxLayout.Items.Add(new LayoutItem(
+                LocalizationService.GetText("Settings.LayoutWindowsDefault"),
+                AppLayout.WindowsDefault));
+            comboBoxLayout.Items.Add(new LayoutItem(
+                LocalizationService.GetText("Settings.LayoutWindowsLight"),
+                AppLayout.WindowsLightMode));
+            comboBoxLayout.Items.Add(new LayoutItem(
+                LocalizationService.GetText("Settings.LayoutWindowsDark"),
+                AppLayout.WindowsDarkMode));
 
-            checkBoxExportPath = new CheckBox
-            {
-                Name = "checkBoxExportPath",
-                Text = LocalizationService.GetText("Settings.ExportPath"),
-                Location = new System.Drawing.Point(12, 18),
-                AutoSize = true
-            };
+            checkBoxExportPath = CreateCheckBox(
+                "checkBoxExportPath",
+                LocalizationService.GetText("Settings.ExportPath"),
+                24,
+                backgroundSecondary);
 
-            checkBoxExportSizeGb = new CheckBox
-            {
-                Name = "checkBoxExportSizeGb",
-                Text = LocalizationService.GetText("Settings.ExportSizeGb"),
-                Location = new System.Drawing.Point(12, 50),
-                AutoSize = true
-            };
+            checkBoxExportSizeGb = CreateCheckBox(
+                "checkBoxExportSizeGb",
+                LocalizationService.GetText("Settings.ExportSizeGb"),
+                60,
+                backgroundSecondary);
 
-            checkBoxExportSizeMb = new CheckBox
-            {
-                Name = "checkBoxExportSizeMb",
-                Text = LocalizationService.GetText("Settings.ExportSizeMb"),
-                Location = new System.Drawing.Point(12, 82),
-                AutoSize = true
-            };
+            checkBoxExportSizeMb = CreateCheckBox(
+                "checkBoxExportSizeMb",
+                LocalizationService.GetText("Settings.ExportSizeMb"),
+                96,
+                backgroundSecondary);
 
-            labelExportMaxDepth = new Label
+            labelExportMaxDepth = new LucidLabel
             {
                 Name = "labelExportMaxDepth",
                 Text = LocalizationService.GetText("Settings.ExportMaxDepth"),
-                Location = new System.Drawing.Point(12, 122),
-                Size = new System.Drawing.Size(150, 23),
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+                Location = new Point(24, 146),
+                Size = new Size(200, 28),
+                TextAlign = ContentAlignment.MiddleLeft
             };
 
-            textBoxExportMaxDepth = new TextBox
+            textBoxExportMaxDepth = new LucidTextBox
             {
                 Name = "textBoxExportMaxDepth",
-                Location = new System.Drawing.Point(168, 122),
-                Size = new System.Drawing.Size(80, 23)
+                Location = new Point(230, 148),
+                Size = new Size(100, 25),
+                TextAlign = HorizontalAlignment.Right
             };
 
-            tabPageGeneral.Controls.Add(checkBoxShowFilesInTree);
-            tabPageGeneral.Controls.Add(checkBoxSkipReparsePoints);
-            tabPageGeneral.Controls.Add(checkBoxShowPartitionPanel);
-            tabPageGeneral.Controls.Add(checkBoxStartElevatedOnStartup);
-            tabPageGeneral.Controls.Add(checkBoxShowElevationPromptOnStartup);
-            tabPageGeneral.Controls.Add(checkBoxShellContextMenuEnabled);
-            tabPageGeneral.Controls.Add(labelLanguage);
-            tabPageGeneral.Controls.Add(comboBoxLanguage);
-            tabPageGeneral.Controls.Add(labelLayout);
-            tabPageGeneral.Controls.Add(comboBoxLayout);
+            panelGeneral.Controls.Add(checkBoxShowFilesInTree);
+            panelGeneral.Controls.Add(checkBoxSkipReparsePoints);
+            panelGeneral.Controls.Add(checkBoxShowPartitionPanel);
+            panelGeneral.Controls.Add(checkBoxStartElevatedOnStartup);
+            panelGeneral.Controls.Add(checkBoxShowElevationPromptOnStartup);
+            panelGeneral.Controls.Add(checkBoxShellContextMenuEnabled);
+            panelGeneral.Controls.Add(labelLanguage);
+            panelGeneral.Controls.Add(comboBoxLanguage);
+            panelGeneral.Controls.Add(labelLayout);
+            panelGeneral.Controls.Add(comboBoxLayout);
 
-            tabPageExport.Controls.Add(checkBoxExportPath);
-            tabPageExport.Controls.Add(checkBoxExportSizeGb);
-            tabPageExport.Controls.Add(checkBoxExportSizeMb);
-            tabPageExport.Controls.Add(labelExportMaxDepth);
-            tabPageExport.Controls.Add(textBoxExportMaxDepth);
+            panelExport.Controls.Add(checkBoxExportPath);
+            panelExport.Controls.Add(checkBoxExportSizeGb);
+            panelExport.Controls.Add(checkBoxExportSizeMb);
+            panelExport.Controls.Add(labelExportMaxDepth);
+            panelExport.Controls.Add(textBoxExportMaxDepth);
 
-            tabControlSettings.TabPages.Add(tabPageGeneral);
-            tabControlSettings.TabPages.Add(tabPageExport);
+            panelPageHost.Controls.Add(panelGeneral);
+            panelPageHost.Controls.Add(panelExport);
 
-            buttonOk = new Button
+            buttonOk = new LucidButton
             {
                 Name = "buttonOk",
                 Text = LocalizationService.GetText("Common.OK"),
-                Location = new System.Drawing.Point(280, 370),
-                Size = new System.Drawing.Size(75, 30),
-                DialogResult = DialogResult.OK
+                Location = new Point(312, 406),
+                Size = new Size(90, 32),
+                DialogResult = DialogResult.OK,
+                ButtonStyle = LucidButtonStyle.Normal
             };
 
-            buttonCancel = new Button
+            buttonCancel = new LucidButton
             {
                 Name = "buttonCancel",
                 Text = LocalizationService.GetText("Common.Cancel"),
-                Location = new System.Drawing.Point(365, 370),
-                Size = new System.Drawing.Size(75, 30),
-                DialogResult = DialogResult.Cancel
+                Location = new Point(412, 406),
+                Size = new Size(90, 32),
+                DialogResult = DialogResult.Cancel,
+                ButtonStyle = LucidButtonStyle.Normal
             };
 
             buttonOk.Click += buttonOk_Click;
 
-            Controls.Add(tabControlSettings);
+            Controls.Add(buttonGeneralTab);
+            Controls.Add(buttonExportTab);
+            Controls.Add(panelPageHost);
             Controls.Add(buttonOk);
             Controls.Add(buttonCancel);
 
             AcceptButton = buttonOk;
             CancelButton = buttonCancel;
+        }
+
+        private static LucidCheckBox CreateCheckBox(
+            string name,
+            string text,
+            int top,
+            Color backColor)
+        {
+            return new LucidCheckBox
+            {
+                Name = name,
+                Text = text,
+                Location = new Point(24, top),
+                Size = new Size(420, 24),
+                UseBackColorProperty = true,
+                BackColor = backColor
+            };
+        }
+
+        private static LucidLabel CreateLabel(string name, string text, int top)
+        {
+            return new LucidLabel
+            {
+                Name = name,
+                Text = text,
+                Location = new Point(24, top),
+                Size = new Size(138, 28),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+        }
+
+        private void buttonGeneralTab_Click(object sender, EventArgs e)
+        {
+            ShowPage(panelGeneral);
+        }
+
+        private void buttonExportTab_Click(object sender, EventArgs e)
+        {
+            ShowPage(panelExport);
+        }
+
+        private void ShowPage(Panel page)
+        {
+            panelGeneral.Visible = page == panelGeneral;
+            panelExport.Visible = page == panelExport;
+            buttonGeneralTab.Enabled = page != panelGeneral;
+            buttonExportTab.Enabled = page != panelExport;
+            page.BringToFront();
         }
 
         private void SettingsForm_KeyDown(object sender, KeyEventArgs e)
@@ -270,12 +346,17 @@ namespace WTF
             checkBoxExportPath.Checked = _settings.ExportPath;
             checkBoxExportSizeGb.Checked = _settings.ExportSizeGb;
             checkBoxExportSizeMb.Checked = _settings.ExportSizeMb;
-            textBoxExportMaxDepth.Text = _settings.ExportMaxDepth.HasValue ? _settings.ExportMaxDepth.Value.ToString() : string.Empty;
+            textBoxExportMaxDepth.Text = _settings.ExportMaxDepth.HasValue
+                ? _settings.ExportMaxDepth.Value.ToString()
+                : string.Empty;
 
             for (int index = 0; index < comboBoxLanguage.Items.Count; index++)
             {
                 if (comboBoxLanguage.Items[index] is LanguageItem languageItem &&
-                    string.Equals(languageItem.LanguageCode, LocalizationService.NormalizeLanguageCode(_settings.LanguageCode), StringComparison.OrdinalIgnoreCase))
+                    string.Equals(
+                        languageItem.LanguageCode,
+                        LocalizationService.NormalizeLanguageCode(_settings.LanguageCode),
+                        StringComparison.OrdinalIgnoreCase))
                 {
                     comboBoxLanguage.SelectedIndex = index;
                     break;
@@ -289,7 +370,8 @@ namespace WTF
 
             for (int index = 0; index < comboBoxLayout.Items.Count; index++)
             {
-                if (comboBoxLayout.Items[index] is LayoutItem layoutItem && layoutItem.Layout == _settings.Layout)
+                if (comboBoxLayout.Items[index] is LayoutItem layoutItem &&
+                    layoutItem.Layout == _settings.Layout)
                 {
                     comboBoxLayout.SelectedIndex = index;
                     return;
@@ -313,10 +395,18 @@ namespace WTF
 
             if (!string.IsNullOrWhiteSpace(textBoxExportMaxDepth.Text))
             {
-                if (!int.TryParse(textBoxExportMaxDepth.Text.Trim(), out int parsedExportMaxDepth) || parsedExportMaxDepth < 0)
+                if (!int.TryParse(
+                        textBoxExportMaxDepth.Text.Trim(),
+                        out int parsedExportMaxDepth) ||
+                    parsedExportMaxDepth < 0)
                 {
-                    MessageBox.Show(this, LocalizationService.GetText("Settings.ExportMaxDepthInvalid"), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    tabControlSettings.SelectedTab = tabPageExport;
+                    MessageBox.Show(
+                        this,
+                        LocalizationService.GetText("Settings.ExportMaxDepthInvalid"),
+                        Text,
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    ShowPage(panelExport);
                     textBoxExportMaxDepth.Focus();
                     return false;
                 }
@@ -337,7 +427,8 @@ namespace WTF
 
             if (comboBoxLanguage.SelectedItem is LanguageItem selectedLanguageItem)
             {
-                _settings.LanguageCode = LocalizationService.NormalizeLanguageCode(selectedLanguageItem.LanguageCode);
+                _settings.LanguageCode = LocalizationService.NormalizeLanguageCode(
+                    selectedLanguageItem.LanguageCode);
                 LocalizationService.Load(_settings.LanguageCode);
             }
 
@@ -352,7 +443,12 @@ namespace WTF
             }
             catch
             {
-                MessageBox.Show(this, LocalizationService.GetText("Settings.ShellContextMenuFailed"), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(
+                    this,
+                    LocalizationService.GetText("Settings.ShellContextMenuFailed"),
+                    Text,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
                 return false;
             }
 

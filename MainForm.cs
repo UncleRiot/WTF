@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Lucid.Controls.GridView;
 
 namespace WTF
 {
@@ -59,7 +60,7 @@ namespace WTF
         private ToolStripMenuItem contextMenuItemCopyToClipboard;
         private ToolStripMenuItem contextMenuItemCopyPath;
         private ImageList imageListEntries;
-        private DataGridView listViewPartitions;
+        private LucidDataGridView listViewPartitions;
         private ImageList imageListPartitions;
         private Chart_TableGridChart dataGridViewEntries;
         private Panel panelRightViewHost;
@@ -73,6 +74,43 @@ namespace WTF
         private ToolStripStatusLabel toolStripStatusLabel;
         
         private bool _suspendPersistentSettingsSave;
+
+        private void ApplyDriveComboBoxTheme()
+        {
+            bool useDarkMode = _settings.Layout == AppLayout.WindowsDarkMode;
+
+            if (_settings.Layout == AppLayout.WindowsDefault)
+            {
+                try
+                {
+                    using Microsoft.Win32.RegistryKey key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                        @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+
+                    object value = key?.GetValue("AppsUseLightTheme");
+
+                    if (value is int appsUseLightTheme)
+                    {
+                        useDarkMode = appsUseLightTheme == 0;
+                    }
+                }
+                catch
+                {
+                    useDarkMode = false;
+                }
+            }
+
+            Color backColor = useDarkMode
+                ? Color.FromArgb(32, 32, 32)
+                : Color.White;
+            Color foreColor = useDarkMode
+                ? Color.White
+                : Color.Black;
+
+            toolStripComboBoxDrives.BackColor = backColor;
+            toolStripComboBoxDrives.ForeColor = foreColor;
+            toolStripComboBoxDrives.ComboBox.BackColor = backColor;
+            toolStripComboBoxDrives.ComboBox.ForeColor = foreColor;
+        }
 
         private void MainForm_SizeChanged(object sender, EventArgs e)
         {
@@ -96,6 +134,7 @@ namespace WTF
             _shellIconService = new ShellIconService();
             _startupScanPath = startupScanPath;
 
+            LucidThemeService.Apply(_settings.Layout);
             InitializeComponent();
             _statusMainFormController = new StatusMainFormController(
                 _settings,
@@ -171,6 +210,7 @@ namespace WTF
             SetDoubleBuffered(barChartView, true);
 
             WindowsFormStyler.Apply(this, _settings.Layout);
+            ApplyDriveComboBoxTheme();
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
             toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
             toolStripExport.GripStyle = ToolStripGripStyle.Visible;
@@ -455,7 +495,7 @@ namespace WTF
             imageListPartitions.ColorDepth = ColorDepth.Depth32Bit;
             imageListPartitions.ImageSize = new System.Drawing.Size(16, 16);
 
-            listViewPartitions = new DataGridView();
+            listViewPartitions = new LucidDataGridView();
             listViewPartitions.Dock = DockStyle.Fill;
             listViewPartitions.AllowUserToAddRows = false;
             listViewPartitions.AllowUserToDeleteRows = false;
@@ -1197,9 +1237,13 @@ namespace WTF
 
             _settings.Save();
             LocalizationService.Load(_settings.LanguageCode);
+            LucidThemeService.Apply(_settings.Layout);
             ApplyLocalizedTexts();
             _driveComboBoxController.LoadDrives();
             WindowsFormStyler.Apply(this, _settings.Layout);
+            treeViewEntries.Invalidate();
+            listViewPartitions.Invalidate();
+            dataGridViewEntries.Invalidate();
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
             toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
             _partitionGridController.UpdatePartitionPanelVisibility();

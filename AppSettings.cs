@@ -48,6 +48,13 @@ namespace WTF
         public int MainWindowHeight { get; set; }
         public bool MainWindowMaximized { get; set; }
 
+        public bool HasStorageHistoryWindowBounds { get; set; }
+        public int StorageHistoryWindowLeft { get; set; }
+        public int StorageHistoryWindowTop { get; set; }
+        public int StorageHistoryWindowWidth { get; set; }
+        public int StorageHistoryWindowHeight { get; set; }
+        public int StorageHistoryGradientIntensityPercent { get; set; } = 55;
+
         public bool HasToolStripLayout { get; set; }
         public int ToolStripLayoutVersion { get; set; }
         public int ToolStripMainLeft { get; set; }
@@ -87,6 +94,10 @@ namespace WTF
 
                 settings = settings ?? new AppSettings();
                 settings.LanguageCode = LocalizationService.NormalizeLanguageCode(settings.LanguageCode);
+                settings.StorageHistoryGradientIntensityPercent = Math.Max(
+                    0,
+                    Math.Min(100, settings.StorageHistoryGradientIntensityPercent));
+
                 return settings;
             }
             catch

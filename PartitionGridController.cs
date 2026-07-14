@@ -2,6 +2,8 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using Lucid.Controls.GridView;
+using Lucid.Theming;
 
 namespace WTF
 {
@@ -9,7 +11,7 @@ namespace WTF
     {
         private readonly AppSettings _settings;
         private readonly SplitContainer _splitContainerLeft;
-        private readonly DataGridView _listViewPartitions;
+        private readonly LucidDataGridView _listViewPartitions;
         private readonly ImageList _imageListPartitions;
         private readonly ShellIconService _shellIconService;
 
@@ -19,7 +21,7 @@ namespace WTF
         public PartitionGridController(
             AppSettings settings,
             SplitContainer splitContainerLeft,
-            DataGridView listViewPartitions,
+            LucidDataGridView listViewPartitions,
             ImageList imageListPartitions,
             ShellIconService shellIconService)
         {
@@ -32,6 +34,17 @@ namespace WTF
 
         public void Configure()
         {
+            Color partitionBackColor = IsDarkMode()
+                ? Color.FromArgb(32, 32, 32)
+                : Color.White;
+            Color partitionForeColor = IsDarkMode()
+                ? Color.White
+                : Color.Black;
+
+            _listViewPartitions.BackgroundColor = partitionBackColor;
+            _listViewPartitions.BackColor = partitionBackColor;
+            _listViewPartitions.ForeColor = partitionForeColor;
+
             ConfigureColumns();
             _listViewPartitions.CellPainting += listViewPartitions_CellPainting;
             _listViewPartitions.SizeChanged += listViewPartitions_SizeChanged;
@@ -177,11 +190,29 @@ namespace WTF
                 return;
 
             int clientWidth = _listViewPartitions.ClientSize.Width;
+            int clientHeight = _listViewPartitions.ClientSize.Height;
 
-            if (clientWidth <= 0)
+            if (clientWidth <= 0 || clientHeight <= 0)
                 return;
 
-            int verticalScrollBarWidth = _listViewPartitions.Rows.Count > _listViewPartitions.DisplayedRowCount(false)
+            int requiredHeight = _listViewPartitions.ColumnHeadersVisible
+                ? _listViewPartitions.ColumnHeadersHeight
+                : 0;
+
+            foreach (DataGridViewRow row in _listViewPartitions.Rows)
+            {
+                if (row.Visible)
+                {
+                    requiredHeight += row.Height;
+                }
+            }
+
+            bool verticalScrollBarRequired = requiredHeight > clientHeight;
+            _listViewPartitions.ScrollBars = verticalScrollBarRequired
+                ? ScrollBars.Vertical
+                : ScrollBars.None;
+
+            int verticalScrollBarWidth = verticalScrollBarRequired
                 ? SystemInformation.VerticalScrollBarWidth
                 : 0;
 
@@ -200,26 +231,22 @@ namespace WTF
 
         public void HandleCellPainting(DataGridViewCellPaintingEventArgs e)
         {
-            if (e.RowIndex < 0)
-                return;
-
-            if (e.ColumnIndex < 0)
-                return;
-
-            if (e.ColumnIndex != 0 && e.ColumnIndex != 3)
+            if (e.RowIndex < 0 || e.ColumnIndex < 0)
                 return;
 
             e.Handled = true;
 
             bool selected = (e.State & DataGridViewElementStates.Selected) == DataGridViewElementStates.Selected;
-
             Color backColor = selected
                 ? SystemColors.Highlight
-                : _listViewPartitions.BackgroundColor;
-
+                : IsDarkMode()
+                    ? Color.FromArgb(32, 32, 32)
+                    : Color.White;
             Color textColor = selected
                 ? SystemColors.HighlightText
-                : _listViewPartitions.ForeColor;
+                : IsDarkMode()
+                    ? Color.White
+                    : Color.Black;
 
             using (SolidBrush backBrush = new SolidBrush(backColor))
             {
@@ -229,14 +256,21 @@ namespace WTF
             if (e.ColumnIndex == 0)
             {
                 string text = Convert.ToString(e.FormattedValue);
-                string rootPath = Convert.ToString(_listViewPartitions.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag);
+                string rootPath = Convert.ToString(
+                    _listViewPartitions.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag);
 
                 int iconLeft = e.CellBounds.Left + 4;
                 int iconTop = e.CellBounds.Top + Math.Max(0, (e.CellBounds.Height - 16) / 2);
 
-                if (!string.IsNullOrWhiteSpace(rootPath) && _imageListPartitions.Images.ContainsKey(rootPath))
+                if (!string.IsNullOrWhiteSpace(rootPath) &&
+                    _imageListPartitions.Images.ContainsKey(rootPath))
                 {
-                    e.Graphics.DrawImage(_imageListPartitions.Images[rootPath], iconLeft, iconTop, 16, 16);
+                    e.Graphics.DrawImage(
+                        _imageListPartitions.Images[rootPath],
+                        iconLeft,
+                        iconTop,
+                        16,
+                        16);
                 }
 
                 Rectangle textBounds = new Rectangle(
@@ -251,45 +285,112 @@ namespace WTF
                     e.CellStyle.Font,
                     textBounds,
                     textColor,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                    TextFormatFlags.Left |
+                    TextFormatFlags.VerticalCenter |
+                    TextFormatFlags.EndEllipsis);
 
                 return;
             }
 
-            int freePercent = _listViewPartitions.Rows[e.RowIndex].Tag is int value ? value : 0;
-            freePercent = Math.Max(0, Math.Min(100, freePercent));
-
-            Rectangle barBounds = new Rectangle(
-                e.CellBounds.Left + 4,
-                e.CellBounds.Top + 2,
-                Math.Max(0, e.CellBounds.Width - 8),
-                Math.Max(0, e.CellBounds.Height - 4));
-
-            int barWidth = (int)Math.Round(barBounds.Width * freePercent / 100D);
-
-            using (SolidBrush emptyBrush = new SolidBrush(Color.FromArgb(230, 230, 230)))
-            using (SolidBrush fillBrush = new SolidBrush(Color.Lime))
-            using (Pen borderPen = new Pen(Color.Silver))
+            if (e.ColumnIndex == 3)
             {
-                e.Graphics.FillRectangle(emptyBrush, barBounds);
+                int freePercent = _listViewPartitions.Rows[e.RowIndex].Tag is int value
+                    ? value
+                    : 0;
+                freePercent = Math.Max(0, Math.Min(100, freePercent));
 
-                if (barWidth > 0)
+                Rectangle barBounds = new Rectangle(
+                    e.CellBounds.Left + 4,
+                    e.CellBounds.Top + 2,
+                    Math.Max(0, e.CellBounds.Width - 8),
+                    Math.Max(0, e.CellBounds.Height - 4));
+
+                int barWidth = (int)Math.Round(barBounds.Width * freePercent / 100D);
+                Color emptyColor = ThemeProvider.Theme.Colors.BackgroundTertiary;
+                Color fillColor = Color.LimeGreen;
+                Color borderColor = ThemeProvider.Theme.Colors.SurfaceHighlight;
+
+                using (SolidBrush emptyBrush = new SolidBrush(emptyColor))
+                using (SolidBrush fillBrush = new SolidBrush(fillColor))
+                using (Pen borderPen = new Pen(borderColor))
                 {
-                    e.Graphics.FillRectangle(
-                        fillBrush,
-                        new Rectangle(barBounds.Left, barBounds.Top, barWidth, barBounds.Height));
+                    e.Graphics.FillRectangle(emptyBrush, barBounds);
+
+                    if (barWidth > 0)
+                    {
+                        e.Graphics.FillRectangle(
+                            fillBrush,
+                            new Rectangle(
+                                barBounds.Left,
+                                barBounds.Top,
+                                barWidth,
+                                barBounds.Height));
+                    }
+
+                    e.Graphics.DrawRectangle(borderPen, barBounds);
                 }
 
-                e.Graphics.DrawRectangle(borderPen, barBounds);
+                Color percentageTextColor = selected
+                    ? SystemColors.HighlightText
+                    : IsDarkMode()
+                        ? Color.White
+                        : Color.Black;
+
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    Convert.ToString(e.FormattedValue),
+                    e.CellStyle.Font,
+                    barBounds,
+                    percentageTextColor,
+                    TextFormatFlags.HorizontalCenter |
+                    TextFormatFlags.VerticalCenter |
+                    TextFormatFlags.EndEllipsis);
+
+                return;
             }
+
+            Rectangle valueBounds = new Rectangle(
+                e.CellBounds.Left + 3,
+                e.CellBounds.Top,
+                Math.Max(0, e.CellBounds.Width - 6),
+                e.CellBounds.Height);
 
             TextRenderer.DrawText(
                 e.Graphics,
                 Convert.ToString(e.FormattedValue),
                 e.CellStyle.Font,
-                barBounds,
-                Color.Black,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                valueBounds,
+                textColor,
+                TextFormatFlags.Right |
+                TextFormatFlags.VerticalCenter |
+                TextFormatFlags.EndEllipsis);
+        }
+
+        private bool IsDarkMode()
+        {
+            if (_settings.Layout == AppLayout.WindowsDarkMode)
+                return true;
+
+            if (_settings.Layout == AppLayout.WindowsLightMode)
+                return false;
+
+            try
+            {
+                using Microsoft.Win32.RegistryKey key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+
+                object value = key?.GetValue("AppsUseLightTheme");
+
+                if (value is int appsUseLightTheme)
+                {
+                    return appsUseLightTheme == 0;
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
         }
 
         private void listViewPartitions_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
@@ -312,7 +413,6 @@ namespace WTF
             _listViewPartitions.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
             _listViewPartitions.ColumnHeadersHeight = headerHeight;
             _listViewPartitions.RowTemplate.MinimumHeight = rowHeight;
-            _listViewPartitions.RowsDefaultCellStyle.Padding = Padding.Empty;
         }
     }
 }

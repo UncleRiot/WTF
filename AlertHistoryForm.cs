@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using Lucid.Controls;
+using Lucid.Controls.GridView;
+using Lucid.Theming;
 
 namespace WTF
 {
@@ -13,20 +16,22 @@ namespace WTF
         private readonly Image _warningSymbolImage = StatusSymbolRenderer.CreateBitmap(StatusSymbolKind.Warning);
         private readonly Image _errorSymbolImage = StatusSymbolRenderer.CreateBitmap(StatusSymbolKind.Error);
 
-        private DataGridView dataGridViewAlerts;
-        private TextBox textBoxDetails;
-        private Button buttonConfirm;
-        private Button buttonDelete;
-        private Button buttonConfirmAll;
-        private Button buttonDeleteAll;
-        private Button buttonClose;
+        private LucidDataGridView dataGridViewAlerts;
+        private LucidTextBox textBoxDetails;
+        private LucidButton buttonConfirm;
+        private LucidButton buttonDelete;
+        private LucidButton buttonConfirmAll;
+        private LucidButton buttonDeleteAll;
+        private LucidButton buttonClose;
 
         public AlertHistoryForm(AppSettings settings)
         {
             _settings = settings;
 
+            LucidThemeService.Apply(_settings.Layout);
             InitializeComponent();
             WindowsFormStyler.Apply(this, _settings.Layout);
+            ApplyTheme();
             LoadAlerts();
 
             AppAlertLog.Changed += AppAlertLog_Changed;
@@ -58,7 +63,7 @@ namespace WTF
             MinimumSize = new System.Drawing.Size(640, 380);
             ShowInTaskbar = false;
 
-            dataGridViewAlerts = new DataGridView
+            dataGridViewAlerts = new LucidDataGridView
             {
                 Name = "dataGridViewAlerts",
                 Dock = DockStyle.Fill,
@@ -119,7 +124,7 @@ namespace WTF
             dataGridViewAlerts.CellFormatting += dataGridViewAlerts_CellFormatting;
             dataGridViewAlerts.SelectionChanged += dataGridViewAlerts_SelectionChanged;
 
-            Label labelDetails = new Label
+            LucidLabel labelDetails = new LucidLabel
             {
                 Name = "labelDetails",
                 Text = LocalizationService.GetText("AlertHistory.Details"),
@@ -129,7 +134,7 @@ namespace WTF
                 Padding = new Padding(8, 0, 0, 0)
             };
 
-            textBoxDetails = new TextBox
+            textBoxDetails = new LucidTextBox
             {
                 Name = "textBoxDetails",
                 Dock = DockStyle.Fill,
@@ -148,37 +153,42 @@ namespace WTF
             detailsPanel.Controls.Add(textBoxDetails);
             detailsPanel.Controls.Add(labelDetails);
 
-            buttonConfirm = new Button
+            buttonConfirm = new LucidButton
             {
                 Name = "buttonConfirm",
+                ButtonStyle = LucidButtonStyle.Normal,
                 Text = LocalizationService.GetText("AlertHistory.Confirm"),
                 Size = new System.Drawing.Size(95, 30)
             };
 
-            buttonDelete = new Button
+            buttonDelete = new LucidButton
             {
                 Name = "buttonDelete",
+                ButtonStyle = LucidButtonStyle.Normal,
                 Text = LocalizationService.GetText("AlertHistory.Delete"),
                 Size = new System.Drawing.Size(85, 30)
             };
 
-            buttonConfirmAll = new Button
+            buttonConfirmAll = new LucidButton
             {
                 Name = "buttonConfirmAll",
+                ButtonStyle = LucidButtonStyle.Normal,
                 Text = LocalizationService.GetText("AlertHistory.ConfirmAll"),
                 Size = new System.Drawing.Size(110, 30)
             };
 
-            buttonDeleteAll = new Button
+            buttonDeleteAll = new LucidButton
             {
                 Name = "buttonDeleteAll",
+                ButtonStyle = LucidButtonStyle.Normal,
                 Text = LocalizationService.GetText("AlertHistory.DeleteAll"),
                 Size = new System.Drawing.Size(95, 30)
             };
 
-            buttonClose = new Button
+            buttonClose = new LucidButton
             {
                 Name = "buttonClose",
+                ButtonStyle = LucidButtonStyle.Normal,
                 Text = LocalizationService.GetText("Common.Close"),
                 Size = new System.Drawing.Size(90, 30),
                 DialogResult = DialogResult.OK
@@ -225,6 +235,51 @@ namespace WTF
 
             UpdateButtonState();
             UpdateDetails();
+        }
+
+        private void ApplyTheme()
+        {
+            Color backgroundColor = ThemeProvider.Theme.Colors.BackgroundPrimary;
+            Color secondaryBackgroundColor = ThemeProvider.Theme.Colors.BackgroundSecondary;
+            Color textColor = ThemeProvider.Theme.Colors.TextPrimary;
+            Color borderColor = ThemeProvider.Theme.Colors.SurfaceHighlight;
+
+            BackColor = backgroundColor;
+            ForeColor = textColor;
+
+            dataGridViewAlerts.BackgroundColor = backgroundColor;
+            dataGridViewAlerts.BackColor = backgroundColor;
+            dataGridViewAlerts.ForeColor = textColor;
+            dataGridViewAlerts.GridColor = borderColor;
+            dataGridViewAlerts.EnableHeadersVisualStyles = false;
+
+
+            textBoxDetails.BackColor = backgroundColor;
+            textBoxDetails.ForeColor = textColor;
+
+            foreach (Control control in Controls)
+            {
+                ApplyContainerTheme(control, backgroundColor, textColor);
+            }
+        }
+
+        private static void ApplyContainerTheme(
+            Control control,
+            Color backgroundColor,
+            Color textColor)
+        {
+            if (control is Panel ||
+                control is TableLayoutPanel ||
+                control is FlowLayoutPanel)
+            {
+                control.BackColor = backgroundColor;
+                control.ForeColor = textColor;
+            }
+
+            foreach (Control child in control.Controls)
+            {
+                ApplyContainerTheme(child, backgroundColor, textColor);
+            }
         }
 
         private void AppAlertLog_Changed(object sender, EventArgs e)

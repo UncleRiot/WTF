@@ -10,6 +10,9 @@ namespace WTF
         [DllImport("dwmapi.dll")]
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
 
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+        private static extern int SetWindowTheme(IntPtr hwnd, string pszSubAppName, string pszSubIdList);
+
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 
         public static void Apply(Form form, AppLayout layout)
@@ -319,9 +322,40 @@ namespace WTF
                 control.BackColor = windowBackColor;
             }
 
+            ApplyNativeScrollBarTheme(control, useDarkMode);
+
             foreach (Control child in control.Controls)
             {
                 ApplyWindowsControl(child, useDarkMode);
+            }
+        }
+
+        private static void ApplyNativeScrollBarTheme(Control control, bool useDarkMode)
+        {
+            if (!(control is DataGridView) &&
+                !(control is TreeView) &&
+                !(control is ListView) &&
+                !(control is PropertyGrid) &&
+                !(control is RichTextBox) &&
+                !(control is TextBox textBox && textBox.Multiline))
+            {
+                return;
+            }
+
+            ApplyNativeScrollBarThemeToHandle(control, useDarkMode);
+        }
+
+        private static void ApplyNativeScrollBarThemeToHandle(Control control, bool useDarkMode)
+        {
+            try
+            {
+                SetWindowTheme(
+                    control.Handle,
+                    useDarkMode ? "DarkMode_Explorer" : "Explorer",
+                    null);
+            }
+            catch
+            {
             }
         }
 

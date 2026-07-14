@@ -3,54 +3,92 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using Lucid.Controls;
+using Lucid.Controls.GridView;
+using Lucid.Theming;
 
 namespace WTF
 {
     public sealed class StorageHistoryForm : Form
     {
         private readonly AppSettings _settings;
-        private readonly ComboBox comboBoxPaths;
-        private readonly ComboBox comboBoxDisplayMode;
-        private readonly DataGridView dataGridViewRecords;
+        private readonly LucidComboBox comboBoxPaths;
+        private readonly LucidComboBox comboBoxDisplayMode;
+        private readonly LucidDataGridView dataGridViewRecords;
         private readonly StorageHistoryChart storageHistoryChart;
-        private readonly Button buttonDelete;
-        private readonly Button buttonClose;
+        private readonly TrackBar trackBarGradientIntensity;
+        private readonly LucidLabel labelGradientIntensityValue;
+        private readonly LucidButton buttonDelete;
+        private readonly LucidButton buttonClose;
         private IReadOnlyList<StorageHistoryRecord> _currentRecords = Array.Empty<StorageHistoryRecord>();
+        private List<StorageHistoryRow> _currentRows = new List<StorageHistoryRow>();
+        private string _sortColumnName = "ColumnDate";
+        private SortOrder _sortOrder = SortOrder.Descending;
 
         public StorageHistoryForm(AppSettings settings)
         {
             _settings = settings;
+            LucidThemeService.Apply(_settings.Layout);
+
+            bool useDarkMode = IsDarkMode();
+            Color windowBackColor = useDarkMode
+                ? Color.FromArgb(32, 32, 32)
+                : Color.White;
+            Color controlBackColor = useDarkMode
+                ? Color.FromArgb(45, 45, 45)
+                : Color.White;
+            Color textColor = useDarkMode
+                ? Color.White
+                : Color.Black;
 
             Text = LocalizationService.GetText("StorageHistory.Title");
             StartPosition = FormStartPosition.CenterParent;
             MinimumSize = new Size(800, 500);
             Size = new Size(1050, 650);
 
-            Label labelPath = new Label
+            if (_settings.HasStorageHistoryWindowBounds &&
+                _settings.StorageHistoryWindowWidth >= MinimumSize.Width &&
+                _settings.StorageHistoryWindowHeight >= MinimumSize.Height)
+            {
+                Rectangle savedBounds = new Rectangle(
+                    _settings.StorageHistoryWindowLeft,
+                    _settings.StorageHistoryWindowTop,
+                    _settings.StorageHistoryWindowWidth,
+                    _settings.StorageHistoryWindowHeight);
+
+                if (Screen.AllScreens.Any(screen => screen.WorkingArea.IntersectsWith(savedBounds)))
+                {
+                    StartPosition = FormStartPosition.Manual;
+                    Bounds = savedBounds;
+                }
+            }
+
+            LucidLabel labelPath = new LucidLabel
             {
                 AutoSize = true,
                 Text = LocalizationService.GetText("StorageHistory.Path"),
                 Anchor = AnchorStyles.Left
             };
 
-            comboBoxPaths = new ComboBox
+            comboBoxPaths = new LucidComboBox
             {
                 Dock = DockStyle.Fill,
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
             comboBoxPaths.SelectedIndexChanged += comboBoxPaths_SelectedIndexChanged;
 
-            Label labelDisplayMode = new Label
+            LucidLabel labelDisplayMode = new LucidLabel
             {
                 AutoSize = true,
                 Text = LocalizationService.GetText("StorageHistory.Display"),
                 Anchor = AnchorStyles.Left
             };
 
-            comboBoxDisplayMode = new ComboBox
+            comboBoxDisplayMode = new LucidComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Width = 130
+                Width = 130,
+                Anchor = AnchorStyles.Left
             };
             comboBoxDisplayMode.Items.Add(new StorageHistoryDisplayModeItem(
                 StorageHistoryDisplayMode.UsedSpace,
@@ -60,52 +98,118 @@ namespace WTF
                 LocalizationService.GetText("StorageHistory.Free")));
             comboBoxDisplayMode.SelectedIndexChanged += comboBoxDisplayMode_SelectedIndexChanged;
 
-            buttonDelete = new Button
+            LucidLabel labelGradientIntensity = new LucidLabel
             {
                 AutoSize = true,
-                Text = LocalizationService.GetText("StorageHistory.Delete")
+                Text = "Intensity:",
+                Anchor = AnchorStyles.Left
+            };
+
+            trackBarGradientIntensity = new TrackBar
+            {
+                Minimum = 0,
+                Maximum = 100,
+                TickFrequency = 10,
+                SmallChange = 5,
+                LargeChange = 10,
+                AutoSize = false,
+                Height = 28,
+                Width = 140,
+                Anchor = AnchorStyles.Left | AnchorStyles.Right,
+                BackColor = controlBackColor,
+                ForeColor = textColor,
+                Value = Clamp(_settings.StorageHistoryGradientIntensityPercent, 0, 100)
+            };
+            trackBarGradientIntensity.ValueChanged += trackBarGradientIntensity_ValueChanged;
+
+            labelGradientIntensityValue = new LucidLabel
+            {
+                AutoSize = false,
+                Width = 44,
+                Height = 28,
+                Text = trackBarGradientIntensity.Value.ToString() + "%",
+                TextAlign = ContentAlignment.MiddleCenter,
+                Dock = DockStyle.Fill
+            };
+
+            TableLayoutPanel gradientIntensityPanel = new TableLayoutPanel
+            {
+                AutoSize = false,
+                BackColor = windowBackColor,
+                ForeColor = textColor,
+                Width = 188,
+                Height = 28,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = Padding.Empty,
+                Anchor = AnchorStyles.Left
+            };
+            gradientIntensityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132F));
+            gradientIntensityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56F));
+            gradientIntensityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
+            gradientIntensityPanel.Controls.Add(trackBarGradientIntensity, 0, 0);
+            gradientIntensityPanel.Controls.Add(labelGradientIntensityValue, 1, 0);
+
+            buttonDelete = new LucidButton
+            {
+                AutoSize = true,
+                Text = LocalizationService.GetText("StorageHistory.Delete"),
+                ButtonStyle = LucidButtonStyle.Normal,
+                Anchor = AnchorStyles.Left
             };
             buttonDelete.Click += buttonDelete_Click;
 
-            buttonClose = new Button
+            buttonClose = new LucidButton
             {
                 AutoSize = true,
                 Text = LocalizationService.GetText("Common.Close"),
-                DialogResult = DialogResult.OK
+                DialogResult = DialogResult.OK,
+                ButtonStyle = LucidButtonStyle.Normal
             };
 
             TableLayoutPanel pathLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
+                BackColor = windowBackColor,
+                ForeColor = textColor,
                 AutoSize = true,
-                ColumnCount = 5,
+                ColumnCount = 7,
+                RowCount = 1,
                 Padding = new Padding(8)
             };
+            pathLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
             pathLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             pathLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             pathLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             pathLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             pathLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            pathLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 188F));
+            pathLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             pathLayout.Controls.Add(labelPath, 0, 0);
             pathLayout.Controls.Add(comboBoxPaths, 1, 0);
             pathLayout.Controls.Add(labelDisplayMode, 2, 0);
             pathLayout.Controls.Add(comboBoxDisplayMode, 3, 0);
-            pathLayout.Controls.Add(buttonDelete, 4, 0);
+            pathLayout.Controls.Add(labelGradientIntensity, 4, 0);
+            pathLayout.Controls.Add(gradientIntensityPanel, 5, 0);
+            pathLayout.Controls.Add(buttonDelete, 6, 0);
 
-            dataGridViewRecords = new DataGridView
+            dataGridViewRecords = new LucidDataGridView
             {
                 Dock = DockStyle.Fill,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
                 AllowUserToResizeRows = false,
                 AutoGenerateColumns = false,
-                BackgroundColor = SystemColors.Window,
+                BackgroundColor = windowBackColor,
+                BackColor = windowBackColor,
+                ForeColor = textColor,
                 BorderStyle = BorderStyle.FixedSingle,
                 MultiSelect = false,
                 ReadOnly = true,
                 RowHeadersVisible = false,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect
             };
+            dataGridViewRecords.ColumnHeaderMouseClick += dataGridViewRecords_ColumnHeaderMouseClick;
 
             dataGridViewRecords.Columns.Add(new DataGridViewTextBoxColumn
             {
@@ -113,7 +217,8 @@ namespace WTF
                 HeaderText = LocalizationService.GetText("StorageHistory.Date"),
                 DataPropertyName = "Date",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-                FillWeight = 45F
+                FillWeight = 45F,
+                SortMode = DataGridViewColumnSortMode.Programmatic
             });
             dataGridViewRecords.Columns.Add(new DataGridViewTextBoxColumn
             {
@@ -121,7 +226,8 @@ namespace WTF
                 HeaderText = LocalizationService.GetText("StorageHistory.Used"),
                 DataPropertyName = "Size",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-                FillWeight = 30F
+                FillWeight = 30F,
+                SortMode = DataGridViewColumnSortMode.Programmatic
             });
             dataGridViewRecords.Columns.Add(new DataGridViewTextBoxColumn
             {
@@ -129,17 +235,22 @@ namespace WTF
                 HeaderText = LocalizationService.GetText("StorageHistory.Change"),
                 DataPropertyName = "Change",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-                FillWeight = 25F
+                FillWeight = 25F,
+                SortMode = DataGridViewColumnSortMode.Programmatic
             });
 
             storageHistoryChart = new StorageHistoryChart
             {
                 Dock = DockStyle.Fill
             };
+            storageHistoryChart.ApplyTheme(useDarkMode);
+            storageHistoryChart.SetGradientIntensity(trackBarGradientIntensity.Value);
 
             SplitContainer splitContainer = new SplitContainer
             {
                 Dock = DockStyle.Fill,
+                BackColor = windowBackColor,
+                ForeColor = textColor,
                 Orientation = Orientation.Vertical
             };
             splitContainer.Panel1.Controls.Add(dataGridViewRecords);
@@ -148,6 +259,8 @@ namespace WTF
             FlowLayoutPanel bottomLayout = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
+                BackColor = windowBackColor,
+                ForeColor = textColor,
                 AutoSize = true,
                 FlowDirection = FlowDirection.RightToLeft,
                 Padding = new Padding(8)
@@ -157,6 +270,8 @@ namespace WTF
             TableLayoutPanel mainLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
+                BackColor = windowBackColor,
+                ForeColor = textColor,
                 RowCount = 3,
                 ColumnCount = 1
             };
@@ -178,9 +293,49 @@ namespace WTF
                 splitContainer.SplitterDistance = 400;
             };
 
+            BackColor = windowBackColor;
+            ForeColor = textColor;
             WindowsFormStyler.Apply(this, _settings.Layout);
-            comboBoxDisplayMode.SelectedIndex = 0;
+
+            comboBoxPaths.BackColor = controlBackColor;
+            comboBoxPaths.ForeColor = textColor;
+            comboBoxDisplayMode.BackColor = controlBackColor;
+            comboBoxDisplayMode.ForeColor = textColor;
+            dataGridViewRecords.BackgroundColor = windowBackColor;
+            dataGridViewRecords.BackColor = windowBackColor;
+            dataGridViewRecords.ForeColor = textColor;
+
+            comboBoxDisplayMode.SelectedIndex = 1;
             LoadPaths();
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            base.OnFormClosing(e);
+
+            Rectangle windowBounds = WindowState == FormWindowState.Normal
+                ? Bounds
+                : RestoreBounds;
+
+            _settings.StorageHistoryGradientIntensityPercent = trackBarGradientIntensity.Value;
+
+            if (windowBounds.Width >= MinimumSize.Width &&
+                windowBounds.Height >= MinimumSize.Height)
+            {
+                _settings.HasStorageHistoryWindowBounds = true;
+                _settings.StorageHistoryWindowLeft = windowBounds.Left;
+                _settings.StorageHistoryWindowTop = windowBounds.Top;
+                _settings.StorageHistoryWindowWidth = windowBounds.Width;
+                _settings.StorageHistoryWindowHeight = windowBounds.Height;
+            }
+
+            try
+            {
+                _settings.Save();
+            }
+            catch
+            {
+            }
         }
 
         private void LoadPaths()
@@ -224,6 +379,37 @@ namespace WTF
             BindRecords(_currentRecords);
         }
 
+        private void trackBarGradientIntensity_ValueChanged(object sender, EventArgs e)
+        {
+            labelGradientIntensityValue.Text = trackBarGradientIntensity.Value.ToString() + "%";
+            _settings.StorageHistoryGradientIntensityPercent = trackBarGradientIntensity.Value;
+            storageHistoryChart.SetGradientIntensity(trackBarGradientIntensity.Value);
+        }
+
+        private void dataGridViewRecords_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.ColumnIndex < 0)
+                return;
+
+            string columnName = dataGridViewRecords.Columns[e.ColumnIndex].Name;
+
+            if (string.Equals(_sortColumnName, columnName, StringComparison.Ordinal))
+            {
+                _sortOrder = _sortOrder == SortOrder.Ascending
+                    ? SortOrder.Descending
+                    : SortOrder.Ascending;
+            }
+            else
+            {
+                _sortColumnName = columnName;
+                _sortOrder = columnName == "ColumnDate"
+                    ? SortOrder.Descending
+                    : SortOrder.Ascending;
+            }
+
+            ApplyRecordSort();
+        }
+
         private void BindRecords(IReadOnlyList<StorageHistoryRecord> records)
         {
             _currentRecords = records ?? Array.Empty<StorageHistoryRecord>();
@@ -242,6 +428,9 @@ namespace WTF
 
                 rows.Add(new StorageHistoryRow
                 {
+                    DateValue = record.RecordedAtUtc.ToLocalTime(),
+                    SizeValue = currentSize,
+                    ChangeValue = change,
                     Date = record.RecordedAtUtc.ToLocalTime().ToString("g"),
                     Size = SizeFormatter.Format(currentSize),
                     Change = change.HasValue
@@ -252,13 +441,57 @@ namespace WTF
                 previousSize = currentSize;
             }
 
-            rows.Reverse();
-            dataGridViewRecords.DataSource = rows;
+            _currentRows = rows;
             dataGridViewRecords.Columns["ColumnSize"].HeaderText = LocalizationService.GetText(
                 displayMode == StorageHistoryDisplayMode.FreeSpace
                     ? "StorageHistory.Free"
                     : "StorageHistory.Used");
+
+            ApplyRecordSort();
+            storageHistoryChart.SetGradientIntensity(trackBarGradientIntensity.Value);
             storageHistoryChart.SetRecords(orderedRecords, displayMode);
+        }
+
+        private void ApplyRecordSort()
+        {
+            IEnumerable<StorageHistoryRow> sortedRows;
+
+            switch (_sortColumnName)
+            {
+                case "ColumnSize":
+                    sortedRows = _sortOrder == SortOrder.Ascending
+                        ? _currentRows.OrderBy(row => row.SizeValue)
+                        : _currentRows.OrderByDescending(row => row.SizeValue);
+                    break;
+
+                case "ColumnChange":
+                    sortedRows = _sortOrder == SortOrder.Ascending
+                        ? _currentRows
+                            .OrderBy(row => row.ChangeValue.HasValue ? 0 : 1)
+                            .ThenBy(row => row.ChangeValue.GetValueOrDefault())
+                        : _currentRows
+                            .OrderBy(row => row.ChangeValue.HasValue ? 0 : 1)
+                            .ThenByDescending(row => row.ChangeValue.GetValueOrDefault());
+                    break;
+
+                default:
+                    sortedRows = _sortOrder == SortOrder.Ascending
+                        ? _currentRows.OrderBy(row => row.DateValue)
+                        : _currentRows.OrderByDescending(row => row.DateValue);
+                    break;
+            }
+
+            dataGridViewRecords.DataSource = sortedRows.ToList();
+
+            foreach (DataGridViewColumn column in dataGridViewRecords.Columns)
+            {
+                column.HeaderCell.SortGlyphDirection = SortOrder.None;
+            }
+
+            if (dataGridViewRecords.Columns.Contains(_sortColumnName))
+            {
+                dataGridViewRecords.Columns[_sortColumnName].HeaderCell.SortGlyphDirection = _sortOrder;
+            }
         }
 
         private StorageHistoryDisplayMode GetDisplayMode()
@@ -266,12 +499,10 @@ namespace WTF
             if (comboBoxDisplayMode.SelectedItem is StorageHistoryDisplayModeItem item)
                 return item.DisplayMode;
 
-            return StorageHistoryDisplayMode.UsedSpace;
+            return StorageHistoryDisplayMode.FreeSpace;
         }
 
-        private static long GetDisplayValue(
-            StorageHistoryRecord record,
-            StorageHistoryDisplayMode displayMode)
+        private static long GetDisplayValue(StorageHistoryRecord record, StorageHistoryDisplayMode displayMode)
         {
             if (displayMode == StorageHistoryDisplayMode.FreeSpace)
             {
@@ -316,11 +547,47 @@ namespace WTF
             LoadPaths();
         }
 
+        private bool IsDarkMode()
+        {
+            if (_settings.Layout == AppLayout.WindowsDarkMode)
+                return true;
+
+            if (_settings.Layout == AppLayout.WindowsLightMode)
+                return false;
+
+            try
+            {
+                using Microsoft.Win32.RegistryKey key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+
+                object value = key?.GetValue("AppsUseLightTheme");
+
+                if (value is int appsUseLightTheme)
+                {
+                    return appsUseLightTheme == 0;
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
+        }
+
+        private static int Clamp(int value, int minimum, int maximum)
+        {
+            if (value < minimum)
+                return minimum;
+
+            if (value > maximum)
+                return maximum;
+
+            return value;
+        }
+
         private sealed class StorageHistoryDisplayModeItem
         {
-            public StorageHistoryDisplayModeItem(
-                StorageHistoryDisplayMode displayMode,
-                string text)
+            public StorageHistoryDisplayModeItem(StorageHistoryDisplayMode displayMode, string text)
             {
                 DisplayMode = displayMode;
                 Text = text;
@@ -337,6 +604,9 @@ namespace WTF
 
         private sealed class StorageHistoryRow
         {
+            public DateTime DateValue { get; set; }
+            public long SizeValue { get; set; }
+            public long? ChangeValue { get; set; }
             public string Date { get; set; }
             public string Size { get; set; }
             public string Change { get; set; }

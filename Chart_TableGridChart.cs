@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using Lucid.Controls.GridView;
 
 namespace WTF
 {
-    public sealed class Chart_TableGridChart : DataGridView
+    public sealed class Chart_TableGridChart : LucidDataGridView
     {
         private bool _applyingColumnWidths;
         private List<EntryChartItem> _rows = new List<EntryChartItem>();
@@ -533,13 +534,19 @@ namespace WTF
             }
 
             string text = percent.ToString("0.0") + " %";
+            int textCenterX = e.CellBounds.Left + e.CellBounds.Width / 2;
+            bool textCenterIsInsideFill = fillBounds.Width > 0 &&
+                textCenterX <= fillBounds.Right;
+            System.Drawing.Color textColor = textCenterIsInsideFill
+                ? System.Drawing.Color.White
+                : System.Drawing.Color.Black;
 
             TextRenderer.DrawText(
                 e.Graphics,
                 text,
                 e.CellStyle.Font,
                 e.CellBounds,
-                e.CellStyle.ForeColor,
+                textColor,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
             e.Paint(e.CellBounds, DataGridViewPaintParts.Border);
