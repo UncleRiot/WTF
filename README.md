@@ -4,16 +4,20 @@ WTF is a lightweight Windows disk space analyzer for quickly finding where stora
 Multilingual support comming, when requested - (Now: English/German)
 
 
-# Table-Chart
+# Main Window(s)
 
 <br>
-<img width="1158" height="819" alt="grafik" src="https://github.com/user-attachments/assets/3c260bdc-be9b-4fa0-9e53-f409df33c3be" />
+<img width="2245" height="1138" alt="grafik" src="https://github.com/user-attachments/assets/eb693c3f-486a-46da-9f55-4c16c3b99d78" />
+<br>
 <br>
 
-# Bar Chart
+# Pie-Chart / Tableview
 
 <br>
-<img width="1158" height="819" alt="grafik" src="https://github.com/user-attachments/assets/bbb4cc3b-ab20-4912-be07-91e089463234" />
+<img width="1385" height="861" alt="grafik" src="https://github.com/user-attachments/assets/05805224-d919-4237-8d0e-25623d840068" />
+<br>
+<img width="1385" height="861" alt="grafik" src="https://github.com/user-attachments/assets/92f74423-8ca9-4356-8cde-4b97f68f1b7e" />
+<br>
 <br>
 
 
@@ -21,6 +25,8 @@ Multilingual support comming, when requested - (Now: English/German)
 
 <br>
 <img width="381" height="227" alt="grafik" src="https://github.com/user-attachments/assets/22c7b85d-8baf-4f42-90d9-8be73c0f2705" />
+
+<br>
 <br>
 
 
