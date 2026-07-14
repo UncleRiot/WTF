@@ -4,32 +4,32 @@ WTF is a lightweight Windows disk space analyzer for quickly finding where stora
 Multilingual support comming, when requested - (Now: English/German)
 
 
-# Table-Chart
+# Main Window and history
 
 <br>
-<img width="1158" height="819" alt="grafik" src="https://github.com/user-attachments/assets/3c260bdc-be9b-4fa0-9e53-f409df33c3be" />
-<br>
-
-# Bar Chart
+<img width="2226" height="1087" alt="grafik" src="https://github.com/user-attachments/assets/144345cb-e280-417d-ad63-15b789199e06" />
 
 <br>
-<img width="1158" height="819" alt="grafik" src="https://github.com/user-attachments/assets/bbb4cc3b-ab20-4912-be07-91e089463234" />
 <br>
 
-
-# Export and more
+# Pie-Chart / Tableview
 
 <br>
-<img width="381" height="227" alt="grafik" src="https://github.com/user-attachments/assets/22c7b85d-8baf-4f42-90d9-8be73c0f2705" />
+<img width="1158" height="819" alt="grafik" src="https://github.com/user-attachments/assets/28fd3c50-7257-4b54-b165-c741895820f0" />
+<br>
+<img width="1158" height="819" alt="grafik" src="https://github.com/user-attachments/assets/eb672365-138a-4878-8db2-55b751f54540" />
+<br>
 <br>
 
 
-
-# Options 
+# Settings
 
 <br>
-<img width="462" height="453" alt="grafik" src="https://github.com/user-attachments/assets/2f8baf67-a8cc-4265-91e1-4cabb755c76f" />
+<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/50b8a0f6-6b0b-446f-9e8c-d1cacd29f1c8" />
 <br>
+<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/902de9a5-8013-4d83-b5cf-c528501e26f7" />
+<br>
+
 
 
 
