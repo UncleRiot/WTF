@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -306,6 +306,15 @@ namespace WTF
                 ["Settings.Title"] = "Einstellungen",
                 ["Settings.General"] = "Allgemein",
                 ["Settings.Export"] = "Export",
+                ["Settings.Colors"] = "Farben",
+                ["Settings.LayoutTab"] = "Layout",
+                ["Settings.BarChartBarHeight"] = "Balkenhöhe Bar Chart:",
+                ["Settings.BarChartBarHeightDefault"] = "(Default: {0})",
+                ["Settings.BarChartBarHeightInvalid"] = "Die Balkenhöhe muss zwischen 5 und 30 Pixel liegen.",
+                ["Settings.PartitionFillLight"] = "Füllanzeige – Light Mode:",
+                ["Settings.PartitionFillDark"] = "Füllanzeige – Dark Mode:",
+                ["Settings.SelectColor"] = "Farbe auswählen",
+                ["Settings.Brightness"] = "Helligkeit:",
                 ["Settings.Language"] = "Sprache:",
                 ["Settings.LanguageGerman"] = "Deutsch",
                 ["Settings.LanguageEnglish"] = "Englisch",
@@ -491,6 +500,15 @@ namespace WTF
                 ["Settings.Title"] = "Settings",
                 ["Settings.General"] = "General",
                 ["Settings.Export"] = "Export",
+                ["Settings.Colors"] = "Colors",
+                ["Settings.LayoutTab"] = "Layout",
+                ["Settings.BarChartBarHeight"] = "Bar chart bar height:",
+                ["Settings.BarChartBarHeightDefault"] = "(Default: {0})",
+                ["Settings.BarChartBarHeightInvalid"] = "The bar height must be between 5 and 30 pixels.",
+                ["Settings.PartitionFillLight"] = "Fill indicator – light mode:",
+                ["Settings.PartitionFillDark"] = "Fill indicator – dark mode:",
+                ["Settings.SelectColor"] = "Select color",
+                ["Settings.Brightness"] = "Brightness:",
                 ["Settings.Language"] = "Language:",
                 ["Settings.LanguageGerman"] = "German",
                 ["Settings.LanguageEnglish"] = "English",

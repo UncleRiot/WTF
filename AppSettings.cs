@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -23,6 +23,11 @@ namespace WTF
         public bool ShowFilesInTree { get; set; }
         public bool SkipReparsePoints { get; set; } = true;
         public bool ShowPartitionPanel { get; set; } = true;
+        public int PartitionFillColorLightArgb { get; set; } = unchecked((int)0xFF32CD32);
+        public int PartitionFillBrightnessLightPercent { get; set; } = 100;
+        public int PartitionFillColorDarkArgb { get; set; } = unchecked((int)0xFF32CD32);
+        public int PartitionFillBrightnessDarkPercent { get; set; } = 100;
+        public int BarChartBarHeight { get; set; } = 14;
         public bool ShowElevationPromptOnStartup { get; set; } = true;
         public bool StartElevatedOnStartup { get; set; }
         public bool ShellContextMenuEnabled { get; set; }
@@ -63,6 +68,8 @@ namespace WTF
         public int ToolStripViewModeTop { get; set; }
         public int ToolStripExportLeft { get; set; }
         public int ToolStripExportTop { get; set; }
+        public int ToolStripFeaturesLeft { get; set; }
+        public int ToolStripFeaturesTop { get; set; }
 
         public bool HasSplitterLayout { get; set; }
         public int SplitContainerMainDistance { get; set; }
@@ -97,6 +104,15 @@ namespace WTF
                 settings.StorageHistoryGradientIntensityPercent = Math.Max(
                     0,
                     Math.Min(100, settings.StorageHistoryGradientIntensityPercent));
+                settings.PartitionFillBrightnessLightPercent = Math.Max(
+                    0,
+                    Math.Min(200, settings.PartitionFillBrightnessLightPercent));
+                settings.PartitionFillBrightnessDarkPercent = Math.Max(
+                    0,
+                    Math.Min(200, settings.PartitionFillBrightnessDarkPercent));
+                settings.BarChartBarHeight = Math.Max(
+                    5,
+                    Math.Min(30, settings.BarChartBarHeight));
 
                 return settings;
             }

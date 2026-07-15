@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -153,19 +153,20 @@ namespace WTF
             }
             else if (control is ComboBox comboBox)
             {
-                comboBox.FlatStyle = useDarkMode ? FlatStyle.Flat : FlatStyle.Standard;
-                comboBox.BackColor = windowBackColor;
-                comboBox.ForeColor = textColor;
-
-                if (comboBox.DrawMode != DrawMode.OwnerDrawFixed)
+                if (comboBox.Parent is not ToolStrip)
                 {
-                    comboBox.DrawMode = useDarkMode ? DrawMode.OwnerDrawFixed : DrawMode.Normal;
-                }
-
-                if (useDarkMode)
-                {
+                    comboBox.FlatStyle = useDarkMode ? FlatStyle.Flat : FlatStyle.Standard;
+                    comboBox.BackColor = windowBackColor;
+                    comboBox.ForeColor = textColor;
                     comboBox.DrawItem -= comboBox_DrawItem;
-                    comboBox.DrawItem += comboBox_DrawItem;
+                    comboBox.DrawMode = useDarkMode
+                        ? DrawMode.OwnerDrawFixed
+                        : DrawMode.Normal;
+
+                    if (useDarkMode)
+                    {
+                        comboBox.DrawItem += comboBox_DrawItem;
+                    }
                 }
             }
             else if (control is Button button)
@@ -456,6 +457,19 @@ namespace WTF
             item.ForeColor = useDarkMode
                 ? Color.White
                 : SystemColors.ControlText;
+
+            if (item is ToolStripComboBox toolStripComboBox)
+            {
+                toolStripComboBox.ComboBox.BackColor = useDarkMode
+                    ? Color.FromArgb(32, 32, 32)
+                    : SystemColors.Window;
+
+                toolStripComboBox.ComboBox.ForeColor = useDarkMode
+                    ? Color.White
+                    : SystemColors.WindowText;
+
+                toolStripComboBox.ComboBox.Invalidate();
+            }
         }
 
         private static void SetImmersiveDarkMode(Form form, bool enabled)
@@ -551,6 +565,40 @@ namespace WTF
 
                 using SolidBrush brush = new SolidBrush(backColor);
                 e.Graphics.FillRectangle(brush, bounds);
+            }
+
+            protected override void OnRenderButtonBackground(ToolStripItemRenderEventArgs e)
+            {
+                Rectangle bounds = new Rectangle(Point.Empty, e.Item.Size);
+
+                Color backColor;
+
+                if (e.Item.Pressed || (e.Item is ToolStripButton button && button.Checked))
+                {
+                    backColor = Color.FromArgb(72, 72, 72);
+                }
+                else if (e.Item.Selected)
+                {
+                    backColor = Color.FromArgb(65, 65, 65);
+                }
+                else
+                {
+                    backColor = Color.FromArgb(45, 45, 45);
+                }
+
+                using SolidBrush brush = new SolidBrush(backColor);
+                e.Graphics.FillRectangle(brush, bounds);
+
+                if (e.Item.Selected || e.Item.Pressed)
+                {
+                    using Pen borderPen = new Pen(Color.FromArgb(95, 95, 95));
+                    e.Graphics.DrawRectangle(
+                        borderPen,
+                        0,
+                        0,
+                        Math.Max(0, bounds.Width - 1),
+                        Math.Max(0, bounds.Height - 1));
+                }
             }
 
             protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)

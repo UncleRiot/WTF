@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -14,6 +14,7 @@ namespace WTF
         private readonly ToolStrip _toolStripMain;
         private readonly ToolStrip _toolStripViewMode;
         private readonly ToolStrip _toolStripExport;
+        private readonly ToolStrip _toolStripFeatures;
         private readonly Panel _panelRightViewHost;
         private readonly Chart_TableGridChart _dataGridViewEntries;
         private readonly Chart_PieChart _pieChartView;
@@ -32,6 +33,7 @@ namespace WTF
             ToolStrip toolStripMain,
             ToolStrip toolStripViewMode,
             ToolStrip toolStripExport,
+            ToolStrip toolStripFeatures,
             Panel panelRightViewHost,
             Chart_TableGridChart dataGridViewEntries,
             Chart_PieChart pieChartView,
@@ -49,6 +51,7 @@ namespace WTF
             _toolStripMain = toolStripMain ?? throw new ArgumentNullException(nameof(toolStripMain));
             _toolStripViewMode = toolStripViewMode ?? throw new ArgumentNullException(nameof(toolStripViewMode));
             _toolStripExport = toolStripExport ?? throw new ArgumentNullException(nameof(toolStripExport));
+            _toolStripFeatures = toolStripFeatures ?? throw new ArgumentNullException(nameof(toolStripFeatures));
             _panelRightViewHost = panelRightViewHost ?? throw new ArgumentNullException(nameof(panelRightViewHost));
             _dataGridViewEntries = dataGridViewEntries ?? throw new ArgumentNullException(nameof(dataGridViewEntries));
             _pieChartView = pieChartView ?? throw new ArgumentNullException(nameof(pieChartView));
@@ -141,6 +144,7 @@ namespace WTF
 
             try
             {
+                _toolStripPanelMain.Join(_toolStripFeatures, 0, 0);
                 _toolStripPanelMain.Join(_toolStripExport, 0, 0);
                 _toolStripPanelMain.Join(_toolStripViewMode, 0, 0);
                 _toolStripPanelMain.Join(_toolStripMain, 0, 0);
@@ -156,7 +160,8 @@ namespace WTF
             if (!_settings.HasToolStripLayout)
                 return;
 
-            if (_settings.ToolStripLayoutVersion != 3)
+            if (_settings.ToolStripLayoutVersion != 3 &&
+                _settings.ToolStripLayoutVersion != 4)
                 return;
 
             _toolStripPanelMain.Join(
@@ -173,12 +178,20 @@ namespace WTF
                 _toolStripExport,
                 Math.Max(0, _settings.ToolStripExportLeft),
                 Math.Max(0, _settings.ToolStripExportTop));
+
+            if (_settings.ToolStripLayoutVersion >= 4)
+            {
+                _toolStripPanelMain.Join(
+                    _toolStripFeatures,
+                    Math.Max(0, _settings.ToolStripFeaturesLeft),
+                    Math.Max(0, _settings.ToolStripFeaturesTop));
+            }
         }
 
         public void SaveToolStripLayout()
         {
             _settings.HasToolStripLayout = true;
-            _settings.ToolStripLayoutVersion = 3;
+            _settings.ToolStripLayoutVersion = 4;
 
             _settings.ToolStripMainLeft = _toolStripMain.Left;
             _settings.ToolStripMainTop = _toolStripMain.Top;
@@ -188,6 +201,9 @@ namespace WTF
 
             _settings.ToolStripExportLeft = _toolStripExport.Left;
             _settings.ToolStripExportTop = _toolStripExport.Top;
+
+            _settings.ToolStripFeaturesLeft = _toolStripFeatures.Left;
+            _settings.ToolStripFeaturesTop = _toolStripFeatures.Top;
         }
 
         public void SaveViewSettings()

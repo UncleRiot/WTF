@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
@@ -307,7 +307,7 @@ namespace WTF
 
                 int barWidth = (int)Math.Round(barBounds.Width * freePercent / 100D);
                 Color emptyColor = ThemeProvider.Theme.Colors.BackgroundTertiary;
-                Color fillColor = Color.LimeGreen;
+                Color fillColor = GetPartitionFillColor();
                 Color borderColor = ThemeProvider.Theme.Colors.SurfaceHighlight;
 
                 using (SolidBrush emptyBrush = new SolidBrush(emptyColor))
@@ -391,6 +391,34 @@ namespace WTF
             }
 
             return false;
+        }
+
+        private Color GetPartitionFillColor()
+        {
+            bool useDarkMode = IsDarkMode();
+
+            int argb = useDarkMode
+                ? _settings.PartitionFillColorDarkArgb
+                : _settings.PartitionFillColorLightArgb;
+
+            int brightnessPercent = useDarkMode
+                ? _settings.PartitionFillBrightnessDarkPercent
+                : _settings.PartitionFillBrightnessLightPercent;
+
+            return ApplyBrightness(
+                Color.FromArgb(argb),
+                brightnessPercent);
+        }
+
+        private static Color ApplyBrightness(Color color, int brightnessPercent)
+        {
+            double factor = Math.Max(0, Math.Min(200, brightnessPercent)) / 100D;
+
+            return Color.FromArgb(
+                color.A,
+                Math.Max(0, Math.Min(255, (int)Math.Round(color.R * factor))),
+                Math.Max(0, Math.Min(255, (int)Math.Round(color.G * factor))),
+                Math.Max(0, Math.Min(255, (int)Math.Round(color.B * factor))));
         }
 
         private void listViewPartitions_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)

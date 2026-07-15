@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -41,16 +41,20 @@ namespace WTF
         private ToolStripPanel toolStripPanelMain;
         private ToolStrip toolStripMain;
         private ToolStripLabel toolStripLabelDrive;
-        private ToolStripComboBox toolStripComboBoxDrives;
+        private ComboBox toolStripComboBoxDrives;
+        private ToolStripControlHost toolStripComboBoxDrivesHost;
         private ToolStripButton toolStripButtonScan;
         private ToolStripButton toolStripButtonPause;
         private ToolStripButton toolStripButtonOpenFolder;
         private ToolStrip toolStripViewMode;
         private ToolStrip toolStripExport;
+        private ToolStrip toolStripFeatures;
         private ToolStripButton toolStripButtonTable;
         private ToolStripButton toolStripButtonPieChart;
         private ToolStripButton toolStripButtonBarChart;
         private ToolStripButton toolStripButtonExportCsv;
+        private ToolStripButton toolStripButtonAnalysis;
+        private ToolStripButton toolStripButtonStorageHistory;
         private SplitContainer splitContainerMain;
         private SplitContainer splitContainerLeft;
         private TreeEntrySizeBarView treeViewEntries;
@@ -106,10 +110,7 @@ namespace WTF
                 ? Color.White
                 : Color.Black;
 
-            toolStripComboBoxDrives.BackColor = backColor;
-            toolStripComboBoxDrives.ForeColor = foreColor;
-            toolStripComboBoxDrives.ComboBox.BackColor = backColor;
-            toolStripComboBoxDrives.ComboBox.ForeColor = foreColor;
+            _driveComboBoxController.ApplyTheme(backColor, foreColor);
         }
 
         private void MainForm_SizeChanged(object sender, EventArgs e)
@@ -159,6 +160,7 @@ namespace WTF
                 toolStripMain,
                 toolStripViewMode,
                 toolStripExport,
+                toolStripFeatures,
                 panelRightViewHost,
                 dataGridViewEntries,
                 pieChartView,
@@ -214,12 +216,14 @@ namespace WTF
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
             toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
             toolStripExport.GripStyle = ToolStripGripStyle.Visible;
+            toolStripFeatures.GripStyle = ToolStripGripStyle.Visible;
             _driveComboBoxController.LoadDrives();
             _partitionGridController.LoadPartitionList();
             _partitionGridController.AdjustColumns();
             _partitionGridController.UpdatePartitionPanelVisibility();
             _layoutMainFormController.SetViewMode(_settings.SelectedViewMode, _suspendPersistentSettingsSave);
             _layoutMainFormController.UpdateRightViewBounds();
+            SetScanningState(false);
 
             _suspendPersistentSettingsSave = false;
         }
@@ -377,15 +381,26 @@ namespace WTF
             toolStripMain.Margin = new Padding(0);
 
             toolStripLabelDrive = new ToolStripLabel(LocalizationService.GetText("Toolbar.Drive"));
-            toolStripComboBoxDrives = new ToolStripComboBox();
+            toolStripComboBoxDrives = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                DrawMode = DrawMode.OwnerDrawFixed,
+                FlatStyle = FlatStyle.Flat,
+                IntegralHeight = false,
+                ItemHeight = 20,
+                Size = new Size(260, 28)
+            };
+            toolStripComboBoxDrivesHost = new ToolStripControlHost(toolStripComboBoxDrives)
+            {
+                AutoSize = false,
+                Size = new Size(260, 28),
+                Margin = new Padding(0)
+            };
             toolStripButtonScan = new ToolStripButton("▶");
             toolStripButtonPause = new ToolStripButton("⏸");
             toolStripButtonOpenFolder = new ToolStripButton(LocalizationService.GetText("Toolbar.Open"));
 
             toolStripLabelDrive.Margin = new Padding(0, 1, 0, 2);
-            toolStripComboBoxDrives.DropDownStyle = ComboBoxStyle.DropDownList;
-            toolStripComboBoxDrives.AutoSize = false;
-            toolStripComboBoxDrives.Width = 260;
             toolStripButtonScan.DisplayStyle = ToolStripItemDisplayStyle.Text;
             toolStripButtonScan.ToolTipText = LocalizationService.GetText("Toolbar.ScanStart");
             toolStripButtonScan.Click += toolStripButtonScan_Click;
@@ -398,7 +413,7 @@ namespace WTF
             toolStripButtonOpenFolder.Click += toolStripButtonOpenFolder_Click;
 
             toolStripMain.Items.Add(toolStripLabelDrive);
-            toolStripMain.Items.Add(toolStripComboBoxDrives);
+            toolStripMain.Items.Add(toolStripComboBoxDrivesHost);
             toolStripMain.Items.Add(toolStripButtonScan);
             toolStripMain.Items.Add(toolStripButtonPause);
             toolStripMain.Items.Add(toolStripButtonOpenFolder);
@@ -443,9 +458,30 @@ namespace WTF
 
             toolStripExport.Items.Add(toolStripButtonExportCsv);
 
+            toolStripFeatures = new ToolStrip();
+            toolStripFeatures.Dock = DockStyle.None;
+            toolStripFeatures.GripStyle = ToolStripGripStyle.Visible;
+            toolStripFeatures.AllowItemReorder = true;
+            toolStripFeatures.Padding = new Padding(0);
+            toolStripFeatures.Margin = new Padding(0);
+
+            toolStripButtonAnalysis = new ToolStripButton(LocalizationService.GetText("Menu.Analysis"));
+            toolStripButtonAnalysis.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
+            toolStripButtonAnalysis.Image = CreateAnalysisButtonImage();
+            toolStripButtonAnalysis.Click += menuItemAdvancedFeatures_Click;
+
+            toolStripButtonStorageHistory = new ToolStripButton(LocalizationService.GetText("Menu.StorageHistory"));
+            toolStripButtonStorageHistory.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
+            toolStripButtonStorageHistory.Image = CreateStorageHistoryButtonImage();
+            toolStripButtonStorageHistory.Click += menuItemStorageHistory_Click;
+
+            toolStripFeatures.Items.Add(toolStripButtonAnalysis);
+            toolStripFeatures.Items.Add(toolStripButtonStorageHistory);
+
             toolStripPanelMain.Join(toolStripMain, 0, 0);
             toolStripPanelMain.Join(toolStripViewMode, 340, 0);
             toolStripPanelMain.Join(toolStripExport, 610, 0);
+            toolStripPanelMain.Join(toolStripFeatures, 720, 0);
 
             splitContainerMain = new SplitContainer();
             splitContainerMain.Dock = DockStyle.Fill;
@@ -536,7 +572,8 @@ namespace WTF
             {
                 Name = "barChartView",
                 Dock = DockStyle.Fill,
-                Visible = false
+                Visible = false,
+                BarHeight = _settings.BarChartBarHeight
             };
 
             panelRightViewHost = new Panel
@@ -659,6 +696,8 @@ namespace WTF
             toolStripButtonBarChart.Text = LocalizationService.GetText("Toolbar.BarChart");
             toolStripButtonExportCsv.Text = LocalizationService.GetText("Toolbar.Export");
             toolStripButtonExportCsv.ToolTipText = LocalizationService.GetText("Toolbar.ExportCsv");
+            toolStripButtonAnalysis.Text = LocalizationService.GetText("Menu.Analysis");
+            toolStripButtonStorageHistory.Text = LocalizationService.GetText("Menu.StorageHistory");
 
             contextMenuItemOpenInExplorer.Text = LocalizationService.GetText("Context.OpenInExplorer");
             contextMenuItemExport.Text = LocalizationService.GetText("Context.Export");
@@ -670,6 +709,55 @@ namespace WTF
             _partitionGridController?.ApplyLocalizedTexts();
 
             dataGridViewEntries.ApplyLocalizedTexts();
+        }
+
+        private System.Drawing.Bitmap CreateAnalysisButtonImage()
+        {
+            System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(16, 16, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+            using (System.Drawing.Graphics graphics = System.Drawing.Graphics.FromImage(bitmap))
+            {
+                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                graphics.Clear(System.Drawing.Color.Transparent);
+
+                using System.Drawing.Pen axisPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(110, 110, 110));
+                using System.Drawing.Pen graphPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0, 120, 215), 2f);
+
+                graphics.DrawLine(axisPen, 2, 2, 2, 13);
+                graphics.DrawLine(axisPen, 2, 13, 14, 13);
+
+                System.Drawing.Point[] points =
+                {
+                    new System.Drawing.Point(3, 11),
+                    new System.Drawing.Point(6, 8),
+                    new System.Drawing.Point(9, 10),
+                    new System.Drawing.Point(13, 4)
+                };
+
+                graphics.DrawLines(graphPen, points);
+            }
+
+            return bitmap;
+        }
+
+        private System.Drawing.Bitmap CreateStorageHistoryButtonImage()
+        {
+            System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(16, 16, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+            using (System.Drawing.Graphics graphics = System.Drawing.Graphics.FromImage(bitmap))
+            {
+                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                graphics.Clear(System.Drawing.Color.Transparent);
+
+                using System.Drawing.Pen clockPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0, 120, 215), 2f);
+                using System.Drawing.Pen handPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(90, 90, 90), 2f);
+
+                graphics.DrawEllipse(clockPen, 2, 2, 12, 12);
+                graphics.DrawLine(handPen, 8, 8, 8, 4);
+                graphics.DrawLine(handPen, 8, 8, 11, 10);
+            }
+
+            return bitmap;
         }
 
         private System.Drawing.Bitmap CreateExportButtonImage()
@@ -1062,6 +1150,7 @@ namespace WTF
             menuItemExportCsv.Enabled = !scanning && _currentRootEntry != null;
             menuItemSaveScanResult.Enabled = !scanning && _currentRootEntry != null;
             menuItemAdvancedFeatures.Enabled = !scanning && _currentRootEntry != null;
+            toolStripButtonAnalysis.Enabled = !scanning && _currentRootEntry != null;
             toolStripButtonExportCsv.Enabled = !scanning && _currentRootEntry != null;
             splitContainerMain.IsSplitterFixed = false;
             splitContainerLeft.IsSplitterFixed = false;
@@ -1241,9 +1330,11 @@ namespace WTF
             ApplyLocalizedTexts();
             _driveComboBoxController.LoadDrives();
             WindowsFormStyler.Apply(this, _settings.Layout);
+            ApplyDriveComboBoxTheme();
             treeViewEntries.Invalidate();
             listViewPartitions.Invalidate();
             dataGridViewEntries.Invalidate();
+            barChartView.BarHeight = _settings.BarChartBarHeight;
             toolStripMain.GripStyle = ToolStripGripStyle.Visible;
             toolStripViewMode.GripStyle = ToolStripGripStyle.Visible;
             _partitionGridController.UpdatePartitionPanelVisibility();

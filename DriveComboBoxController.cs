@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -8,13 +8,15 @@ namespace WTF
 {
     public sealed class DriveComboBoxController
     {
-        private readonly ToolStripComboBox _toolStripComboBoxDrives;
+        private readonly ComboBox _toolStripComboBoxDrives;
         private readonly ShellIconService _shellIconService;
         private readonly Action<string> _updateStatusStripForDrive;
         private readonly Action<string> _scanPathSelectionCommitted;
+        private Color _backColor;
+        private Color _foreColor;
 
         public DriveComboBoxController(
-            ToolStripComboBox toolStripComboBoxDrives,
+            ComboBox toolStripComboBoxDrives,
             ShellIconService shellIconService,
             Action<string> updateStatusStripForDrive,
             Action<string> scanPathSelectionCommitted)
@@ -23,6 +25,8 @@ namespace WTF
             _shellIconService = shellIconService;
             _updateStatusStripForDrive = updateStatusStripForDrive;
             _scanPathSelectionCommitted = scanPathSelectionCommitted;
+            _backColor = SystemColors.Window;
+            _foreColor = SystemColors.WindowText;
         }
 
         public void Configure()
@@ -31,12 +35,14 @@ namespace WTF
                 return;
 
             _toolStripComboBoxDrives.DropDownStyle = ComboBoxStyle.DropDownList;
-            _toolStripComboBoxDrives.ComboBox.DrawMode = DrawMode.OwnerDrawFixed;
-            _toolStripComboBoxDrives.ComboBox.ItemHeight = Math.Max(20, _toolStripComboBoxDrives.ComboBox.ItemHeight);
-            _toolStripComboBoxDrives.ComboBox.DrawItem -= toolStripComboBoxDrives_DrawItem;
-            _toolStripComboBoxDrives.ComboBox.DrawItem += toolStripComboBoxDrives_DrawItem;
-            _toolStripComboBoxDrives.ComboBox.SelectionChangeCommitted -= toolStripComboBoxDrives_SelectionChangeCommitted;
-            _toolStripComboBoxDrives.ComboBox.SelectionChangeCommitted += toolStripComboBoxDrives_SelectionChangeCommitted;
+            _toolStripComboBoxDrives.DrawMode = DrawMode.OwnerDrawFixed;
+            _toolStripComboBoxDrives.FlatStyle = FlatStyle.Flat;
+            _toolStripComboBoxDrives.IntegralHeight = false;
+            _toolStripComboBoxDrives.ItemHeight = 20;
+            _toolStripComboBoxDrives.DrawItem -= toolStripComboBoxDrives_DrawItem;
+            _toolStripComboBoxDrives.DrawItem += toolStripComboBoxDrives_DrawItem;
+            _toolStripComboBoxDrives.SelectionChangeCommitted -= toolStripComboBoxDrives_SelectionChangeCommitted;
+            _toolStripComboBoxDrives.SelectionChangeCommitted += toolStripComboBoxDrives_SelectionChangeCommitted;
         }
 
         public void LoadDrives()
@@ -113,6 +119,21 @@ namespace WTF
             _toolStripComboBoxDrives.Enabled = enabled;
         }
 
+        public void ApplyTheme(Color backColor, Color foreColor)
+        {
+            if (_toolStripComboBoxDrives == null)
+                return;
+
+            _backColor = backColor;
+            _foreColor = foreColor;
+
+            _toolStripComboBoxDrives.BackColor = backColor;
+            _toolStripComboBoxDrives.ForeColor = foreColor;
+            _toolStripComboBoxDrives.FlatStyle = FlatStyle.Flat;
+            _toolStripComboBoxDrives.Invalidate();
+            _toolStripComboBoxDrives.Update();
+        }
+
         private List<DriveItem> GetReadyDrives()
         {
             List<DriveItem> drives = new List<DriveItem>();
@@ -149,12 +170,25 @@ namespace WTF
 
         private void toolStripComboBoxDrives_DrawItem(object sender, DrawItemEventArgs e)
         {
-            e.DrawBackground();
-
             if (e.Index < 0)
                 return;
 
             ComboBox comboBox = (ComboBox)sender;
+            bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+
+            Color backgroundColor = isSelected
+                ? SystemColors.Highlight
+                : _backColor;
+
+            Color textColor = isSelected
+                ? SystemColors.HighlightText
+                : _foreColor;
+
+            using (SolidBrush backgroundBrush = new SolidBrush(backgroundColor))
+            {
+                e.Graphics.FillRectangle(backgroundBrush, e.Bounds);
+            }
+
             object item = comboBox.Items[e.Index];
 
             string text = item == null
@@ -162,10 +196,6 @@ namespace WTF
                 : item.ToString();
 
             string iconPath = GetDriveComboBoxItemIconPath(item);
-
-            Color textColor = (e.State & DrawItemState.Selected) == DrawItemState.Selected
-                ? SystemColors.HighlightText
-                : comboBox.ForeColor;
 
             int iconLeft = e.Bounds.Left + 3;
             int iconTop = e.Bounds.Top + Math.Max(0, (e.Bounds.Height - 16) / 2);

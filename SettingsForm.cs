@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
 using Lucid.Controls;
@@ -12,9 +12,13 @@ namespace WTF
 
         private LucidButton buttonGeneralTab;
         private LucidButton buttonExportTab;
+        private LucidButton buttonColorsTab;
+        private LucidButton buttonLayoutTab;
         private Panel panelPageHost;
         private Panel panelGeneral;
         private Panel panelExport;
+        private Panel panelColors;
+        private Panel panelLayout;
         private LucidCheckBox checkBoxShowFilesInTree;
         private LucidCheckBox checkBoxSkipReparsePoints;
         private LucidCheckBox checkBoxShowPartitionPanel;
@@ -22,14 +26,31 @@ namespace WTF
         private LucidCheckBox checkBoxShowElevationPromptOnStartup;
         private LucidCheckBox checkBoxShellContextMenuEnabled;
         private LucidLabel labelLanguage;
-        private LucidComboBox comboBoxLanguage;
+        private ComboBox comboBoxLanguage;
         private LucidLabel labelLayout;
-        private LucidComboBox comboBoxLayout;
+        private ComboBox comboBoxLayout;
         private LucidCheckBox checkBoxExportPath;
         private LucidCheckBox checkBoxExportSizeGb;
         private LucidCheckBox checkBoxExportSizeMb;
         private LucidLabel labelExportMaxDepth;
         private LucidTextBox textBoxExportMaxDepth;
+        private LucidLabel labelPartitionFillLight;
+        private LucidButton buttonPartitionFillLightColor;
+        private Panel panelPartitionFillLightPreview;
+        private LucidLabel labelPartitionFillLightBrightness;
+        private TrackBar trackBarPartitionFillLightBrightness;
+        private LucidLabel labelPartitionFillLightBrightnessValue;
+        private LucidLabel labelPartitionFillDark;
+        private LucidButton buttonPartitionFillDarkColor;
+        private Panel panelPartitionFillDarkPreview;
+        private LucidLabel labelPartitionFillDarkBrightness;
+        private TrackBar trackBarPartitionFillDarkBrightness;
+        private LucidLabel labelPartitionFillDarkBrightnessValue;
+        private Color partitionFillLightColor;
+        private Color partitionFillDarkColor;
+        private LucidLabel labelBarChartBarHeight;
+        private LucidTextBox textBoxBarChartBarHeight;
+        private LucidLabel labelBarChartBarHeightDefault;
         private LucidButton buttonOk;
         private LucidButton buttonCancel;
 
@@ -84,6 +105,26 @@ namespace WTF
             };
             buttonExportTab.Click += buttonExportTab_Click;
 
+            buttonColorsTab = new LucidButton
+            {
+                Name = "buttonColorsTab",
+                Text = LocalizationService.GetText("Settings.Colors"),
+                Location = new Point(262, 16),
+                Size = new Size(116, 32),
+                ButtonStyle = LucidButtonStyle.Normal
+            };
+            buttonColorsTab.Click += buttonColorsTab_Click;
+
+            buttonLayoutTab = new LucidButton
+            {
+                Name = "buttonLayoutTab",
+                Text = LocalizationService.GetText("Settings.LayoutTab"),
+                Location = new Point(384, 16),
+                Size = new Size(116, 32),
+                ButtonStyle = LucidButtonStyle.Normal
+            };
+            buttonLayoutTab.Click += buttonLayoutTab_Click;
+
             panelPageHost = new Panel
             {
                 Name = "panelPageHost",
@@ -103,6 +144,22 @@ namespace WTF
             panelExport = new Panel
             {
                 Name = "panelExport",
+                Dock = DockStyle.Fill,
+                BackColor = backgroundSecondary,
+                Visible = false
+            };
+
+            panelColors = new Panel
+            {
+                Name = "panelColors",
+                Dock = DockStyle.Fill,
+                BackColor = backgroundSecondary,
+                Visible = false
+            };
+
+            panelLayout = new Panel
+            {
+                Name = "panelLayout",
                 Dock = DockStyle.Fill,
                 BackColor = backgroundSecondary,
                 Visible = false
@@ -149,12 +206,16 @@ namespace WTF
                 LocalizationService.GetText("Settings.Language"),
                 250);
 
-            comboBoxLanguage = new LucidComboBox
+            comboBoxLanguage = new ComboBox
             {
                 Name = "comboBoxLanguage",
                 Location = new Point(174, 250),
                 Size = new Size(268, 28),
-                DropDownStyle = ComboBoxStyle.DropDownList
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FlatStyle = FlatStyle.Standard,
+                BackColor = backgroundSecondary,
+                ForeColor = ThemeProvider.Theme.Colors.TextPrimary,
+                Font = SystemFonts.MessageBoxFont
             };
 
             comboBoxLanguage.Items.Add(new LanguageItem(
@@ -163,18 +224,21 @@ namespace WTF
             comboBoxLanguage.Items.Add(new LanguageItem(
                 LocalizationService.GetText("Settings.LanguageEnglish"),
                 LocalizationService.EnglishLanguageCode));
-
             labelLayout = CreateLabel(
                 "labelLayout",
                 LocalizationService.GetText("Settings.Layout"),
                 290);
 
-            comboBoxLayout = new LucidComboBox
+            comboBoxLayout = new ComboBox
             {
                 Name = "comboBoxLayout",
                 Location = new Point(174, 290),
                 Size = new Size(268, 28),
-                DropDownStyle = ComboBoxStyle.DropDownList
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FlatStyle = FlatStyle.Standard,
+                BackColor = backgroundSecondary,
+                ForeColor = ThemeProvider.Theme.Colors.TextPrimary,
+                Font = SystemFonts.MessageBoxFont
             };
 
             comboBoxLayout.Items.Add(new LayoutItem(
@@ -186,6 +250,7 @@ namespace WTF
             comboBoxLayout.Items.Add(new LayoutItem(
                 LocalizationService.GetText("Settings.LayoutWindowsDark"),
                 AppLayout.WindowsDarkMode));
+            comboBoxLayout.SelectedIndexChanged += comboBoxLayout_SelectedIndexChanged;
 
             checkBoxExportPath = CreateCheckBox(
                 "checkBoxExportPath",
@@ -222,6 +287,114 @@ namespace WTF
                 TextAlign = HorizontalAlignment.Right
             };
 
+            labelPartitionFillLight = CreateLabel(
+                "labelPartitionFillLight",
+                LocalizationService.GetText("Settings.PartitionFillLight"),
+                24);
+
+            labelPartitionFillLight.Size = new Size(220, 28);
+
+            buttonPartitionFillLightColor = new LucidButton
+            {
+                Name = "buttonPartitionFillLightColor",
+                Text = LocalizationService.GetText("Settings.SelectColor"),
+                Location = new Point(250, 24),
+                Size = new Size(140, 28),
+                ButtonStyle = LucidButtonStyle.Normal
+            };
+            buttonPartitionFillLightColor.Click += buttonPartitionFillLightColor_Click;
+
+            panelPartitionFillLightPreview = new Panel
+            {
+                Name = "panelPartitionFillLightPreview",
+                Location = new Point(400, 24),
+                Size = new Size(42, 28),
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            labelPartitionFillLightBrightness = CreateLabel(
+                "labelPartitionFillLightBrightness",
+                LocalizationService.GetText("Settings.Brightness"),
+                64);
+
+            trackBarPartitionFillLightBrightness = CreateBrightnessTrackBar(
+                "trackBarPartitionFillLightBrightness",
+                250,
+                64);
+            trackBarPartitionFillLightBrightness.ValueChanged +=
+                trackBarPartitionFillLightBrightness_ValueChanged;
+
+            labelPartitionFillLightBrightnessValue = CreateBrightnessValueLabel(
+                "labelPartitionFillLightBrightnessValue",
+                404,
+                64);
+
+            labelPartitionFillDark = CreateLabel(
+                "labelPartitionFillDark",
+                LocalizationService.GetText("Settings.PartitionFillDark"),
+                24);
+
+            labelPartitionFillDark.Size = new Size(220, 28);
+
+            buttonPartitionFillDarkColor = new LucidButton
+            {
+                Name = "buttonPartitionFillDarkColor",
+                Text = LocalizationService.GetText("Settings.SelectColor"),
+                Location = new Point(250, 24),
+                Size = new Size(140, 28),
+                ButtonStyle = LucidButtonStyle.Normal
+            };
+            buttonPartitionFillDarkColor.Click += buttonPartitionFillDarkColor_Click;
+
+            panelPartitionFillDarkPreview = new Panel
+            {
+                Name = "panelPartitionFillDarkPreview",
+                Location = new Point(400, 24),
+                Size = new Size(42, 28),
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            labelPartitionFillDarkBrightness = CreateLabel(
+                "labelPartitionFillDarkBrightness",
+                LocalizationService.GetText("Settings.Brightness"),
+                64);
+
+            trackBarPartitionFillDarkBrightness = CreateBrightnessTrackBar(
+                "trackBarPartitionFillDarkBrightness",
+                250,
+                64);
+            trackBarPartitionFillDarkBrightness.ValueChanged +=
+                trackBarPartitionFillDarkBrightness_ValueChanged;
+
+            labelPartitionFillDarkBrightnessValue = CreateBrightnessValueLabel(
+                "labelPartitionFillDarkBrightnessValue",
+                404,
+                64);
+
+            labelBarChartBarHeight = CreateLabel(
+                "labelBarChartBarHeight",
+                LocalizationService.GetText("Settings.BarChartBarHeight"),
+                24);
+            labelBarChartBarHeight.Size = new Size(220, 28);
+
+            textBoxBarChartBarHeight = new LucidTextBox
+            {
+                Name = "textBoxBarChartBarHeight",
+                Location = new Point(253, 24),
+                Size = new Size(45, 25),
+                TextAlign = HorizontalAlignment.Right,
+                MaxLength = 3
+            };
+
+            labelBarChartBarHeightDefault = CreateLabel(
+                "labelBarChartBarHeightDefault",
+                string.Format(
+                    LocalizationService.GetText("Settings.BarChartBarHeightDefault"),
+                    14),
+                24);
+            labelBarChartBarHeightDefault.Location = new Point(308, 24);
+            labelBarChartBarHeightDefault.Size = new Size(160, 28);
+
             panelGeneral.Controls.Add(checkBoxShowFilesInTree);
             panelGeneral.Controls.Add(checkBoxSkipReparsePoints);
             panelGeneral.Controls.Add(checkBoxShowPartitionPanel);
@@ -239,8 +412,27 @@ namespace WTF
             panelExport.Controls.Add(labelExportMaxDepth);
             panelExport.Controls.Add(textBoxExportMaxDepth);
 
+            panelColors.Controls.Add(labelPartitionFillLight);
+            panelColors.Controls.Add(buttonPartitionFillLightColor);
+            panelColors.Controls.Add(panelPartitionFillLightPreview);
+            panelColors.Controls.Add(labelPartitionFillLightBrightness);
+            panelColors.Controls.Add(trackBarPartitionFillLightBrightness);
+            panelColors.Controls.Add(labelPartitionFillLightBrightnessValue);
+            panelColors.Controls.Add(labelPartitionFillDark);
+            panelColors.Controls.Add(buttonPartitionFillDarkColor);
+            panelColors.Controls.Add(panelPartitionFillDarkPreview);
+            panelColors.Controls.Add(labelPartitionFillDarkBrightness);
+            panelColors.Controls.Add(trackBarPartitionFillDarkBrightness);
+            panelColors.Controls.Add(labelPartitionFillDarkBrightnessValue);
+
+            panelLayout.Controls.Add(labelBarChartBarHeight);
+            panelLayout.Controls.Add(textBoxBarChartBarHeight);
+            panelLayout.Controls.Add(labelBarChartBarHeightDefault);
+
             panelPageHost.Controls.Add(panelGeneral);
             panelPageHost.Controls.Add(panelExport);
+            panelPageHost.Controls.Add(panelColors);
+            panelPageHost.Controls.Add(panelLayout);
 
             buttonOk = new LucidButton
             {
@@ -266,6 +458,8 @@ namespace WTF
 
             Controls.Add(buttonGeneralTab);
             Controls.Add(buttonExportTab);
+            Controls.Add(buttonColorsTab);
+            Controls.Add(buttonLayoutTab);
             Controls.Add(panelPageHost);
             Controls.Add(buttonOk);
             Controls.Add(buttonCancel);
@@ -291,6 +485,38 @@ namespace WTF
             };
         }
 
+        private static TrackBar CreateBrightnessTrackBar(
+            string name,
+            int left,
+            int top)
+        {
+            return new TrackBar
+            {
+                Name = name,
+                Location = new Point(left, top),
+                Size = new Size(150, 45),
+                Minimum = 0,
+                Maximum = 200,
+                TickFrequency = 25,
+                SmallChange = 1,
+                LargeChange = 10
+            };
+        }
+
+        private static LucidLabel CreateBrightnessValueLabel(
+            string name,
+            int left,
+            int top)
+        {
+            return new LucidLabel
+            {
+                Name = name,
+                Location = new Point(left, top),
+                Size = new Size(54, 28),
+                TextAlign = ContentAlignment.MiddleRight
+            };
+        }
+
         private static LucidLabel CreateLabel(string name, string text, int top)
         {
             return new LucidLabel
@@ -313,12 +539,72 @@ namespace WTF
             ShowPage(panelExport);
         }
 
+        private void buttonColorsTab_Click(object sender, EventArgs e)
+        {
+            UpdatePartitionFillControlsVisibility();
+            ShowPage(panelColors);
+        }
+
+        private void buttonLayoutTab_Click(object sender, EventArgs e)
+        {
+            ShowPage(panelLayout);
+        }
+
+        private void comboBoxLayout_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            UpdatePartitionFillControlsVisibility();
+        }
+
+        private void buttonPartitionFillLightColor_Click(object sender, EventArgs e)
+        {
+            using ColorDialog colorDialog = new ColorDialog
+            {
+                Color = partitionFillLightColor,
+                FullOpen = true
+            };
+
+            if (colorDialog.ShowDialog(this) == DialogResult.OK)
+            {
+                partitionFillLightColor = colorDialog.Color;
+                UpdateColorPreviews();
+            }
+        }
+
+        private void buttonPartitionFillDarkColor_Click(object sender, EventArgs e)
+        {
+            using ColorDialog colorDialog = new ColorDialog
+            {
+                Color = partitionFillDarkColor,
+                FullOpen = true
+            };
+
+            if (colorDialog.ShowDialog(this) == DialogResult.OK)
+            {
+                partitionFillDarkColor = colorDialog.Color;
+                UpdateColorPreviews();
+            }
+        }
+
+        private void trackBarPartitionFillLightBrightness_ValueChanged(object sender, EventArgs e)
+        {
+            UpdateColorPreviews();
+        }
+
+        private void trackBarPartitionFillDarkBrightness_ValueChanged(object sender, EventArgs e)
+        {
+            UpdateColorPreviews();
+        }
+
         private void ShowPage(Panel page)
         {
             panelGeneral.Visible = page == panelGeneral;
             panelExport.Visible = page == panelExport;
+            panelColors.Visible = page == panelColors;
+            panelLayout.Visible = page == panelLayout;
             buttonGeneralTab.Enabled = page != panelGeneral;
             buttonExportTab.Enabled = page != panelExport;
+            buttonColorsTab.Enabled = page != panelColors;
+            buttonLayoutTab.Enabled = page != panelLayout;
             page.BringToFront();
         }
 
@@ -349,6 +635,21 @@ namespace WTF
             textBoxExportMaxDepth.Text = _settings.ExportMaxDepth.HasValue
                 ? _settings.ExportMaxDepth.Value.ToString()
                 : string.Empty;
+            textBoxBarChartBarHeight.Text = _settings.BarChartBarHeight.ToString();
+
+            partitionFillLightColor = Color.FromArgb(_settings.PartitionFillColorLightArgb);
+            partitionFillDarkColor = Color.FromArgb(_settings.PartitionFillColorDarkArgb);
+            trackBarPartitionFillLightBrightness.Value = Math.Max(
+                trackBarPartitionFillLightBrightness.Minimum,
+                Math.Min(
+                    trackBarPartitionFillLightBrightness.Maximum,
+                    _settings.PartitionFillBrightnessLightPercent));
+            trackBarPartitionFillDarkBrightness.Value = Math.Max(
+                trackBarPartitionFillDarkBrightness.Minimum,
+                Math.Min(
+                    trackBarPartitionFillDarkBrightness.Maximum,
+                    _settings.PartitionFillBrightnessDarkPercent));
+            UpdateColorPreviews();
 
             for (int index = 0; index < comboBoxLanguage.Items.Count; index++)
             {
@@ -393,6 +694,24 @@ namespace WTF
         {
             int? exportMaxDepth = null;
 
+            if (!int.TryParse(
+                    textBoxBarChartBarHeight.Text.Trim(),
+                    out int barChartBarHeight) ||
+                barChartBarHeight < 5 ||
+                barChartBarHeight > 30)
+            {
+                MessageBox.Show(
+                    this,
+                    LocalizationService.GetText("Settings.BarChartBarHeightInvalid"),
+                    Text,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                ShowPage(panelLayout);
+                textBoxBarChartBarHeight.Focus();
+                textBoxBarChartBarHeight.SelectAll();
+                return false;
+            }
+
             if (!string.IsNullOrWhiteSpace(textBoxExportMaxDepth.Text))
             {
                 if (!int.TryParse(
@@ -424,6 +743,13 @@ namespace WTF
             _settings.ExportSizeGb = checkBoxExportSizeGb.Checked;
             _settings.ExportSizeMb = checkBoxExportSizeMb.Checked;
             _settings.ExportMaxDepth = exportMaxDepth;
+            _settings.PartitionFillColorLightArgb = partitionFillLightColor.ToArgb();
+            _settings.PartitionFillBrightnessLightPercent =
+                trackBarPartitionFillLightBrightness.Value;
+            _settings.PartitionFillColorDarkArgb = partitionFillDarkColor.ToArgb();
+            _settings.PartitionFillBrightnessDarkPercent =
+                trackBarPartitionFillDarkBrightness.Value;
+            _settings.BarChartBarHeight = barChartBarHeight;
 
             if (comboBoxLanguage.SelectedItem is LanguageItem selectedLanguageItem)
             {
@@ -453,6 +779,69 @@ namespace WTF
             }
 
             return true;
+        }
+
+        private void UpdatePartitionFillControlsVisibility()
+        {
+            bool useDarkMode;
+
+            if (comboBoxLayout.SelectedItem is LayoutItem selectedLayoutItem)
+            {
+                useDarkMode = selectedLayoutItem.Layout switch
+                {
+                    AppLayout.WindowsDarkMode => true,
+                    AppLayout.WindowsLightMode => false,
+                    _ => ThemeProvider.Theme.Colors.BackgroundPrimary.GetBrightness() < 0.5f
+                };
+            }
+            else
+            {
+                useDarkMode = ThemeProvider.Theme.Colors.BackgroundPrimary.GetBrightness() < 0.5f;
+            }
+
+            labelPartitionFillLight.Visible = !useDarkMode;
+            buttonPartitionFillLightColor.Visible = !useDarkMode;
+            panelPartitionFillLightPreview.Visible = !useDarkMode;
+            labelPartitionFillLightBrightness.Visible = !useDarkMode;
+            trackBarPartitionFillLightBrightness.Visible = !useDarkMode;
+            labelPartitionFillLightBrightnessValue.Visible = !useDarkMode;
+
+            labelPartitionFillDark.Visible = useDarkMode;
+            buttonPartitionFillDarkColor.Visible = useDarkMode;
+            panelPartitionFillDarkPreview.Visible = useDarkMode;
+            labelPartitionFillDarkBrightness.Visible = useDarkMode;
+            trackBarPartitionFillDarkBrightness.Visible = useDarkMode;
+            labelPartitionFillDarkBrightnessValue.Visible = useDarkMode;
+        }
+
+        private void UpdateColorPreviews()
+        {
+            Color lightPreviewColor = ApplyBrightness(
+                partitionFillLightColor,
+                trackBarPartitionFillLightBrightness.Value);
+            Color darkPreviewColor = ApplyBrightness(
+                partitionFillDarkColor,
+                trackBarPartitionFillDarkBrightness.Value);
+
+            panelPartitionFillLightPreview.BackColor = lightPreviewColor;
+            panelPartitionFillDarkPreview.BackColor = darkPreviewColor;
+            labelPartitionFillLightBrightnessValue.Text =
+                trackBarPartitionFillLightBrightness.Value + " %";
+            labelPartitionFillDarkBrightnessValue.Text =
+                trackBarPartitionFillDarkBrightness.Value + " %";
+
+            UpdatePartitionFillControlsVisibility();
+        }
+
+        private static Color ApplyBrightness(Color color, int brightnessPercent)
+        {
+            double factor = Math.Max(0, Math.Min(200, brightnessPercent)) / 100D;
+
+            return Color.FromArgb(
+                color.A,
+                Math.Max(0, Math.Min(255, (int)Math.Round(color.R * factor))),
+                Math.Max(0, Math.Min(255, (int)Math.Round(color.G * factor))),
+                Math.Max(0, Math.Min(255, (int)Math.Round(color.B * factor))));
         }
 
         private sealed class LanguageItem

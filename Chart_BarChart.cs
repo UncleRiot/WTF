@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -35,6 +35,22 @@ namespace WTF
         private readonly Dictionary<string, Bitmap> _systemIconCache;
         private FileSystemEntry _entry;
         private string _currentToolTipText;
+        private int _barHeight = 14;
+
+        public int BarHeight
+        {
+            get => _barHeight;
+            set
+            {
+                int normalizedValue = Math.Max(5, Math.Min(30, value));
+
+                if (_barHeight == normalizedValue)
+                    return;
+
+                _barHeight = normalizedValue;
+                Invalidate();
+            }
+        }
 
         public Chart_BarChart()
         {
@@ -158,8 +174,8 @@ namespace WTF
             int rightMargin = 20;
             int topMargin = 18;
             int labelToBarGap = 20;
-            int rowHeight = 21;
-            int barHeight = 14;
+            int barHeight = BarHeight;
+            int rowHeight = Math.Max(21, barHeight + 7);
             int iconSize = 16;
             int iconToTextGap = 6;
             int textPaddingLeft = 10;

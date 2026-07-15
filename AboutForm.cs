@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.IO;
 using System.Net.Http;
@@ -13,6 +13,7 @@ namespace WTF
     {
         private const string GitHubRepositoryUrl = "https://github.com/UncleRiot/WTF";
         private const string GitHubLatestReleaseApiUrl = "https://api.github.com/repos/UncleRiot/WTF/releases/latest";
+        private const string HelpUrl = "https://github.com/UncleRiot/WTF/wiki";
         private const string KoFiUrl = "https://ko-fi.com/uncleriot";
 
         private readonly AppSettings _settings;
@@ -23,6 +24,7 @@ namespace WTF
         private Label labelVersion;
         private LinkLabel linkLabelUpdate;
         private LinkLabel linkLabelGithub;
+        private LinkLabel linkLabelHelp;
         private Label labelKoFiText;
         private PictureBox pictureBoxKoFi;
         private Button buttonOk;
@@ -34,6 +36,7 @@ namespace WTF
             InitializeComponent();
             WindowsFormStyler.Apply(this, _settings.Layout);
             ConfigureImageBackgrounds();
+            ConfigureLinkColors();
             UpdateGitHubStatusAsync();
         }
         private void ConfigureImageBackgrounds()
@@ -42,12 +45,36 @@ namespace WTF
             pictureBoxKoFi.BackColor = Color.Transparent;
         }
 
+        private void ConfigureLinkColors()
+        {
+            bool useDarkMode = BackColor.GetBrightness() < 0.5f;
+            Color linkColor = useDarkMode
+                ? Color.FromArgb(140, 200, 255)
+                : SystemColors.HotTrack;
+
+            Color activeLinkColor = useDarkMode
+                ? Color.FromArgb(185, 220, 255)
+                : Color.Red;
+
+            linkLabelUpdate.LinkColor = linkColor;
+            linkLabelUpdate.ActiveLinkColor = activeLinkColor;
+            linkLabelUpdate.VisitedLinkColor = linkColor;
+
+            linkLabelGithub.LinkColor = linkColor;
+            linkLabelGithub.ActiveLinkColor = activeLinkColor;
+            linkLabelGithub.VisitedLinkColor = linkColor;
+
+            linkLabelHelp.LinkColor = linkColor;
+            linkLabelHelp.ActiveLinkColor = activeLinkColor;
+            linkLabelHelp.VisitedLinkColor = linkColor;
+        }
+
         private void InitializeComponent()
         {
             Text = LocalizationService.GetText("About.Title");
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(475, 285);
+            ClientSize = new Size(475, 309);
             MinimumSize = Size;
             MaximumSize = Size;
             MaximizeBox = false;
@@ -117,13 +144,25 @@ namespace WTF
 
             linkLabelGithub.LinkClicked += linkLabelGithub_LinkClicked;
 
+            linkLabelHelp = new LinkLabel
+            {
+                Name = "linkLabelHelp",
+                Text = "Help: " + HelpUrl,
+                AutoSize = true,
+                Location = new Point(122, 154),
+                BackColor = Color.Transparent,
+                LinkBehavior = LinkBehavior.HoverUnderline
+            };
+
+            linkLabelHelp.LinkClicked += linkLabelHelp_LinkClicked;
+
             labelKoFiText = new Label
             {
                 Name = "labelKoFiText",
                 Text = LocalizationService.GetText("About.FreeText") + Environment.NewLine +
                        LocalizationService.GetText("About.SupportText"),
                 AutoSize = false,
-                Location = new Point(20, 170),
+                Location = new Point(20, 194),
                 Size = new Size(435, 38),
                 BackColor = Color.Transparent
             };
@@ -133,7 +172,7 @@ namespace WTF
                 Name = "pictureBoxKoFi",
                 Image = CreateKoFiImage(),
                 Size = new Size(179, 42),
-                Location = new Point(20, 220),
+                Location = new Point(20, 244),
                 SizeMode = PictureBoxSizeMode.StretchImage,
                 BackColor = Color.Transparent,
                 Cursor = Cursors.Hand
@@ -146,7 +185,7 @@ namespace WTF
                 Name = "buttonOk",
                 Text = LocalizationService.GetText("Common.OK"),
                 Size = new Size(90, 32),
-                Location = new Point(365, 230),
+                Location = new Point(365, 254),
                 DialogResult = DialogResult.OK
             };
 
@@ -156,6 +195,7 @@ namespace WTF
             Controls.Add(labelVersion);
             Controls.Add(linkLabelUpdate);
             Controls.Add(linkLabelGithub);
+            Controls.Add(linkLabelHelp);
             Controls.Add(labelKoFiText);
             Controls.Add(pictureBoxKoFi);
             Controls.Add(buttonOk);
@@ -375,6 +415,15 @@ namespace WTF
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = GitHubRepositoryUrl,
+                UseShellExecute = true
+            });
+        }
+
+        private void linkLabelHelp_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = HelpUrl,
                 UseShellExecute = true
             });
         }
