@@ -28,17 +28,40 @@ Multilingual support comming, when requested - (Now: English/German)
 <br>
 <br>
 
+# Scan History / Comparison
+
+<br>
+<img width="1155" height="552" alt="grafik" src="https://github.com/user-attachments/assets/6f996750-75d0-4844-8fe0-a236ad0b9445" />
+<br>
+<br>
+
+<br>
+<img width="1155" height="552" alt="grafik" src="https://github.com/user-attachments/assets/e24a9d78-cfc1-461b-b546-d053be800df0" />
+<br>
+<br>
+
+<br>
+<img width="1260" height="925" alt="grafik" src="https://github.com/user-attachments/assets/168afdca-bc5a-43fe-aeab-a5b06bb1e0dc" />
+<br>
+<br>
+
+
 
 # Settings
 
 <br>
-<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/50b8a0f6-6b0b-446f-9e8c-d1cacd29f1c8" />
+<img width="872" height="690" alt="grafik" src="https://github.com/user-attachments/assets/52cbde1e-e4ea-4eb4-82e6-e5bc8454c9cd" />
 <br>
-<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/902de9a5-8013-4d83-b5cf-c528501e26f7" />
+<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/1af4979c-1a7a-461e-a4fd-8209893a5eb8" />
+<br>
+<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/4d7da813-5483-47f8-b11b-88bb3ef4c4b0" />
+<br>
+<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/47759978-996d-482b-ba0d-b4db02ebdd2a" />
+<br>
 <br>
 
 
-
+<br>
 
 # Important
 
