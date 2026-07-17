@@ -47,6 +47,7 @@ namespace WTF
 
             ConfigureColumns();
             _listViewPartitions.CellPainting += listViewPartitions_CellPainting;
+            _listViewPartitions.Paint += listViewPartitions_Paint;
             _listViewPartitions.SizeChanged += listViewPartitions_SizeChanged;
         }
 
@@ -424,6 +425,55 @@ namespace WTF
         private void listViewPartitions_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
         {
             HandleCellPainting(e);
+        }
+
+        private void listViewPartitions_Paint(object sender, PaintEventArgs e)
+        {
+            FillEmptyPartitionGridBackground(e.Graphics);
+        }
+
+        private void FillEmptyPartitionGridBackground(Graphics graphics)
+        {
+            Color partitionBackColor = IsDarkMode()
+                ? Color.FromArgb(32, 32, 32)
+                : Color.White;
+
+            int top = _listViewPartitions.ColumnHeadersVisible
+                ? _listViewPartitions.ColumnHeadersHeight
+                : 0;
+
+            foreach (DataGridViewRow row in _listViewPartitions.Rows)
+            {
+                if (!row.Visible)
+                    continue;
+
+                Rectangle rowBounds = _listViewPartitions.GetRowDisplayRectangle(row.Index, false);
+
+                if (rowBounds.Height <= 0)
+                    continue;
+
+                top = Math.Max(top, rowBounds.Bottom);
+            }
+
+            int width = _listViewPartitions.ClientSize.Width;
+
+            if (_listViewPartitions.ScrollBars == ScrollBars.Vertical ||
+                _listViewPartitions.ScrollBars == ScrollBars.Both)
+            {
+                width = Math.Max(0, width - SystemInformation.VerticalScrollBarWidth);
+            }
+
+            if (top < _listViewPartitions.ClientSize.Height && width > 0)
+            {
+                using SolidBrush backBrush = new SolidBrush(partitionBackColor);
+                graphics.FillRectangle(
+                    backBrush,
+                    new Rectangle(
+                        0,
+                        top,
+                        width,
+                        _listViewPartitions.ClientSize.Height - top));
+            }
         }
 
         private void listViewPartitions_SizeChanged(object sender, EventArgs e)

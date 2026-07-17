@@ -35,6 +35,7 @@ namespace WTF
         private ToolStripMenuItem menuItemLoadScanResult;
         private ToolStripMenuItem menuItemAdvancedFeatures;
         private ToolStripMenuItem menuItemStorageHistory;
+        private ToolStripMenuItem menuItemScanHistory;
         private ToolStripMenuItem menuItemExit;
         private ToolStripMenuItem menuItemHelp;
         private ToolStripMenuItem menuItemAbout;
@@ -55,6 +56,7 @@ namespace WTF
         private ToolStripButton toolStripButtonExportCsv;
         private ToolStripButton toolStripButtonAnalysis;
         private ToolStripButton toolStripButtonStorageHistory;
+        private ToolStripButton toolStripButtonScanHistory;
         private SplitContainer splitContainerMain;
         private SplitContainer splitContainerLeft;
         private TreeEntrySizeBarView treeViewEntries;
@@ -340,6 +342,7 @@ namespace WTF
             menuItemLoadScanResult = new ToolStripMenuItem(LocalizationService.GetText("Menu.LoadScanResult"));
             menuItemAdvancedFeatures = new ToolStripMenuItem(LocalizationService.GetText("Menu.Analysis"));
             menuItemStorageHistory = new ToolStripMenuItem(LocalizationService.GetText("Menu.StorageHistory"));
+            menuItemScanHistory = new ToolStripMenuItem(LocalizationService.GetText("Menu.ScanHistory"));
             menuItemExit = new ToolStripMenuItem(LocalizationService.GetText("Menu.Exit"));
             menuItemHelp = new ToolStripMenuItem(LocalizationService.GetText("Menu.Help"));
             menuItemAbout = new ToolStripMenuItem(LocalizationService.GetText("Menu.About"));
@@ -349,6 +352,7 @@ namespace WTF
             menuItemFile.DropDownItems.Add(menuItemLoadScanResult);
             menuItemFile.DropDownItems.Add(menuItemAdvancedFeatures);
             menuItemFile.DropDownItems.Add(menuItemStorageHistory);
+            menuItemFile.DropDownItems.Add(menuItemScanHistory);
             menuItemFile.DropDownItems.Add(new ToolStripSeparator());
             menuItemFile.DropDownItems.Add(menuItemSettings);
             menuItemFile.DropDownItems.Add(new ToolStripSeparator());
@@ -363,6 +367,7 @@ namespace WTF
             menuItemLoadScanResult.Click += menuItemLoadScanResult_Click;
             menuItemAdvancedFeatures.Click += menuItemAdvancedFeatures_Click;
             menuItemStorageHistory.Click += menuItemStorageHistory_Click;
+            menuItemScanHistory.Click += menuItemScanHistory_Click;
             menuItemExit.Click += menuItemExit_Click;
             menuItemAbout.Click += menuItemAbout_Click;
 
@@ -475,8 +480,14 @@ namespace WTF
             toolStripButtonStorageHistory.Image = CreateStorageHistoryButtonImage();
             toolStripButtonStorageHistory.Click += menuItemStorageHistory_Click;
 
+            toolStripButtonScanHistory = new ToolStripButton(LocalizationService.GetText("Menu.ScanHistory"));
+            toolStripButtonScanHistory.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
+            toolStripButtonScanHistory.Image = CreateScanHistoryButtonImage();
+            toolStripButtonScanHistory.Click += menuItemScanHistory_Click;
+
             toolStripFeatures.Items.Add(toolStripButtonAnalysis);
             toolStripFeatures.Items.Add(toolStripButtonStorageHistory);
+            toolStripFeatures.Items.Add(toolStripButtonScanHistory);
 
             toolStripPanelMain.Join(toolStripMain, 0, 0);
             toolStripPanelMain.Join(toolStripViewMode, 340, 0);
@@ -676,6 +687,7 @@ namespace WTF
             menuItemLoadScanResult.Text = LocalizationService.GetText("Menu.LoadScanResult");
             menuItemAdvancedFeatures.Text = LocalizationService.GetText("Menu.Analysis");
             menuItemStorageHistory.Text = LocalizationService.GetText("Menu.StorageHistory");
+            menuItemScanHistory.Text = LocalizationService.GetText("Menu.ScanHistory");
             menuItemSettings.Text = LocalizationService.GetText("Menu.Settings");
             menuItemExit.Text = LocalizationService.GetText("Menu.Exit");
             menuItemHelp.Text = LocalizationService.GetText("Menu.Help");
@@ -698,6 +710,7 @@ namespace WTF
             toolStripButtonExportCsv.ToolTipText = LocalizationService.GetText("Toolbar.ExportCsv");
             toolStripButtonAnalysis.Text = LocalizationService.GetText("Menu.Analysis");
             toolStripButtonStorageHistory.Text = LocalizationService.GetText("Menu.StorageHistory");
+            toolStripButtonScanHistory.Text = LocalizationService.GetText("Menu.ScanHistory");
 
             contextMenuItemOpenInExplorer.Text = LocalizationService.GetText("Context.OpenInExplorer");
             contextMenuItemExport.Text = LocalizationService.GetText("Context.Export");
@@ -755,6 +768,34 @@ namespace WTF
                 graphics.DrawEllipse(clockPen, 2, 2, 12, 12);
                 graphics.DrawLine(handPen, 8, 8, 8, 4);
                 graphics.DrawLine(handPen, 8, 8, 11, 10);
+            }
+
+            return bitmap;
+        }
+
+        private System.Drawing.Bitmap CreateScanHistoryButtonImage()
+        {
+            System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(16, 16, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+            using (System.Drawing.Graphics graphics = System.Drawing.Graphics.FromImage(bitmap))
+            {
+                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                graphics.Clear(System.Drawing.Color.Transparent);
+
+                using System.Drawing.Pen outlinePen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0, 84, 153), 1.4f);
+                using System.Drawing.Pen linePen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0, 120, 215), 1.2f);
+                using System.Drawing.SolidBrush accentBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(0, 120, 215));
+                using System.Drawing.SolidBrush lightBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(211, 232, 252));
+
+                graphics.FillRectangle(lightBrush, 2, 3, 9, 10);
+                graphics.DrawRectangle(outlinePen, 2, 3, 9, 10);
+                graphics.DrawLine(linePen, 4, 6, 9, 6);
+                graphics.DrawLine(linePen, 4, 8, 9, 8);
+                graphics.DrawLine(linePen, 4, 10, 7, 10);
+
+                graphics.FillEllipse(accentBrush, 10, 2, 4, 4);
+                graphics.FillEllipse(accentBrush, 10, 10, 4, 4);
+                graphics.DrawLine(linePen, 12, 6, 12, 10);
             }
 
             return bitmap;
@@ -947,6 +988,8 @@ namespace WTF
                     _statusMainFormController.SetStatusProgressText(100D);
                     _statusMainFormController.ReportSkippedDirectories(session.SkippedDirectories, session.SkippedDirectoryDetails);
                 }
+
+                await SaveScanHistoryIfEnabledAsync(rootEntry);
             }
             catch (OperationCanceledException)
             {
@@ -976,6 +1019,23 @@ namespace WTF
             return session != null &&
                 _scanSessions.TryGetValue(session.RootPath, out ScanSession currentSession) &&
                 ReferenceEquals(currentSession, session);
+        }
+
+        private async Task SaveScanHistoryIfEnabledAsync(FileSystemEntry rootEntry)
+        {
+            if (!_settings.SaveScanHistory || rootEntry == null)
+                return;
+
+            try
+            {
+                await Task.Run(() => ScanHistoryService.Save(rootEntry));
+            }
+            catch (Exception exception)
+            {
+                AppAlertLog.AddWarning(
+                    LocalizationService.GetText("Alert.Scan"),
+                    LocalizationService.Format("Alert.ScanHistorySaveFailed", exception.Message));
+            }
         }
 
 
@@ -1300,6 +1360,12 @@ namespace WTF
         {
             using StorageHistoryForm storageHistoryForm = new StorageHistoryForm(_settings);
             storageHistoryForm.ShowDialog(this);
+        }
+
+        private void menuItemScanHistory_Click(object sender, EventArgs e)
+        {
+            using ScanHistoryForm scanHistoryForm = new ScanHistoryForm(_settings);
+            scanHistoryForm.ShowDialog(this);
         }
 
         private void ApplyEntryColumnVisibility()

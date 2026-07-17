@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -248,6 +248,7 @@ namespace WTF
                 cancellationToken.ThrowIfCancellationRequested();
 
                 uint nextEntryOffset = (uint)Marshal.ReadInt32(currentEntryPointer, 0);
+                long lastWriteTimeFileTime = Marshal.ReadInt64(currentEntryPointer, 24);
                 long endOfFile = Marshal.ReadInt64(currentEntryPointer, 40);
                 FileAttributes attributes = (FileAttributes)Marshal.ReadInt32(currentEntryPointer, 56);
                 int fileNameLength = Marshal.ReadInt32(currentEntryPointer, 60);
@@ -260,11 +261,16 @@ namespace WTF
 
                     if (!string.IsNullOrWhiteSpace(name) && name != "." && name != "..")
                     {
+                        DateTime lastWriteTimeUtc = lastWriteTimeFileTime > 0
+                            ? DateTime.FromFileTimeUtc(lastWriteTimeFileTime)
+                            : DateTime.MinValue;
+
                         AddDirectoryEntryChild(
                             workItem,
                             name,
                             attributes,
                             endOfFile,
+                            lastWriteTimeUtc,
                             progress,
                             cancellationToken);
                     }
@@ -277,7 +283,7 @@ namespace WTF
             }
         }
 
-        private void AddDirectoryEntryChild(WorkItem workItem, string name, FileAttributes attributes, long sizeBytes, IProgress<ScanProgress> progress, CancellationToken cancellationToken)
+        private void AddDirectoryEntryChild(WorkItem workItem, string name, FileAttributes attributes, long sizeBytes, DateTime lastWriteTimeUtc, IProgress<ScanProgress> progress, CancellationToken cancellationToken)
         {
             FileSystemEntry directoryEntry = workItem.Entry;
             bool isDirectory = attributes.HasFlag(FileAttributes.Directory);
@@ -295,7 +301,8 @@ namespace WTF
                 {
                     Name = name,
                     FullPath = fullPath,
-                    IsDirectory = true
+                    IsDirectory = true,
+                    LastWriteTimeUtc = lastWriteTimeUtc
                 };
 
                 AddChildEntry(directoryEntry, childEntry);
@@ -333,7 +340,8 @@ namespace WTF
                 Name = name,
                 FullPath = fullPath,
                 SizeBytes = normalizedSizeBytes,
-                IsDirectory = false
+                IsDirectory = false,
+                LastWriteTimeUtc = lastWriteTimeUtc
             };
 
             lock (_liveRootEntry.AllFiles)

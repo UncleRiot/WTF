@@ -40,6 +40,8 @@ namespace WTF
         public AppLayout Layout { get; set; } = AppLayout.WindowsDefault;
         public ViewMode SelectedViewMode { get; set; } = ViewMode.Table;
         public string LanguageCode { get; set; } = LocalizationService.EnglishLanguageCode;
+        public bool SaveScanHistory { get; set; }
+        public string ScanHistoryDatabasePath { get; set; } = ScanHistoryService.DefaultDatabasePath;
 
         public bool ExportPath { get; set; } = true;
         public bool ExportSizeGb { get; set; } = true;
@@ -113,6 +115,9 @@ namespace WTF
                 settings.BarChartBarHeight = Math.Max(
                     5,
                     Math.Min(30, settings.BarChartBarHeight));
+                settings.ScanHistoryDatabasePath = ScanHistoryService.NormalizeDatabasePath(
+                    settings.ScanHistoryDatabasePath);
+                ScanHistoryService.ConfigureDatabasePath(settings.ScanHistoryDatabasePath);
 
                 return settings;
             }

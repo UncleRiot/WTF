@@ -14,11 +14,13 @@ namespace WTF
         private LucidButton buttonExportTab;
         private LucidButton buttonColorsTab;
         private LucidButton buttonLayoutTab;
+        private LucidButton buttonStatisticsTab;
         private Panel panelPageHost;
         private Panel panelGeneral;
         private Panel panelExport;
         private Panel panelColors;
         private Panel panelLayout;
+        private Panel panelStatistics;
         private LucidCheckBox checkBoxShowFilesInTree;
         private LucidCheckBox checkBoxSkipReparsePoints;
         private LucidCheckBox checkBoxShowPartitionPanel;
@@ -51,12 +53,22 @@ namespace WTF
         private LucidLabel labelBarChartBarHeight;
         private LucidTextBox textBoxBarChartBarHeight;
         private LucidLabel labelBarChartBarHeightDefault;
+        private LucidCheckBox checkBoxSaveScanHistory;
+        private LucidLabel labelScanHistoryDatabasePath;
+        private LucidTextBox textBoxScanHistoryDatabasePath;
+        private LucidButton buttonBrowseScanHistoryDatabasePath;
+        private LucidLabel labelScanHistoryDatabaseMoveHint;
+        private LucidLabel labelScanHistoryDatabaseSize;
         private LucidButton buttonOk;
         private LucidButton buttonCancel;
+        private DatabasePathSelectionMode selectedDatabasePathSelectionMode;
 
         public SettingsForm(AppSettings settings)
         {
             _settings = settings;
+            _settings.ScanHistoryDatabasePath = ScanHistoryService.NormalizeDatabasePath(
+                _settings.ScanHistoryDatabasePath);
+            ScanHistoryService.ConfigureDatabasePath(_settings.ScanHistoryDatabasePath);
 
             LucidThemeService.Apply(_settings.Layout);
             WindowsFormStyler.Apply(this, _settings.Layout);
@@ -90,7 +102,7 @@ namespace WTF
                 Name = "buttonGeneralTab",
                 Text = LocalizationService.GetText("Settings.General"),
                 Location = new Point(18, 16),
-                Size = new Size(116, 32),
+                Size = new Size(92, 32),
                 ButtonStyle = LucidButtonStyle.Normal
             };
             buttonGeneralTab.Click += buttonGeneralTab_Click;
@@ -99,8 +111,8 @@ namespace WTF
             {
                 Name = "buttonExportTab",
                 Text = LocalizationService.GetText("Settings.Export"),
-                Location = new Point(140, 16),
-                Size = new Size(116, 32),
+                Location = new Point(114, 16),
+                Size = new Size(92, 32),
                 ButtonStyle = LucidButtonStyle.Normal
             };
             buttonExportTab.Click += buttonExportTab_Click;
@@ -109,8 +121,8 @@ namespace WTF
             {
                 Name = "buttonColorsTab",
                 Text = LocalizationService.GetText("Settings.Colors"),
-                Location = new Point(262, 16),
-                Size = new Size(116, 32),
+                Location = new Point(210, 16),
+                Size = new Size(92, 32),
                 ButtonStyle = LucidButtonStyle.Normal
             };
             buttonColorsTab.Click += buttonColorsTab_Click;
@@ -119,11 +131,21 @@ namespace WTF
             {
                 Name = "buttonLayoutTab",
                 Text = LocalizationService.GetText("Settings.LayoutTab"),
-                Location = new Point(384, 16),
-                Size = new Size(116, 32),
+                Location = new Point(210, 16),
+                Size = new Size(92, 32),
                 ButtonStyle = LucidButtonStyle.Normal
             };
             buttonLayoutTab.Click += buttonLayoutTab_Click;
+
+            buttonStatisticsTab = new LucidButton
+            {
+                Name = "buttonStatisticsTab",
+                Text = LocalizationService.GetText("Settings.Statistics"),
+                Location = new Point(306, 16),
+                Size = new Size(100, 32),
+                ButtonStyle = LucidButtonStyle.Normal
+            };
+            buttonStatisticsTab.Click += buttonStatisticsTab_Click;
 
             panelPageHost = new Panel
             {
@@ -160,6 +182,14 @@ namespace WTF
             panelLayout = new Panel
             {
                 Name = "panelLayout",
+                Dock = DockStyle.Fill,
+                BackColor = backgroundSecondary,
+                Visible = false
+            };
+
+            panelStatistics = new Panel
+            {
+                Name = "panelStatistics",
                 Dock = DockStyle.Fill,
                 BackColor = backgroundSecondary,
                 Visible = false
@@ -374,13 +404,13 @@ namespace WTF
             labelBarChartBarHeight = CreateLabel(
                 "labelBarChartBarHeight",
                 LocalizationService.GetText("Settings.BarChartBarHeight"),
-                24);
+                120);
             labelBarChartBarHeight.Size = new Size(220, 28);
 
             textBoxBarChartBarHeight = new LucidTextBox
             {
                 Name = "textBoxBarChartBarHeight",
-                Location = new Point(253, 24),
+                Location = new Point(253, 120),
                 Size = new Size(45, 25),
                 TextAlign = HorizontalAlignment.Right,
                 MaxLength = 3
@@ -392,8 +422,66 @@ namespace WTF
                     LocalizationService.GetText("Settings.BarChartBarHeightDefault"),
                     14),
                 24);
-            labelBarChartBarHeightDefault.Location = new Point(308, 24);
+            labelBarChartBarHeightDefault.Location = new Point(308, 120);
             labelBarChartBarHeightDefault.Size = new Size(160, 28);
+
+            checkBoxSaveScanHistory = CreateCheckBox(
+                "checkBoxSaveScanHistory",
+                LocalizationService.GetText("Settings.SaveScanHistory"),
+                24,
+                backgroundSecondary);
+            checkBoxSaveScanHistory.CheckedChanged += checkBoxSaveScanHistory_CheckedChanged;
+            checkBoxSaveScanHistory.Location = new Point(24, 24);
+
+            labelScanHistoryDatabasePath = new LucidLabel
+            {
+                Name = "labelScanHistoryDatabasePath",
+                Text = LocalizationService.GetText("Settings.ScanHistoryDatabasePath"),
+                Location = new Point(24, 60),
+                Size = new Size(420, 24),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Visible = false
+            };
+
+            textBoxScanHistoryDatabasePath = new LucidTextBox
+            {
+                Name = "textBoxScanHistoryDatabasePath",
+                Location = new Point(24, 88),
+                Size = new Size(330, 25),
+                Text = _settings.ScanHistoryDatabasePath,
+                ReadOnly = true,
+                Visible = false
+            };
+
+            buttonBrowseScanHistoryDatabasePath = new LucidButton
+            {
+                Name = "buttonBrowseScanHistoryDatabasePath",
+                Text = LocalizationService.GetText("Settings.MoveDatabase"),
+                Location = new Point(364, 86),
+                Size = new Size(90, 28),
+                ButtonStyle = LucidButtonStyle.Normal,
+                Visible = false
+            };
+            buttonBrowseScanHistoryDatabasePath.Click += buttonBrowseScanHistoryDatabasePath_Click;
+
+            labelScanHistoryDatabaseMoveHint = new LucidLabel
+            {
+                Name = "labelScanHistoryDatabaseMoveHint",
+                Text = LocalizationService.GetText("Settings.ScanHistoryDatabaseMoveHint"),
+                Location = new Point(24, 122),
+                Size = new Size(430, 24),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Visible = false
+            };
+
+            labelScanHistoryDatabaseSize = new LucidLabel
+            {
+                Name = "labelScanHistoryDatabaseSize",
+                Location = new Point(24, 150),
+                Size = new Size(430, 24),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Visible = false
+            };
 
             panelGeneral.Controls.Add(checkBoxShowFilesInTree);
             panelGeneral.Controls.Add(checkBoxSkipReparsePoints);
@@ -412,27 +500,34 @@ namespace WTF
             panelExport.Controls.Add(labelExportMaxDepth);
             panelExport.Controls.Add(textBoxExportMaxDepth);
 
-            panelColors.Controls.Add(labelPartitionFillLight);
-            panelColors.Controls.Add(buttonPartitionFillLightColor);
-            panelColors.Controls.Add(panelPartitionFillLightPreview);
-            panelColors.Controls.Add(labelPartitionFillLightBrightness);
-            panelColors.Controls.Add(trackBarPartitionFillLightBrightness);
-            panelColors.Controls.Add(labelPartitionFillLightBrightnessValue);
-            panelColors.Controls.Add(labelPartitionFillDark);
-            panelColors.Controls.Add(buttonPartitionFillDarkColor);
-            panelColors.Controls.Add(panelPartitionFillDarkPreview);
-            panelColors.Controls.Add(labelPartitionFillDarkBrightness);
-            panelColors.Controls.Add(trackBarPartitionFillDarkBrightness);
-            panelColors.Controls.Add(labelPartitionFillDarkBrightnessValue);
+            panelLayout.Controls.Add(labelPartitionFillLight);
+            panelLayout.Controls.Add(buttonPartitionFillLightColor);
+            panelLayout.Controls.Add(panelPartitionFillLightPreview);
+            panelLayout.Controls.Add(labelPartitionFillLightBrightness);
+            panelLayout.Controls.Add(trackBarPartitionFillLightBrightness);
+            panelLayout.Controls.Add(labelPartitionFillLightBrightnessValue);
+            panelLayout.Controls.Add(labelPartitionFillDark);
+            panelLayout.Controls.Add(buttonPartitionFillDarkColor);
+            panelLayout.Controls.Add(panelPartitionFillDarkPreview);
+            panelLayout.Controls.Add(labelPartitionFillDarkBrightness);
+            panelLayout.Controls.Add(trackBarPartitionFillDarkBrightness);
+            panelLayout.Controls.Add(labelPartitionFillDarkBrightnessValue);
 
             panelLayout.Controls.Add(labelBarChartBarHeight);
             panelLayout.Controls.Add(textBoxBarChartBarHeight);
             panelLayout.Controls.Add(labelBarChartBarHeightDefault);
 
+            panelStatistics.Controls.Add(checkBoxSaveScanHistory);
+            panelStatistics.Controls.Add(labelScanHistoryDatabasePath);
+            panelStatistics.Controls.Add(textBoxScanHistoryDatabasePath);
+            panelStatistics.Controls.Add(buttonBrowseScanHistoryDatabasePath);
+            panelStatistics.Controls.Add(labelScanHistoryDatabaseMoveHint);
+            panelStatistics.Controls.Add(labelScanHistoryDatabaseSize);
+
             panelPageHost.Controls.Add(panelGeneral);
             panelPageHost.Controls.Add(panelExport);
-            panelPageHost.Controls.Add(panelColors);
             panelPageHost.Controls.Add(panelLayout);
+            panelPageHost.Controls.Add(panelStatistics);
 
             buttonOk = new LucidButton
             {
@@ -458,8 +553,8 @@ namespace WTF
 
             Controls.Add(buttonGeneralTab);
             Controls.Add(buttonExportTab);
-            Controls.Add(buttonColorsTab);
             Controls.Add(buttonLayoutTab);
+            Controls.Add(buttonStatisticsTab);
             Controls.Add(panelPageHost);
             Controls.Add(buttonOk);
             Controls.Add(buttonCancel);
@@ -550,6 +645,97 @@ namespace WTF
             ShowPage(panelLayout);
         }
 
+        private void buttonStatisticsTab_Click(object sender, EventArgs e)
+        {
+            ShowPage(panelStatistics);
+        }
+
+        private void checkBoxSaveScanHistory_CheckedChanged(object sender, EventArgs e)
+        {
+            UpdateScanHistoryDatabasePathVisibility();
+        }
+
+        private void UpdateScanHistoryDatabasePathVisibility()
+        {
+            bool showDatabasePath = checkBoxSaveScanHistory.Checked;
+            labelScanHistoryDatabasePath.Visible = showDatabasePath;
+            textBoxScanHistoryDatabasePath.Visible = showDatabasePath;
+            buttonBrowseScanHistoryDatabasePath.Visible = showDatabasePath;
+            labelScanHistoryDatabaseMoveHint.Visible = showDatabasePath;
+            labelScanHistoryDatabaseSize.Visible = showDatabasePath;
+
+            if (showDatabasePath && string.IsNullOrWhiteSpace(textBoxScanHistoryDatabasePath.Text))
+            {
+                textBoxScanHistoryDatabasePath.Text = ScanHistoryService.DatabasePath;
+            }
+
+            UpdateScanHistoryDatabaseSize();
+        }
+
+        private void UpdateScanHistoryDatabaseSize()
+        {
+            string selectedDatabasePath = string.IsNullOrWhiteSpace(
+                    textBoxScanHistoryDatabasePath.Text)
+                ? ScanHistoryService.DatabasePath
+                : textBoxScanHistoryDatabasePath.Text;
+            string databasePath = ScanHistoryService.NormalizeDatabasePath(
+                selectedDatabasePath);
+            string databaseSize = LocalizationService.GetText("Settings.DatabaseSizeUnavailable");
+
+            try
+            {
+                if (System.IO.File.Exists(databasePath))
+                {
+                    databaseSize = SizeFormatter.Format(
+                        new System.IO.FileInfo(databasePath).Length);
+                }
+            }
+            catch
+            {
+            }
+
+            labelScanHistoryDatabaseSize.Text = string.Format(
+                LocalizationService.GetText("Settings.DatabaseSize"),
+                databaseSize);
+        }
+
+        private void buttonBrowseScanHistoryDatabasePath_Click(object sender, EventArgs e)
+        {
+            string currentDatabasePath = ScanHistoryService.NormalizeDatabasePath(
+                ScanHistoryService.DatabasePath);
+
+            using DatabaseMoveForm databaseMoveForm = new DatabaseMoveForm(
+                _settings.Layout,
+                currentDatabasePath);
+
+            if (databaseMoveForm.ShowDialog(this) == DialogResult.OK)
+            {
+                textBoxScanHistoryDatabasePath.Text = ScanHistoryService.NormalizeDatabasePath(
+                    databaseMoveForm.SelectedDatabasePath);
+                selectedDatabasePathSelectionMode = databaseMoveForm.SelectionMode;
+                UpdateScanHistoryDatabaseSize();
+            }
+        }
+
+        private static string GetExistingDirectoryPath(string filePath)
+        {
+            try
+            {
+                string directoryPath = System.IO.Path.GetDirectoryName(filePath);
+
+                if (!string.IsNullOrWhiteSpace(directoryPath) &&
+                    System.IO.Directory.Exists(directoryPath))
+                {
+                    return directoryPath;
+                }
+            }
+            catch
+            {
+            }
+
+            return AppContext.BaseDirectory;
+        }
+
         private void comboBoxLayout_SelectedIndexChanged(object sender, EventArgs e)
         {
             UpdatePartitionFillControlsVisibility();
@@ -601,10 +787,12 @@ namespace WTF
             panelExport.Visible = page == panelExport;
             panelColors.Visible = page == panelColors;
             panelLayout.Visible = page == panelLayout;
+            panelStatistics.Visible = page == panelStatistics;
             buttonGeneralTab.Enabled = page != panelGeneral;
             buttonExportTab.Enabled = page != panelExport;
             buttonColorsTab.Enabled = page != panelColors;
             buttonLayoutTab.Enabled = page != panelLayout;
+            buttonStatisticsTab.Enabled = page != panelStatistics;
             page.BringToFront();
         }
 
@@ -636,6 +824,10 @@ namespace WTF
                 ? _settings.ExportMaxDepth.Value.ToString()
                 : string.Empty;
             textBoxBarChartBarHeight.Text = _settings.BarChartBarHeight.ToString();
+            textBoxScanHistoryDatabasePath.Text = ScanHistoryService.NormalizeDatabasePath(
+                _settings.ScanHistoryDatabasePath);
+            checkBoxSaveScanHistory.Checked = _settings.SaveScanHistory;
+            UpdateScanHistoryDatabasePathVisibility();
 
             partitionFillLightColor = Color.FromArgb(_settings.PartitionFillColorLightArgb);
             partitionFillDarkColor = Color.FromArgb(_settings.PartitionFillColorDarkArgb);
@@ -749,7 +941,18 @@ namespace WTF
             _settings.PartitionFillColorDarkArgb = partitionFillDarkColor.ToArgb();
             _settings.PartitionFillBrightnessDarkPercent =
                 trackBarPartitionFillDarkBrightness.Value;
+            string selectedScanHistoryDatabasePath = ScanHistoryService.NormalizeDatabasePath(
+                textBoxScanHistoryDatabasePath.Text);
+
+            if (!TryApplyScanHistoryDatabasePath(selectedScanHistoryDatabasePath))
+            {
+                ShowPage(panelStatistics);
+                return false;
+            }
+
             _settings.BarChartBarHeight = barChartBarHeight;
+            _settings.SaveScanHistory = checkBoxSaveScanHistory.Checked;
+            _settings.ScanHistoryDatabasePath = selectedScanHistoryDatabasePath;
 
             if (comboBoxLanguage.SelectedItem is LanguageItem selectedLanguageItem)
             {
@@ -779,6 +982,82 @@ namespace WTF
             }
 
             return true;
+        }
+
+        private bool TryApplyScanHistoryDatabasePath(string selectedScanHistoryDatabasePath)
+        {
+            try
+            {
+                string currentDatabasePath = ScanHistoryService.NormalizeDatabasePath(
+                    ScanHistoryService.DatabasePath);
+
+                if (string.Equals(
+                        currentDatabasePath,
+                        selectedScanHistoryDatabasePath,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    ScanHistoryService.ConfigureDatabasePath(selectedScanHistoryDatabasePath);
+                }
+                else
+                {
+                    switch (selectedDatabasePathSelectionMode)
+                    {
+                        case DatabasePathSelectionMode.MoveCurrentDatabase:
+                            if (System.IO.File.Exists(selectedScanHistoryDatabasePath))
+                            {
+                                throw new System.IO.IOException(
+                                    LocalizationService.GetText("DatabaseBrowse.TargetExists"));
+                            }
+
+                            ScanHistoryService.MoveDatabase(selectedScanHistoryDatabasePath);
+                            break;
+
+                        case DatabasePathSelectionMode.UseExistingDatabase:
+                            if (!System.IO.File.Exists(selectedScanHistoryDatabasePath))
+                            {
+                                throw new System.IO.FileNotFoundException(
+                                    LocalizationService.GetText("DatabaseBrowse.SourceMissing"),
+                                    selectedScanHistoryDatabasePath);
+                            }
+
+                            ScanHistoryService.ConfigureDatabasePath(selectedScanHistoryDatabasePath);
+                            break;
+
+                        case DatabasePathSelectionMode.CreateNewDatabase:
+                            if (System.IO.File.Exists(selectedScanHistoryDatabasePath))
+                            {
+                                throw new System.IO.IOException(
+                                    LocalizationService.GetText("DatabaseBrowse.TargetExists"));
+                            }
+
+                            ScanHistoryService.ConfigureDatabasePath(selectedScanHistoryDatabasePath);
+                            break;
+
+                        default:
+                            throw new InvalidOperationException(
+                                LocalizationService.GetText("DatabaseBrowse.SelectionRequired"));
+                    }
+                }
+
+                selectedDatabasePathSelectionMode = DatabasePathSelectionMode.None;
+                textBoxScanHistoryDatabasePath.Text = ScanHistoryService.DatabasePath;
+                UpdateScanHistoryDatabaseSize();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    this,
+                    LocalizationService.GetText("DatabaseBrowse.ApplyFailed") +
+                    Environment.NewLine +
+                    Environment.NewLine +
+                    ex.Message,
+                    Text,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                textBoxScanHistoryDatabasePath.Focus();
+                return false;
+            }
         }
 
         private void UpdatePartitionFillControlsVisibility()

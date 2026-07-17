@@ -1,7 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Lucid.Controls;
 using Lucid.Controls.GridView;
@@ -12,9 +14,10 @@ namespace WTF
     public sealed class StorageHistoryForm : Form
     {
         private readonly AppSettings _settings;
-        private readonly LucidComboBox comboBoxPaths;
+        private readonly ShellIconService _shellIconService;
+        private readonly ComboBox comboBoxPaths;
         private readonly LucidComboBox comboBoxDisplayMode;
-        private readonly LucidDataGridView dataGridViewRecords;
+        private readonly DataGridView dataGridViewRecords;
         private readonly StorageHistoryChart storageHistoryChart;
         private readonly TrackBar trackBarGradientIntensity;
         private readonly LucidLabel labelGradientIntensityValue;
@@ -28,6 +31,7 @@ namespace WTF
         public StorageHistoryForm(AppSettings settings)
         {
             _settings = settings;
+            _shellIconService = new ShellIconService();
             LucidThemeService.Apply(_settings.Layout);
 
             bool useDarkMode = IsDarkMode();
@@ -43,8 +47,8 @@ namespace WTF
 
             Text = LocalizationService.GetText("StorageHistory.Title");
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(800, 500);
-            Size = new Size(1050, 650);
+            MinimumSize = new Size(900, 500);
+            Size = new Size(1120, 650);
 
             if (_settings.HasStorageHistoryWindowBounds &&
                 _settings.StorageHistoryWindowWidth >= MinimumSize.Width &&
@@ -70,10 +74,16 @@ namespace WTF
                 Anchor = AnchorStyles.Left
             };
 
-            comboBoxPaths = new LucidComboBox
+            comboBoxPaths = new StorageHistoryPathComboBox(_shellIconService)
             {
-                Dock = DockStyle.Fill,
-                DropDownStyle = ComboBoxStyle.DropDownList
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                DrawMode = DrawMode.OwnerDrawFixed,
+                FlatStyle = FlatStyle.Flat,
+                IntegralHeight = false,
+                ItemHeight = 20,
+                Size = new Size(260, 28),
+                DropDownWidth = 260,
+                Anchor = AnchorStyles.Left
             };
             comboBoxPaths.SelectedIndexChanged += comboBoxPaths_SelectedIndexChanged;
 
@@ -179,7 +189,7 @@ namespace WTF
             };
             pathLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
             pathLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            pathLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            pathLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 260F));
             pathLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             pathLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             pathLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -193,13 +203,16 @@ namespace WTF
             pathLayout.Controls.Add(gradientIntensityPanel, 5, 0);
             pathLayout.Controls.Add(buttonDelete, 6, 0);
 
-            dataGridViewRecords = new LucidDataGridView
+            dataGridViewRecords = new StorageHistoryDataGridView
             {
                 Dock = DockStyle.Fill,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
                 AllowUserToResizeRows = false,
+                AllowUserToOrderColumns = false,
                 AutoGenerateColumns = false,
+                ClipboardCopyMode = DataGridViewClipboardCopyMode.Disable,
+                EditMode = DataGridViewEditMode.EditProgrammatically,
                 BackgroundColor = windowBackColor,
                 BackColor = windowBackColor,
                 ForeColor = textColor,
@@ -209,7 +222,9 @@ namespace WTF
                 RowHeadersVisible = false,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect
             };
+            dataGridViewRecords.CellFormatting += dataGridViewRecords_CellFormatting;
             dataGridViewRecords.ColumnHeaderMouseClick += dataGridViewRecords_ColumnHeaderMouseClick;
+            dataGridViewRecords.DataBindingComplete += dataGridViewRecords_DataBindingComplete;
 
             dataGridViewRecords.Columns.Add(new DataGridViewTextBoxColumn
             {
@@ -253,8 +268,9 @@ namespace WTF
                 ForeColor = textColor,
                 Orientation = Orientation.Vertical
             };
+            splitContainer.Panel1.Padding = new Padding(16, 0, 0, 8);
+            splitContainer.Panel2.Padding = new Padding(12, 0, 8, 0);
             splitContainer.Panel1.Controls.Add(dataGridViewRecords);
-            splitContainer.Panel2.Controls.Add(storageHistoryChart);
 
             FlowLayoutPanel bottomLayout = new FlowLayoutPanel
             {
@@ -267,20 +283,34 @@ namespace WTF
             };
             bottomLayout.Controls.Add(buttonClose);
 
+            TableLayoutPanel chartLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = windowBackColor,
+                ForeColor = textColor,
+                RowCount = 2,
+                ColumnCount = 1,
+                Padding = Padding.Empty,
+                Margin = Padding.Empty
+            };
+            chartLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            chartLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            chartLayout.Controls.Add(storageHistoryChart, 0, 0);
+            chartLayout.Controls.Add(bottomLayout, 0, 1);
+            splitContainer.Panel2.Controls.Add(chartLayout);
+
             TableLayoutPanel mainLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 BackColor = windowBackColor,
                 ForeColor = textColor,
-                RowCount = 3,
+                RowCount = 2,
                 ColumnCount = 1
             };
             mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             mainLayout.Controls.Add(pathLayout, 0, 0);
             mainLayout.Controls.Add(splitContainer, 0, 1);
-            mainLayout.Controls.Add(bottomLayout, 0, 2);
 
             Controls.Add(mainLayout);
             AcceptButton = buttonClose;
@@ -290,7 +320,8 @@ namespace WTF
             {
                 splitContainer.Panel1MinSize = 280;
                 splitContainer.Panel2MinSize = 320;
-                splitContainer.SplitterDistance = 400;
+                splitContainer.SplitterDistance = 416;
+                ApplyHistoryGridScrollBarTheme();
             };
 
             BackColor = windowBackColor;
@@ -304,6 +335,7 @@ namespace WTF
             dataGridViewRecords.BackgroundColor = windowBackColor;
             dataGridViewRecords.BackColor = windowBackColor;
             dataGridViewRecords.ForeColor = textColor;
+            ApplyHistoryGridScrollBarTheme();
 
             comboBoxDisplayMode.SelectedIndex = 1;
             LoadPaths();
@@ -340,7 +372,7 @@ namespace WTF
 
         private void LoadPaths()
         {
-            string selectedPath = comboBoxPaths.SelectedItem as string;
+            string selectedPath = GetSelectedHistoryPath();
             IReadOnlyList<string> paths = StorageHistoryService.GetPaths();
 
             comboBoxPaths.BeginUpdate();
@@ -348,7 +380,9 @@ namespace WTF
 
             foreach (string path in paths)
             {
-                comboBoxPaths.Items.Add(path);
+                comboBoxPaths.Items.Add(new StorageHistoryPathItem(
+                    path,
+                    GetHistoryPathDisplayName(path)));
             }
 
             comboBoxPaths.EndUpdate();
@@ -360,17 +394,28 @@ namespace WTF
                 return;
             }
 
-            int selectedIndex = selectedPath == null
-                ? 0
-                : comboBoxPaths.FindStringExact(selectedPath);
+            int selectedIndex = 0;
 
-            comboBoxPaths.SelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+            if (selectedPath != null)
+            {
+                for (int index = 0; index < comboBoxPaths.Items.Count; index++)
+                {
+                    if (comboBoxPaths.Items[index] is StorageHistoryPathItem item &&
+                        string.Equals(item.Path, selectedPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        selectedIndex = index;
+                        break;
+                    }
+                }
+            }
+
+            comboBoxPaths.SelectedIndex = selectedIndex;
             buttonDelete.Enabled = true;
         }
 
         private void comboBoxPaths_SelectedIndexChanged(object sender, EventArgs e)
         {
-            string path = comboBoxPaths.SelectedItem as string;
+            string path = GetSelectedHistoryPath();
             BindRecords(StorageHistoryService.GetRecords(path));
         }
 
@@ -384,6 +429,95 @@ namespace WTF
             labelGradientIntensityValue.Text = trackBarGradientIntensity.Value.ToString() + "%";
             _settings.StorageHistoryGradientIntensityPercent = trackBarGradientIntensity.Value;
             storageHistoryChart.SetGradientIntensity(trackBarGradientIntensity.Value);
+        }
+
+        private void comboBoxPaths_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            ComboBox comboBox = (ComboBox)sender;
+            object item = e.Index >= 0
+                ? comboBox.Items[e.Index]
+                : comboBox.SelectedItem;
+
+            if (item == null)
+                return;
+
+            bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+
+            Color backgroundColor = isSelected
+                ? SystemColors.Highlight
+                : comboBox.BackColor;
+
+            Color textColor = isSelected
+                ? SystemColors.HighlightText
+                : comboBox.ForeColor;
+
+            using (SolidBrush backgroundBrush = new SolidBrush(backgroundColor))
+            {
+                e.Graphics.FillRectangle(backgroundBrush, e.Bounds);
+            }
+
+            string text = item.ToString();
+
+            string iconPath = item is StorageHistoryPathItem pathItem
+                ? pathItem.Path
+                : string.Empty;
+
+            int iconLeft = e.Bounds.Left + 3;
+            int iconTop = e.Bounds.Top + Math.Max(0, (e.Bounds.Height - 16) / 2);
+
+            if (!string.IsNullOrWhiteSpace(iconPath))
+            {
+                using Bitmap icon = _shellIconService.GetSmallSystemIcon(iconPath);
+                e.Graphics.DrawImage(icon, iconLeft, iconTop, 16, 16);
+            }
+
+            Rectangle textBounds = new Rectangle(
+                e.Bounds.Left + 24,
+                e.Bounds.Top,
+                Math.Max(0, e.Bounds.Width - 26),
+                e.Bounds.Height);
+
+            TextRenderer.DrawText(
+                e.Graphics,
+                text,
+                comboBox.Font,
+                textBounds,
+                textColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+            e.DrawFocusRectangle();
+        }
+
+        private void dataGridViewRecords_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
+        {
+            ApplyHistoryGridScrollBarTheme();
+        }
+
+        private void dataGridViewRecords_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (e.RowIndex < 0)
+                return;
+
+            bool isSelected = dataGridViewRecords.Rows[e.RowIndex].Selected;
+            bool isOddRow = e.RowIndex % 2 != 0;
+
+            if (isSelected)
+            {
+                e.CellStyle.BackColor = SystemColors.Highlight;
+                e.CellStyle.ForeColor = SystemColors.HighlightText;
+                e.CellStyle.SelectionBackColor = SystemColors.Highlight;
+                e.CellStyle.SelectionForeColor = SystemColors.HighlightText;
+                return;
+            }
+
+            bool useDarkMode = IsDarkMode();
+
+            e.CellStyle.BackColor = isOddRow
+                ? (useDarkMode ? Color.FromArgb(24, 24, 24) : Color.FromArgb(245, 245, 245))
+                : (useDarkMode ? Color.FromArgb(61, 66, 68) : Color.White);
+            e.CellStyle.ForeColor = useDarkMode ? Color.White : Color.Black;
+            e.CellStyle.SelectionBackColor = SystemColors.Highlight;
+            e.CellStyle.SelectionForeColor = SystemColors.HighlightText;
         }
 
         private void dataGridViewRecords_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
@@ -483,6 +617,23 @@ namespace WTF
 
             dataGridViewRecords.DataSource = sortedRows.ToList();
 
+            ApplyRecordSortHeaderState();
+
+            if (IsHandleCreated)
+                BeginInvoke(new MethodInvoker(ApplyHistoryGridScrollBarTheme));
+        }
+
+        private void ApplyRecordSortHeaderState()
+        {
+            string sizeHeaderText = LocalizationService.GetText(
+                GetDisplayMode() == StorageHistoryDisplayMode.FreeSpace
+                    ? "StorageHistory.Free"
+                    : "StorageHistory.Used");
+
+            SetRecordColumnHeader("ColumnDate", LocalizationService.GetText("StorageHistory.Date"));
+            SetRecordColumnHeader("ColumnSize", sizeHeaderText);
+            SetRecordColumnHeader("ColumnChange", LocalizationService.GetText("StorageHistory.Change"));
+
             foreach (DataGridViewColumn column in dataGridViewRecords.Columns)
             {
                 column.HeaderCell.SortGlyphDirection = SortOrder.None;
@@ -490,8 +641,15 @@ namespace WTF
 
             if (dataGridViewRecords.Columns.Contains(_sortColumnName))
             {
-                dataGridViewRecords.Columns[_sortColumnName].HeaderCell.SortGlyphDirection = _sortOrder;
+                DataGridViewColumn sortedColumn = dataGridViewRecords.Columns[_sortColumnName];
+                sortedColumn.HeaderCell.SortGlyphDirection = _sortOrder;
             }
+        }
+
+        private void SetRecordColumnHeader(string columnName, string headerText)
+        {
+            if (dataGridViewRecords.Columns.Contains(columnName))
+                dataGridViewRecords.Columns[columnName].HeaderText = headerText;
         }
 
         private StorageHistoryDisplayMode GetDisplayMode()
@@ -528,7 +686,7 @@ namespace WTF
 
         private void buttonDelete_Click(object sender, EventArgs e)
         {
-            string path = comboBoxPaths.SelectedItem as string;
+            string path = GetSelectedHistoryPath();
 
             if (string.IsNullOrWhiteSpace(path))
                 return;
@@ -545,6 +703,44 @@ namespace WTF
 
             StorageHistoryService.DeleteRecords(path);
             LoadPaths();
+        }
+
+        private string GetSelectedHistoryPath()
+        {
+            if (comboBoxPaths.SelectedItem is StorageHistoryPathItem item)
+                return item.Path;
+
+            return comboBoxPaths.Text == null
+                ? string.Empty
+                : comboBoxPaths.Text.Trim();
+        }
+
+        private static string GetHistoryPathDisplayName(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return string.Empty;
+
+            try
+            {
+                string fullPath = Path.GetFullPath(path);
+                string rootPath = Path.GetPathRoot(fullPath);
+
+                if (!string.IsNullOrWhiteSpace(rootPath))
+                {
+                    DriveInfo driveInfo = new DriveInfo(rootPath);
+
+                    string label = string.IsNullOrWhiteSpace(driveInfo.VolumeLabel)
+                        ? LocalizationService.GetText("Drive.LocalDisk")
+                        : driveInfo.VolumeLabel;
+
+                    return LocalizationService.Format("Drive.Display", label, rootPath);
+                }
+            }
+            catch
+            {
+            }
+
+            return path;
         }
 
         private bool IsDarkMode()
@@ -583,6 +779,235 @@ namespace WTF
                 return maximum;
 
             return value;
+        }
+
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+        private static extern int SetWindowTheme(IntPtr hwnd, string pszSubAppName, string pszSubIdList);
+
+        private void ApplyHistoryGridScrollBarTheme()
+        {
+            if (!dataGridViewRecords.IsHandleCreated)
+                return;
+
+            try
+            {
+                string themeName = IsDarkMode() ? "DarkMode_Explorer" : "Explorer";
+
+                SetWindowTheme(dataGridViewRecords.Handle, themeName, null);
+
+                foreach (Control child in dataGridViewRecords.Controls)
+                {
+                    if (child.IsHandleCreated)
+                        SetWindowTheme(child.Handle, themeName, null);
+                }
+
+                dataGridViewRecords.Invalidate();
+            }
+            catch
+            {
+            }
+        }
+
+        private sealed class StorageHistoryPathComboBox : ComboBox
+        {
+            private readonly ShellIconService _shellIconService;
+
+            public StorageHistoryPathComboBox(ShellIconService shellIconService)
+            {
+                _shellIconService = shellIconService;
+            }
+
+            protected override void OnDrawItem(DrawItemEventArgs e)
+            {
+                if (e.Index < 0)
+                    return;
+
+                bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+
+                Color backgroundColor = isSelected
+                    ? SystemColors.Highlight
+                    : BackColor;
+
+                Color textColor = isSelected
+                    ? SystemColors.HighlightText
+                    : ForeColor;
+
+                using (SolidBrush backgroundBrush = new SolidBrush(backgroundColor))
+                {
+                    e.Graphics.FillRectangle(backgroundBrush, e.Bounds);
+                }
+
+                object item = Items[e.Index];
+
+                string text = item == null
+                    ? string.Empty
+                    : item.ToString();
+
+                string iconPath = GetItemIconPath(item);
+
+                int iconLeft = e.Bounds.Left + 3;
+                int iconTop = e.Bounds.Top + Math.Max(0, (e.Bounds.Height - 16) / 2);
+
+                if (!string.IsNullOrWhiteSpace(iconPath))
+                {
+                    using Bitmap icon = _shellIconService.GetSmallSystemIcon(iconPath);
+                    e.Graphics.DrawImage(icon, iconLeft, iconTop, 16, 16);
+                }
+
+                Rectangle textBounds = new Rectangle(
+                    e.Bounds.Left + 24,
+                    e.Bounds.Top,
+                    Math.Max(0, e.Bounds.Width - 26),
+                    e.Bounds.Height);
+
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    text,
+                    Font,
+                    textBounds,
+                    textColor,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+                e.DrawFocusRectangle();
+            }
+
+            protected override void WndProc(ref Message m)
+            {
+                base.WndProc(ref m);
+
+                const int WM_PAINT = 0x000F;
+
+                if (m.Msg != WM_PAINT ||
+                    DrawMode != DrawMode.OwnerDrawFixed ||
+                    DropDownStyle != ComboBoxStyle.DropDownList ||
+                    SelectedItem == null)
+                {
+                    return;
+                }
+
+                using Graphics graphics = CreateGraphics();
+
+                Rectangle bounds = new Rectangle(
+                    1,
+                    1,
+                    Math.Max(0, Width - SystemInformation.VerticalScrollBarWidth - 3),
+                    Math.Max(0, Height - 2));
+
+                using (SolidBrush backgroundBrush = new SolidBrush(BackColor))
+                {
+                    graphics.FillRectangle(backgroundBrush, bounds);
+                }
+
+                string iconPath = GetItemIconPath(SelectedItem);
+                int iconLeft = bounds.Left + 3;
+                int iconTop = bounds.Top + Math.Max(0, (bounds.Height - 16) / 2);
+
+                if (!string.IsNullOrWhiteSpace(iconPath))
+                {
+                    using Bitmap icon = _shellIconService.GetSmallSystemIcon(iconPath);
+                    graphics.DrawImage(icon, iconLeft, iconTop, 16, 16);
+                }
+
+                Rectangle textBounds = new Rectangle(
+                    bounds.Left + 24,
+                    bounds.Top,
+                    Math.Max(0, bounds.Width - 26),
+                    bounds.Height);
+
+                TextRenderer.DrawText(
+                    graphics,
+                    SelectedItem.ToString(),
+                    Font,
+                    textBounds,
+                    ForeColor,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            }
+
+            private static string GetItemIconPath(object item)
+            {
+                if (item is StorageHistoryPathItem pathItem)
+                    return pathItem.Path;
+
+                if (item is string path)
+                {
+                    if (Directory.Exists(path))
+                        return path;
+
+                    if (File.Exists(path))
+                        return path;
+                }
+
+                return Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            }
+        }
+
+        private sealed class StorageHistoryDataGridView : DataGridView
+        {
+            private const int WM_MOUSEMOVE = 0x0200;
+            private const int MK_LBUTTON = 0x0001;
+
+            public StorageHistoryDataGridView()
+            {
+                AllowDrop = false;
+                AllowUserToOrderColumns = false;
+            }
+
+            protected override void WndProc(ref Message m)
+            {
+                if (m.Msg == WM_MOUSEMOVE && (((int)m.WParam) & MK_LBUTTON) == MK_LBUTTON)
+                    return;
+
+                base.WndProc(ref m);
+            }
+
+            protected override void OnMouseMove(MouseEventArgs e)
+            {
+                if (e.Button == MouseButtons.Left)
+                    return;
+
+                base.OnMouseMove(e);
+            }
+
+            protected override void OnCellMouseMove(DataGridViewCellMouseEventArgs e)
+            {
+                if ((MouseButtons & MouseButtons.Left) == MouseButtons.Left)
+                    return;
+
+                base.OnCellMouseMove(e);
+            }
+
+            protected override void OnDragEnter(DragEventArgs drgevent)
+            {
+                drgevent.Effect = DragDropEffects.None;
+            }
+
+            protected override void OnDragOver(DragEventArgs drgevent)
+            {
+                drgevent.Effect = DragDropEffects.None;
+            }
+
+            protected override void OnDragDrop(DragEventArgs drgevent)
+            {
+                drgevent.Effect = DragDropEffects.None;
+            }
+        }
+
+
+        private sealed class StorageHistoryPathItem
+        {
+            public StorageHistoryPathItem(string path, string displayName)
+            {
+                Path = path;
+                DisplayName = displayName;
+            }
+
+            public string Path { get; }
+            public string DisplayName { get; }
+
+            public override string ToString()
+            {
+                return DisplayName;
+            }
         }
 
         private sealed class StorageHistoryDisplayModeItem
