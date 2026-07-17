@@ -14,7 +14,7 @@ Multilingual support comming, when requested - (Now: English/German)
 # Storage History
 
 <br>
-<img width="1437" height="948" alt="grafik" src="https://github.com/user-attachments/assets/502aaa18-e8ed-4899-b9e6-a30e9ebd7928" />
+<img width="1346" height="711" alt="grafik" src="https://github.com/user-attachments/assets/916c6caa-97e9-4b2f-8833-c6f3b088d9ce" />
 <br>
 <br>
 
