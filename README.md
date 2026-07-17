@@ -50,7 +50,7 @@ Multilingual support comming, when requested - (Now: English/German)
 # Settings
 
 <br>
-<img width="872" height="690" alt="grafik" src="https://github.com/user-attachments/assets/52cbde1e-e4ea-4eb4-82e6-e5bc8454c9cd" />
+<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/4e876b52-28b7-4adf-b63a-5193920d6ad2" />
 <br>
 <img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/1af4979c-1a7a-461e-a4fd-8209893a5eb8" />
 <br>
