@@ -98,6 +98,9 @@ Windows may show this message because the file was downloaded from the internet.
 - More focused: No treemap or extension statistics; instead it offers table, pie, and bar views.
 - Faster-first design: tries NTFS MFT scanning, then NT API scanning, then standard scanning.
 - Smaller scope: built for quick local Windows storage inspection, not full storage management.
+- WTF goes beyond showing what is large: it helps you understand what changed between scans.
+- It highlights new, modified, and deleted files, shows which folders have grown, and makes storage changes easy to trace.
+- Its focus is a clear, local, user-friendly history of where your disk space went.
 
 ## Special Notes
 
