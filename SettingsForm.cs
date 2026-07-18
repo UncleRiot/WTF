@@ -853,17 +853,29 @@ namespace WTF
             try
             {
                 Directory.CreateDirectory(LocalizationService.GetSettingsDirectoryPath());
-                File.Copy(
-                    openFileDialog.FileName,
-                    LocalizationService.GetLanguageFilePath(languageCode),
-                    true);
+
+                string sourceFilePath = Path.GetFullPath(openFileDialog.FileName);
+                string targetFilePath = Path.GetFullPath(
+                    LocalizationService.GetLanguageFilePath(languageCode));
+
+                if (!string.Equals(
+                        sourceFilePath,
+                        targetFilePath,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Copy(sourceFilePath, targetFilePath, true);
+                }
+
                 ReloadLanguageItems(languageCode);
             }
-            catch
+            catch (Exception exception)
             {
                 MessageBox.Show(
                     this,
-                    LocalizationService.GetText("Settings.LanguageImportFailed"),
+                    LocalizationService.GetText("Settings.LanguageImportFailed") +
+                    Environment.NewLine +
+                    Environment.NewLine +
+                    exception.Message,
                     LocalizationService.GetText("Common.Error"),
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
