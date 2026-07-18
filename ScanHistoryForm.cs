@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using Lucid.Controls;
 using Lucid.Theming;
@@ -47,16 +48,17 @@ namespace WTF
         {
             _settings = settings ?? new AppSettings();
 
+            LucidThemeService.Apply(_settings.Layout);
             InitializeComponent();
-            LoadScanHistoryInfos();
+            Shown += ScanHistoryForm_Shown;
             WindowsFormStyler.Apply(this, _settings.Layout);
-            ApplyGridTheme(dataGridViewScans);
+            DialogTableStyle.Apply(dataGridViewScans);
             growthOverviewControl.ApplyTheme();
-            ApplyGridTheme(dataGridViewSummary);
-            ApplyGridTheme(dataGridViewFolderGrowth);
-            ApplyGridTheme(dataGridViewNewFiles);
-            ApplyGridTheme(dataGridViewChangedFiles);
-            ApplyGridTheme(dataGridViewDeletedFiles);
+            DialogTableStyle.Apply(dataGridViewSummary);
+            DialogTableStyle.Apply(dataGridViewFolderGrowth);
+            DialogTableStyle.Apply(dataGridViewNewFiles);
+            DialogTableStyle.Apply(dataGridViewChangedFiles);
+            DialogTableStyle.Apply(dataGridViewDeletedFiles);
             ApplyScanHistoryLucidTheme();
         }
 
@@ -207,7 +209,13 @@ namespace WTF
             panelTop.Controls.Add(labelStatus);
             panelBottom.Controls.Add(buttonClose);
 
-            Controls.Add(tabControlResults);
+            Panel resultsHostPanel = DialogTableStyle.CreateTableHost(
+                tabControlResults,
+                backgroundPrimary,
+                0,
+                0);
+
+            Controls.Add(resultsHostPanel);
             Controls.Add(panelBottom);
             Controls.Add(panelTop);
 
@@ -234,12 +242,17 @@ namespace WTF
 
         private static TabPage CreateTabPage(string name, string text)
         {
-            return new TabPage
+            TabPage tabPage = new TabPage
             {
                 Name = name,
-                Text = text,
-                Padding = new Padding(8)
+                Text = text
             };
+
+            DialogTableStyle.ConfigureTablePage(
+                tabPage,
+                ThemeProvider.Theme.Colors.BackgroundPrimary);
+
+            return tabPage;
         }
 
         private static DataGridView CreateGrid(string name)
@@ -289,32 +302,7 @@ namespace WTF
             }
         }
 
-        private static void ApplyGridTheme(DataGridView grid)
-        {
-            Color backgroundPrimary = ThemeProvider.Theme.Colors.BackgroundPrimary;
-            Color backgroundSecondary = ThemeProvider.Theme.Colors.BackgroundSecondary;
-            Color textPrimary = ThemeProvider.Theme.Colors.TextPrimary;
-            Color selectionBackColor = ThemeProvider.Theme.Colors.Accent;
-            Color headerBackColor = ControlPaint.Dark(backgroundSecondary, 0.08f);
-
-            grid.BackgroundColor = backgroundSecondary;
-            grid.GridColor = ControlPaint.Dark(backgroundSecondary, 0.2f);
-            grid.DefaultCellStyle.BackColor = backgroundSecondary;
-            grid.DefaultCellStyle.ForeColor = textPrimary;
-            grid.DefaultCellStyle.SelectionBackColor = selectionBackColor;
-            grid.DefaultCellStyle.SelectionForeColor = Color.White;
-            grid.AlternatingRowsDefaultCellStyle.BackColor = backgroundPrimary;
-            grid.AlternatingRowsDefaultCellStyle.ForeColor = textPrimary;
-            grid.AlternatingRowsDefaultCellStyle.SelectionBackColor = selectionBackColor;
-            grid.AlternatingRowsDefaultCellStyle.SelectionForeColor = Color.White;
-            grid.ColumnHeadersDefaultCellStyle.BackColor = headerBackColor;
-            grid.ColumnHeadersDefaultCellStyle.ForeColor = textPrimary;
-            grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = headerBackColor;
-            grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = textPrimary;
-            grid.EnableHeadersVisualStyles = false;
-        }
-
-        private void ApplyScanHistoryLucidTheme()
+                private void ApplyScanHistoryLucidTheme()
         {
             Color backgroundPrimary = ThemeProvider.Theme.Colors.BackgroundPrimary;
             Color backgroundSecondary = ThemeProvider.Theme.Colors.BackgroundSecondary;
@@ -394,9 +382,56 @@ namespace WTF
             grid.Columns.Add(column);
         }
 
+        private async void ScanHistoryForm_Shown(object sender, EventArgs e)
+        {
+            Shown -= ScanHistoryForm_Shown;
+
+            if (!ScanHistoryService.IsDatabaseMaintenanceRequired())
+            {
+                LoadScanHistoryInfos();
+                return;
+            }
+
+            using DatabaseMaintenanceForm maintenanceForm =
+                new DatabaseMaintenanceForm(_settings.Layout);
+
+            Enabled = false;
+            maintenanceForm.Show(this);
+            maintenanceForm.Refresh();
+
+            try
+            {
+                IReadOnlyList<ScanHistoryInfo> loadedScanHistoryInfos =
+                    await Task.Run(() => ScanHistoryService.List());
+
+                BindScanHistoryInfos(loadedScanHistoryInfos);
+            }
+            catch (Exception exception)
+            {
+                MessageBox.Show(
+                    this,
+                    exception.Message,
+                    LocalizationService.GetText("Common.Error"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+            finally
+            {
+                maintenanceForm.Close();
+                Enabled = true;
+                Activate();
+            }
+        }
+
         private void LoadScanHistoryInfos()
         {
-            scanHistoryInfos = ScanHistoryService.List()
+            BindScanHistoryInfos(ScanHistoryService.List());
+        }
+
+        private void BindScanHistoryInfos(
+            IReadOnlyList<ScanHistoryInfo> loadedScanHistoryInfos)
+        {
+            scanHistoryInfos = loadedScanHistoryInfos
                 .OrderBy(
                     scanHistoryInfo => System.IO.Path.GetPathRoot(scanHistoryInfo.RootPath) ?? scanHistoryInfo.RootPath,
                     StringComparer.OrdinalIgnoreCase)
@@ -874,6 +909,48 @@ namespace WTF
             {
                 using SolidBrush backgroundBrush = new SolidBrush(_backgroundPrimary);
                 e.Graphics.FillRectangle(backgroundBrush, ClientRectangle);
+            }
+        }
+
+        private sealed class DatabaseMaintenanceForm : Form
+        {
+            public DatabaseMaintenanceForm(AppLayout layout)
+            {
+                LucidThemeService.Apply(layout);
+
+                Text = LocalizationService.GetText("ScanHistory.DatabaseMaintenanceTitle");
+                StartPosition = FormStartPosition.CenterParent;
+                FormBorderStyle = FormBorderStyle.FixedDialog;
+                ClientSize = new Size(420, 126);
+                MinimumSize = Size;
+                MaximumSize = Size;
+                ControlBox = false;
+                ShowInTaskbar = false;
+                BackColor = ThemeProvider.Theme.Colors.BackgroundPrimary;
+                ForeColor = ThemeProvider.Theme.Colors.TextPrimary;
+
+                LucidLabel labelMessage = new LucidLabel
+                {
+                    Name = "labelMessage",
+                    Text = LocalizationService.GetText("ScanHistory.DatabaseMaintenanceMessage"),
+                    Location = new Point(20, 18),
+                    Size = new Size(380, 48),
+                    TextAlign = ContentAlignment.MiddleLeft
+                };
+
+                ProgressBar progressBar = new ProgressBar
+                {
+                    Name = "progressBar",
+                    Location = new Point(20, 80),
+                    Size = new Size(380, 22),
+                    Style = ProgressBarStyle.Marquee,
+                    MarqueeAnimationSpeed = 30
+                };
+
+                Controls.Add(labelMessage);
+                Controls.Add(progressBar);
+
+                WindowsFormStyler.Apply(this, layout);
             }
         }
 

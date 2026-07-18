@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows.Forms;
 
 namespace WTF
@@ -94,7 +94,7 @@ namespace WTF
             private void InitializeComponent()
             {
                 StartPosition = FormStartPosition.CenterScreen;
-                ClientSize = new System.Drawing.Size(430, 150);
+                ClientSize = new System.Drawing.Size(480, 170);
                 MinimumSize = Size;
                 MaximumSize = Size;
                 MaximizeBox = false;
@@ -114,7 +114,7 @@ namespace WTF
                     Name = "labelMessage",
                     AutoSize = false,
                     Location = new System.Drawing.Point(74, 22),
-                    Size = new System.Drawing.Size(334, 42),
+                    Size = new System.Drawing.Size(384, 60),
                     BackColor = System.Drawing.Color.Transparent,
                     Text = _messageText
                 };
@@ -123,7 +123,7 @@ namespace WTF
                 {
                     Name = "checkBoxOption",
                     AutoSize = true,
-                    Location = new System.Drawing.Point(24, 80),
+                    Location = new System.Drawing.Point(24, 98),
                     Text = _checkBoxText,
                     BackColor = System.Drawing.Color.Transparent
                 };
@@ -133,7 +133,7 @@ namespace WTF
                     Name = "buttonYes",
                     Text = _yesButtonText,
                     Size = new System.Drawing.Size(84, 30),
-                    Location = new System.Drawing.Point(244, 108),
+                    Location = new System.Drawing.Point(294, 128),
                     DialogResult = DialogResult.Yes
                 };
 
@@ -142,7 +142,7 @@ namespace WTF
                     Name = "buttonNo",
                     Text = _noButtonText,
                     Size = new System.Drawing.Size(84, 30),
-                    Location = new System.Drawing.Point(336, 108),
+                    Location = new System.Drawing.Point(386, 128),
                     DialogResult = DialogResult.No
                 };
 

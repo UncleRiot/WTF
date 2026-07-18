@@ -42,6 +42,7 @@ namespace WTF
         public string LanguageCode { get; set; } = LocalizationService.EnglishLanguageCode;
         public bool SaveScanHistory { get; set; }
         public string ScanHistoryDatabasePath { get; set; } = ScanHistoryService.DefaultDatabasePath;
+        public int ScanHistoryMaximumScansPerPath { get; set; } = 30;
 
         public bool ExportPath { get; set; } = true;
         public bool ExportSizeGb { get; set; } = true;
@@ -117,7 +118,12 @@ namespace WTF
                     Math.Min(30, settings.BarChartBarHeight));
                 settings.ScanHistoryDatabasePath = ScanHistoryService.NormalizeDatabasePath(
                     settings.ScanHistoryDatabasePath);
+                settings.ScanHistoryMaximumScansPerPath = Math.Max(
+                    1,
+                    settings.ScanHistoryMaximumScansPerPath);
                 ScanHistoryService.ConfigureDatabasePath(settings.ScanHistoryDatabasePath);
+                ScanHistoryService.ConfigureRetention(
+                    settings.ScanHistoryMaximumScansPerPath);
 
                 return settings;
             }

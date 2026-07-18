@@ -57,6 +57,14 @@ namespace WTF
             return form.MinimumSize != form.MaximumSize;
         }
 
+        private static bool IsLucidControl(Control control)
+        {
+            string controlNamespace = control.GetType().Namespace;
+
+            return !string.IsNullOrWhiteSpace(controlNamespace) &&
+                   controlNamespace.StartsWith("Lucid.", StringComparison.Ordinal);
+        }
+
         private static bool ShouldUseDarkMode(AppLayout layout)
         {
             if (layout == AppLayout.WindowsDarkMode)

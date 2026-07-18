@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 namespace WTF
@@ -74,15 +75,97 @@ namespace WTF
 
         public static string NormalizeLanguageCode(string languageCode)
         {
-            if (string.Equals(languageCode, EnglishLanguageCode, StringComparison.OrdinalIgnoreCase))
-                return EnglishLanguageCode;
+            if (string.IsNullOrWhiteSpace(languageCode))
+                return GermanLanguageCode;
 
-            return GermanLanguageCode;
+            string normalizedLanguageCode = languageCode.Trim().ToLowerInvariant();
+
+            foreach (char character in normalizedLanguageCode)
+            {
+                if (!char.IsLetterOrDigit(character) &&
+                    character != '-' &&
+                    character != '_')
+                {
+                    return GermanLanguageCode;
+                }
+            }
+
+            return normalizedLanguageCode;
+        }
+
+        public static bool IsBuiltInLanguage(string languageCode)
+        {
+            string normalizedLanguageCode = NormalizeLanguageCode(languageCode);
+
+            return string.Equals(
+                       normalizedLanguageCode,
+                       GermanLanguageCode,
+                       StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(
+                       normalizedLanguageCode,
+                       EnglishLanguageCode,
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string[] GetAvailableLanguageCodes()
+        {
+            EnsureLanguageFiles();
+
+            try
+            {
+                return Directory
+                    .GetFiles(GetSettingsDirectoryPath(), "lang_*.json", SearchOption.TopDirectoryOnly)
+                    .Select(Path.GetFileNameWithoutExtension)
+                    .Where(fileName =>
+                        !string.IsNullOrWhiteSpace(fileName) &&
+                        fileName.StartsWith("lang_", StringComparison.OrdinalIgnoreCase))
+                    .Select(fileName => NormalizeLanguageCode(fileName.Substring(5)))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(languageCode => languageCode, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+            catch
+            {
+                return new[] { GermanLanguageCode, EnglishLanguageCode };
+            }
+        }
+
+        public static string GetLanguageDisplayName(string languageCode)
+        {
+            string normalizedLanguageCode = NormalizeLanguageCode(languageCode);
+
+            if (string.Equals(
+                    normalizedLanguageCode,
+                    GermanLanguageCode,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return GetText("Settings.LanguageGerman");
+            }
+
+            if (string.Equals(
+                    normalizedLanguageCode,
+                    EnglishLanguageCode,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return GetText("Settings.LanguageEnglish");
+            }
+
+            Dictionary<string, string> languageTexts = LoadLanguageFile(normalizedLanguageCode);
+
+            if (languageTexts.TryGetValue("Language.Name", out string languageName) &&
+                !string.IsNullOrWhiteSpace(languageName))
+            {
+                return languageName.Trim();
+            }
+
+            return normalizedLanguageCode.ToUpperInvariant();
         }
 
         public static string GetLanguageFilePath(string languageCode)
         {
-            return Path.Combine(GetSettingsDirectoryPath(), "lang_" + NormalizeLanguageCode(languageCode) + ".json");
+            return Path.Combine(
+                GetSettingsDirectoryPath(),
+                "lang_" + NormalizeLanguageCode(languageCode) + ".json");
         }
 
         public static string GetSettingsDirectoryPath()
@@ -106,102 +189,18 @@ namespace WTF
         private static void EnsureLanguageFile(string languageCode, Dictionary<string, string> defaultTexts)
         {
             string languageFilePath = GetLanguageFilePath(languageCode);
-            Dictionary<string, string> fileTexts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            if (File.Exists(languageFilePath))
+            if (!IsBuiltInLanguage(languageCode) && File.Exists(languageFilePath))
+                return;
+
+            JsonSerializerOptions options = new JsonSerializerOptions
             {
-                try
-                {
-                    string json = File.ReadAllText(languageFilePath);
-                    Dictionary<string, string> loadedTexts = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+                WriteIndented = true
+            };
 
-                    if (loadedTexts != null)
-                    {
-                        foreach (KeyValuePair<string, string> loadedText in loadedTexts)
-                        {
-                            if (!string.IsNullOrWhiteSpace(loadedText.Key))
-                            {
-                                fileTexts[loadedText.Key] = loadedText.Value ?? string.Empty;
-                            }
-                        }
-                    }
-                }
-                catch
-                {
-                    fileTexts.Clear();
-                }
-            }
-
-            bool changed = false;
-
-            if (string.Equals(languageCode, GermanLanguageCode, StringComparison.OrdinalIgnoreCase))
-            {
-                changed |= ReplaceLegacyTranslation(
-                    fileTexts,
-                    "Menu.SaveScanResult",
-                    "Save scan...",
-                    defaultTexts["Menu.SaveScanResult"]);
-
-                changed |= ReplaceLegacyTranslation(
-                    fileTexts,
-                    "Menu.LoadScanResult",
-                    "Load scan...",
-                    defaultTexts["Menu.LoadScanResult"]);
-
-                changed |= ReplaceLegacyTranslation(
-                    fileTexts,
-                    "Menu.Analysis",
-                    "Analysis",
-                    defaultTexts["Menu.Analysis"]);
-            }
-
-            if (string.Equals(languageCode, GermanLanguageCode, StringComparison.OrdinalIgnoreCase))
-            {
-                changed |= ReplaceLegacyTranslation(
-                    fileTexts,
-                    "Settings.MoveDatabase",
-                    "Verschieben...",
-                    defaultTexts["Settings.MoveDatabase"]);
-
-                changed |= ReplaceLegacyTranslation(
-                    fileTexts,
-                    "Settings.ScanHistoryDatabaseMoveHint",
-                    "Änderungen verschieben die bestehende Datenbank.",
-                    defaultTexts["Settings.ScanHistoryDatabaseMoveHint"]);
-            }
-            else if (string.Equals(languageCode, EnglishLanguageCode, StringComparison.OrdinalIgnoreCase))
-            {
-                changed |= ReplaceLegacyTranslation(
-                    fileTexts,
-                    "Settings.MoveDatabase",
-                    "Move...",
-                    defaultTexts["Settings.MoveDatabase"]);
-
-                changed |= ReplaceLegacyTranslation(
-                    fileTexts,
-                    "Settings.ScanHistoryDatabaseMoveHint",
-                    "Changes move the existing database.",
-                    defaultTexts["Settings.ScanHistoryDatabaseMoveHint"]);
-            }
-
-            foreach (KeyValuePair<string, string> defaultText in defaultTexts)
-            {
-                if (!fileTexts.ContainsKey(defaultText.Key))
-                {
-                    fileTexts[defaultText.Key] = defaultText.Value;
-                    changed = true;
-                }
-            }
-
-            if (!File.Exists(languageFilePath) || changed)
-            {
-                JsonSerializerOptions options = new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                };
-
-                File.WriteAllText(languageFilePath, JsonSerializer.Serialize(fileTexts, options));
-            }
+            File.WriteAllText(
+                languageFilePath,
+                JsonSerializer.Serialize(defaultTexts, options));
         }
 
         private static bool ReplaceLegacyTranslation(
@@ -346,6 +345,8 @@ namespace WTF
                 ["Settings.ScanHistoryDatabaseMoveHint"] = "(Browse/move/create DB)",
                 ["Settings.DatabaseSize"] = "Datenbank-Größe: {0}",
                 ["Settings.DatabaseSizeUnavailable"] = "—",
+                ["Settings.ScanHistoryMaximumScansPerPath"] = "Maximale Scans pro Pfad:",
+                ["Settings.ScanHistoryMaximumScansPerPathInvalid"] = "Die maximale Anzahl gespeicherter Scans pro Pfad muss mindestens 1 betragen.",
                 ["DatabaseBrowse.Title"] = "Datenbank auswählen",
                 ["DatabaseBrowse.CurrentPath"] = "Aktueller Datenbank-Pfad:",
                 ["DatabaseBrowse.Hint"] = "Wähle genau aus, was mit der Datenbank geschehen soll. Bestehende Dateien werden niemals überschrieben.",
@@ -362,6 +363,8 @@ namespace WTF
                 ["DatabaseBrowse.SelectionRequired"] = "Bitte den Datenbank-Pfad erneut über „Durchsuchen...“ auswählen.",
                 ["DatabaseBrowse.ApplyFailed"] = "Die Datenbank-Auswahl konnte nicht übernommen werden.",
                 ["ScanHistory.Title"] = "Scan history",
+                ["ScanHistory.DatabaseMaintenanceTitle"] = "Scan-History-Datenbank",
+                ["ScanHistory.DatabaseMaintenanceMessage"] = "Die Scan-History-Datenbank wird optimiert.\nBitte warten und die Anwendung nicht schließen.",
                 ["ScanHistory.BaselineScan"] = "Baseline scan:",
                 ["ScanHistory.CompareScan"] = "Compare scan:",
                 ["ScanHistory.Compare"] = "Compare",
@@ -415,13 +418,21 @@ namespace WTF
                 ["Settings.Language"] = "Sprache:",
                 ["Settings.LanguageGerman"] = "Deutsch",
                 ["Settings.LanguageEnglish"] = "Englisch",
+                ["Settings.AddLanguage"] = "Sprache hinzufügen",
+                ["Settings.DeleteLanguage"] = "Sprache löschen",
+                ["Settings.AddLanguageWarning"] = "Fügen Sie nur vertrauenswürdige JSON-Sprachdateien hinzu. Fortfahren?",
+                ["Settings.DeleteLanguageConfirm"] = "Soll die Sprache „{0}“ wirklich gelöscht werden?",
+                ["Settings.LanguageFileFilter"] = "JSON-Sprachdateien (lang_*.json)|lang_*.json",
+                ["Settings.InvalidLanguageFile"] = "Die ausgewählte Sprachdatei ist ungültig. Erwartet wird eine JSON-Datei mit dem Namen lang_<code>.json.",
+                ["Settings.LanguageImportFailed"] = "Die Sprachdatei konnte nicht hinzugefügt werden.",
+                ["Settings.LanguageDeleteFailed"] = "Die Sprachdatei konnte nicht gelöscht werden.",
                 ["Settings.ShowFilesInTree"] = "Dateien im Baum anzeigen",
                 ["Settings.SkipReparsePoints"] = "Reparse Points / Junctions überspringen",
                 ["Settings.ShowPartitionPanel"] = "Partitionsfenster anzeigen",
                 ["Settings.StartElevated"] = "Starten mit erhöhten Rechten",
                 ["Settings.ShowElevationPrompt"] = "Admin-Hinweis beim Start anzeigen",
                 ["Settings.ShellContextMenu"] = "Explorer-Kontextmenüeintrag für Ordner und Laufwerke anzeigen",
-                ["Settings.Layout"] = "Layout:",
+                ["Settings.Layout"] = "Design:",
                 ["Settings.LayoutWindowsDefault"] = "Windows default",
                 ["Settings.LayoutWindowsLight"] = "Windows light mode",
                 ["Settings.LayoutWindowsDark"] = "Windows dark mode",
@@ -608,6 +619,8 @@ namespace WTF
                 ["Settings.ScanHistoryDatabaseMoveHint"] = "(Browse/move/create DB)",
                 ["Settings.DatabaseSize"] = "Database size: {0}",
                 ["Settings.DatabaseSizeUnavailable"] = "—",
+                ["Settings.ScanHistoryMaximumScansPerPath"] = "Maximum scans per path:",
+                ["Settings.ScanHistoryMaximumScansPerPathInvalid"] = "The maximum number of saved scans per path must be at least 1.",
                 ["DatabaseBrowse.Title"] = "Select database",
                 ["DatabaseBrowse.CurrentPath"] = "Current database path:",
                 ["DatabaseBrowse.Hint"] = "Choose exactly what should happen to the database. Existing files are never overwritten.",
@@ -624,6 +637,8 @@ namespace WTF
                 ["DatabaseBrowse.SelectionRequired"] = "Select the database path again using “Browse...”.",
                 ["DatabaseBrowse.ApplyFailed"] = "The database selection could not be applied.",
                 ["ScanHistory.Title"] = "Scan history",
+                ["ScanHistory.DatabaseMaintenanceTitle"] = "Scan history database",
+                ["ScanHistory.DatabaseMaintenanceMessage"] = "The scan history database is being optimized.\nPlease wait and do not close the application.",
                 ["ScanHistory.BaselineScan"] = "Baseline scan:",
                 ["ScanHistory.CompareScan"] = "Compare scan:",
                 ["ScanHistory.Compare"] = "Compare",
@@ -677,13 +692,21 @@ namespace WTF
                 ["Settings.Language"] = "Language:",
                 ["Settings.LanguageGerman"] = "German",
                 ["Settings.LanguageEnglish"] = "English",
+                ["Settings.AddLanguage"] = "Add language",
+                ["Settings.DeleteLanguage"] = "Delete language",
+                ["Settings.AddLanguageWarning"] = "Only add trusted JSON language files. Continue?",
+                ["Settings.DeleteLanguageConfirm"] = "Do you really want to delete the language “{0}”?",
+                ["Settings.LanguageFileFilter"] = "JSON language files (lang_*.json)|lang_*.json",
+                ["Settings.InvalidLanguageFile"] = "The selected language file is invalid. A JSON file named lang_<code>.json is required.",
+                ["Settings.LanguageImportFailed"] = "The language file could not be added.",
+                ["Settings.LanguageDeleteFailed"] = "The language file could not be deleted.",
                 ["Settings.ShowFilesInTree"] = "Show files in tree",
                 ["Settings.SkipReparsePoints"] = "Skip reparse points / junctions",
                 ["Settings.ShowPartitionPanel"] = "Show partition panel",
                 ["Settings.StartElevated"] = "Start with elevated privileges",
                 ["Settings.ShowElevationPrompt"] = "Show admin notice at startup",
                 ["Settings.ShellContextMenu"] = "Show Explorer context menu entry for folders and drives",
-                ["Settings.Layout"] = "Layout:",
+                ["Settings.Layout"] = "Theme:",
                 ["Settings.LayoutWindowsDefault"] = "Windows default",
                 ["Settings.LayoutWindowsLight"] = "Windows light mode",
                 ["Settings.LayoutWindowsDark"] = "Windows dark mode",

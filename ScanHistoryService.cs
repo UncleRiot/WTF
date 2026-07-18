@@ -15,6 +15,16 @@ namespace WTF
             ScanHistoryDatabaseService.ConfigureDatabasePath(databasePath);
         }
 
+        public static void ConfigureRetention(int maximumScansPerPath)
+        {
+            ScanHistoryDatabaseService.ConfigureRetention(maximumScansPerPath);
+        }
+
+        public static bool IsDatabaseMaintenanceRequired()
+        {
+            return ScanHistoryDatabaseService.IsMaintenanceRequired();
+        }
+
         public static string NormalizeDatabasePath(string databasePath)
         {
             return ScanHistoryDatabaseService.NormalizeDatabasePath(databasePath);

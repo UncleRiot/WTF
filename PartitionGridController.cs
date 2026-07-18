@@ -122,6 +122,19 @@ namespace WTF
                     Alignment = DataGridViewContentAlignment.MiddleRight
                 }
             });
+
+            Color headerBackColor = IsDarkMode()
+                ? Color.FromArgb(32, 32, 32)
+                : Color.White;
+            Color headerForeColor = IsDarkMode()
+                ? Color.White
+                : Color.Black;
+
+            foreach (DataGridViewColumn column in _listViewPartitions.Columns)
+            {
+                column.HeaderCell.Style.SelectionBackColor = headerBackColor;
+                column.HeaderCell.Style.SelectionForeColor = headerForeColor;
+            }
         }
 
         public void LoadPartitionList()

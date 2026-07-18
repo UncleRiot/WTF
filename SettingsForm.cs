@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
+using System.Text.Json;
 using System.Windows.Forms;
 using Lucid.Controls;
 using Lucid.Theming;
@@ -29,6 +32,9 @@ namespace WTF
         private LucidCheckBox checkBoxShellContextMenuEnabled;
         private LucidLabel labelLanguage;
         private ComboBox comboBoxLanguage;
+        private LucidButton buttonAddLanguage;
+        private LucidButton buttonDeleteLanguage;
+        private ToolTip toolTip;
         private LucidLabel labelLayout;
         private ComboBox comboBoxLayout;
         private LucidCheckBox checkBoxExportPath;
@@ -59,6 +65,8 @@ namespace WTF
         private LucidButton buttonBrowseScanHistoryDatabasePath;
         private LucidLabel labelScanHistoryDatabaseMoveHint;
         private LucidLabel labelScanHistoryDatabaseSize;
+        private LucidLabel labelScanHistoryMaximumScansPerPath;
+        private LucidTextBox textBoxScanHistoryMaximumScansPerPath;
         private LucidButton buttonOk;
         private LucidButton buttonCancel;
         private DatabasePathSelectionMode selectedDatabasePathSelectionMode;
@@ -231,39 +239,74 @@ namespace WTF
                 204,
                 backgroundSecondary);
 
+            // Language/Layout label start
             labelLanguage = CreateLabel(
                 "labelLanguage",
                 LocalizationService.GetText("Settings.Language"),
                 250);
+            labelLanguage.Location = new Point(22, 250);
+            // Language/Layout label width
+            labelLanguage.Size = new Size(80, 28);
 
+            // Language/Layout dropdown start
             comboBoxLanguage = new ComboBox
             {
                 Name = "comboBoxLanguage",
-                Location = new Point(174, 250),
-                Size = new Size(268, 28),
+                // Dropdown text moves with control
+                Location = new Point(100, 250),
+                Size = new Size(216, 28),
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 FlatStyle = FlatStyle.Standard,
                 BackColor = backgroundSecondary,
                 ForeColor = ThemeProvider.Theme.Colors.TextPrimary,
                 Font = SystemFonts.MessageBoxFont
             };
+            comboBoxLanguage.SelectedIndexChanged += comboBoxLanguage_SelectedIndexChanged;
 
-            comboBoxLanguage.Items.Add(new LanguageItem(
-                LocalizationService.GetText("Settings.LanguageGerman"),
-                LocalizationService.GermanLanguageCode));
-            comboBoxLanguage.Items.Add(new LanguageItem(
-                LocalizationService.GetText("Settings.LanguageEnglish"),
-                LocalizationService.EnglishLanguageCode));
+            // Language buttons start
+            buttonAddLanguage = new LucidButton
+            {
+                Name = "buttonAddLanguage",
+                Text = "+",
+                Location = new Point(326, 250),
+                Size = new Size(28, 28),
+                ButtonStyle = LucidButtonStyle.Normal
+            };
+            buttonAddLanguage.Click += buttonAddLanguage_Click;
+
+            buttonDeleteLanguage = new LucidButton
+            {
+                Name = "buttonDeleteLanguage",
+                Text = "−",
+                Location = new Point(358, 250),
+                Size = new Size(28, 28),
+                ButtonStyle = LucidButtonStyle.Normal
+            };
+            buttonDeleteLanguage.Click += buttonDeleteLanguage_Click;
+
+            toolTip = new ToolTip();
+            toolTip.SetToolTip(
+                buttonAddLanguage,
+                LocalizationService.GetText("Settings.AddLanguage"));
+            toolTip.SetToolTip(
+                buttonDeleteLanguage,
+                LocalizationService.GetText("Settings.DeleteLanguage"));
+
+            ReloadLanguageItems(_settings.LanguageCode);
+
             labelLayout = CreateLabel(
                 "labelLayout",
                 LocalizationService.GetText("Settings.Layout"),
                 290);
+            labelLayout.Location = new Point(22, 290);
+            labelLayout.Size = new Size(68, 28);
 
             comboBoxLayout = new ComboBox
             {
                 Name = "comboBoxLayout",
-                Location = new Point(174, 290),
-                Size = new Size(268, 28),
+                // Dropdown text moves with control
+                Location = new Point(100, 290),
+                Size = new Size(216, 28),
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 FlatStyle = FlatStyle.Standard,
                 BackColor = backgroundSecondary,
@@ -483,6 +526,26 @@ namespace WTF
                 Visible = false
             };
 
+            labelScanHistoryMaximumScansPerPath = new LucidLabel
+            {
+                Name = "labelScanHistoryMaximumScansPerPath",
+                Text = LocalizationService.GetText("Settings.ScanHistoryMaximumScansPerPath"),
+                Location = new Point(24, 182),
+                Size = new Size(300, 25),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Visible = false
+            };
+
+            textBoxScanHistoryMaximumScansPerPath = new LucidTextBox
+            {
+                Name = "textBoxScanHistoryMaximumScansPerPath",
+                Location = new Point(334, 182),
+                Size = new Size(60, 25),
+                TextAlign = HorizontalAlignment.Right,
+                MaxLength = 5,
+                Visible = false
+            };
+
             panelGeneral.Controls.Add(checkBoxShowFilesInTree);
             panelGeneral.Controls.Add(checkBoxSkipReparsePoints);
             panelGeneral.Controls.Add(checkBoxShowPartitionPanel);
@@ -491,6 +554,8 @@ namespace WTF
             panelGeneral.Controls.Add(checkBoxShellContextMenuEnabled);
             panelGeneral.Controls.Add(labelLanguage);
             panelGeneral.Controls.Add(comboBoxLanguage);
+            panelGeneral.Controls.Add(buttonAddLanguage);
+            panelGeneral.Controls.Add(buttonDeleteLanguage);
             panelGeneral.Controls.Add(labelLayout);
             panelGeneral.Controls.Add(comboBoxLayout);
 
@@ -523,6 +588,8 @@ namespace WTF
             panelStatistics.Controls.Add(buttonBrowseScanHistoryDatabasePath);
             panelStatistics.Controls.Add(labelScanHistoryDatabaseMoveHint);
             panelStatistics.Controls.Add(labelScanHistoryDatabaseSize);
+            panelStatistics.Controls.Add(labelScanHistoryMaximumScansPerPath);
+            panelStatistics.Controls.Add(textBoxScanHistoryMaximumScansPerPath);
 
             panelPageHost.Controls.Add(panelGeneral);
             panelPageHost.Controls.Add(panelExport);
@@ -663,6 +730,8 @@ namespace WTF
             buttonBrowseScanHistoryDatabasePath.Visible = showDatabasePath;
             labelScanHistoryDatabaseMoveHint.Visible = showDatabasePath;
             labelScanHistoryDatabaseSize.Visible = showDatabasePath;
+            labelScanHistoryMaximumScansPerPath.Visible = showDatabasePath;
+            textBoxScanHistoryMaximumScansPerPath.Visible = showDatabasePath;
 
             if (showDatabasePath && string.IsNullOrWhiteSpace(textBoxScanHistoryDatabasePath.Text))
             {
@@ -734,6 +803,194 @@ namespace WTF
             }
 
             return AppContext.BaseDirectory;
+        }
+
+        private void comboBoxLanguage_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            buttonDeleteLanguage.Enabled =
+                comboBoxLanguage.SelectedItem is LanguageItem selectedLanguageItem &&
+                !LocalizationService.IsBuiltInLanguage(selectedLanguageItem.LanguageCode);
+        }
+
+        private void buttonAddLanguage_Click(object sender, EventArgs e)
+        {
+            DialogResult warningResult = MessageBox.Show(
+                this,
+                LocalizationService.GetText("Settings.AddLanguageWarning"),
+                LocalizationService.GetText("Common.Warning"),
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+            if (warningResult != DialogResult.Yes)
+                return;
+
+            using OpenFileDialog openFileDialog = new OpenFileDialog
+            {
+                Title = LocalizationService.GetText("Settings.AddLanguage"),
+                Filter = LocalizationService.GetText("Settings.LanguageFileFilter"),
+                CheckFileExists = true,
+                Multiselect = false
+            };
+
+            if (openFileDialog.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            string fileName = Path.GetFileName(openFileDialog.FileName);
+            string languageCode = GetLanguageCodeFromFileName(fileName);
+
+            if (languageCode == null || !IsValidLanguageFile(openFileDialog.FileName))
+            {
+                MessageBox.Show(
+                    this,
+                    LocalizationService.GetText("Settings.InvalidLanguageFile"),
+                    LocalizationService.GetText("Common.Warning"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(LocalizationService.GetSettingsDirectoryPath());
+                File.Copy(
+                    openFileDialog.FileName,
+                    LocalizationService.GetLanguageFilePath(languageCode),
+                    true);
+                ReloadLanguageItems(languageCode);
+            }
+            catch
+            {
+                MessageBox.Show(
+                    this,
+                    LocalizationService.GetText("Settings.LanguageImportFailed"),
+                    LocalizationService.GetText("Common.Error"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+        private void buttonDeleteLanguage_Click(object sender, EventArgs e)
+        {
+            if (!(comboBoxLanguage.SelectedItem is LanguageItem selectedLanguageItem))
+                return;
+
+            if (LocalizationService.IsBuiltInLanguage(selectedLanguageItem.LanguageCode))
+                return;
+
+            DialogResult warningResult = MessageBox.Show(
+                this,
+                LocalizationService.Format(
+                    "Settings.DeleteLanguageConfirm",
+                    selectedLanguageItem.Text),
+                LocalizationService.GetText("Common.Warning"),
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+            if (warningResult != DialogResult.Yes)
+                return;
+
+            try
+            {
+                string languageFilePath = LocalizationService.GetLanguageFilePath(
+                    selectedLanguageItem.LanguageCode);
+
+                if (File.Exists(languageFilePath))
+                {
+                    File.Delete(languageFilePath);
+                }
+
+                ReloadLanguageItems(LocalizationService.EnglishLanguageCode);
+            }
+            catch
+            {
+                MessageBox.Show(
+                    this,
+                    LocalizationService.GetText("Settings.LanguageDeleteFailed"),
+                    LocalizationService.GetText("Common.Error"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+        private void ReloadLanguageItems(string selectedLanguageCode)
+        {
+            string normalizedSelectedLanguageCode =
+                LocalizationService.NormalizeLanguageCode(selectedLanguageCode);
+
+            comboBoxLanguage.BeginUpdate();
+
+            try
+            {
+                comboBoxLanguage.Items.Clear();
+
+                foreach (string languageCode in LocalizationService.GetAvailableLanguageCodes())
+                {
+                    comboBoxLanguage.Items.Add(new LanguageItem(
+                        LocalizationService.GetLanguageDisplayName(languageCode),
+                        languageCode));
+                }
+            }
+            finally
+            {
+                comboBoxLanguage.EndUpdate();
+            }
+
+            for (int index = 0; index < comboBoxLanguage.Items.Count; index++)
+            {
+                if (comboBoxLanguage.Items[index] is LanguageItem languageItem &&
+                    string.Equals(
+                        languageItem.LanguageCode,
+                        normalizedSelectedLanguageCode,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    comboBoxLanguage.SelectedIndex = index;
+                    return;
+                }
+            }
+
+            comboBoxLanguage.SelectedIndex = comboBoxLanguage.Items.Count > 0 ? 0 : -1;
+        }
+
+        private static string GetLanguageCodeFromFileName(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName) ||
+                !fileName.StartsWith("lang_", StringComparison.OrdinalIgnoreCase) ||
+                !fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            string languageCode = fileName.Substring(5, fileName.Length - 10);
+
+            if (string.IsNullOrWhiteSpace(languageCode))
+                return null;
+
+            string normalizedLanguageCode = LocalizationService.NormalizeLanguageCode(languageCode);
+
+            return string.Equals(
+                normalizedLanguageCode,
+                languageCode,
+                StringComparison.OrdinalIgnoreCase)
+                ? normalizedLanguageCode
+                : null;
+        }
+
+        private static bool IsValidLanguageFile(string filePath)
+        {
+            try
+            {
+                string json = File.ReadAllText(filePath);
+                Dictionary<string, string> texts =
+                    JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+
+                return texts != null && texts.Count > 0;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void comboBoxLayout_SelectedIndexChanged(object sender, EventArgs e)
@@ -826,6 +1083,8 @@ namespace WTF
             textBoxBarChartBarHeight.Text = _settings.BarChartBarHeight.ToString();
             textBoxScanHistoryDatabasePath.Text = ScanHistoryService.NormalizeDatabasePath(
                 _settings.ScanHistoryDatabasePath);
+            textBoxScanHistoryMaximumScansPerPath.Text =
+                _settings.ScanHistoryMaximumScansPerPath.ToString();
             checkBoxSaveScanHistory.Checked = _settings.SaveScanHistory;
             UpdateScanHistoryDatabasePathVisibility();
 
@@ -885,6 +1144,23 @@ namespace WTF
         private bool TrySaveSettings()
         {
             int? exportMaxDepth = null;
+
+            if (!int.TryParse(
+                    textBoxScanHistoryMaximumScansPerPath.Text.Trim(),
+                    out int scanHistoryMaximumScansPerPath) ||
+                scanHistoryMaximumScansPerPath < 1)
+            {
+                MessageBox.Show(
+                    this,
+                    LocalizationService.GetText("Settings.ScanHistoryMaximumScansPerPathInvalid"),
+                    Text,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                ShowPage(panelStatistics);
+                textBoxScanHistoryMaximumScansPerPath.Focus();
+                textBoxScanHistoryMaximumScansPerPath.SelectAll();
+                return false;
+            }
 
             if (!int.TryParse(
                     textBoxBarChartBarHeight.Text.Trim(),
@@ -953,6 +1229,8 @@ namespace WTF
             _settings.BarChartBarHeight = barChartBarHeight;
             _settings.SaveScanHistory = checkBoxSaveScanHistory.Checked;
             _settings.ScanHistoryDatabasePath = selectedScanHistoryDatabasePath;
+            _settings.ScanHistoryMaximumScansPerPath = scanHistoryMaximumScansPerPath;
+            ScanHistoryService.ConfigureRetention(scanHistoryMaximumScansPerPath);
 
             if (comboBoxLanguage.SelectedItem is LanguageItem selectedLanguageItem)
             {

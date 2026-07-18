@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using Lucid.Controls;
-using Lucid.Controls.GridView;
 using Lucid.Theming;
 
 namespace WTF
@@ -16,8 +16,10 @@ namespace WTF
         private readonly Image _warningSymbolImage = StatusSymbolRenderer.CreateBitmap(StatusSymbolKind.Warning);
         private readonly Image _errorSymbolImage = StatusSymbolRenderer.CreateBitmap(StatusSymbolKind.Error);
 
-        private LucidDataGridView dataGridViewAlerts;
-        private LucidTextBox textBoxDetails;
+        private DataGridView dataGridViewAlerts;
+        private DataGridView dataGridViewDetails;
+        private string _sortColumnName;
+        private ListSortDirection _sortDirection = ListSortDirection.Ascending;
         private LucidButton buttonConfirm;
         private LucidButton buttonDelete;
         private LucidButton buttonConfirmAll;
@@ -31,7 +33,8 @@ namespace WTF
             LucidThemeService.Apply(_settings.Layout);
             InitializeComponent();
             WindowsFormStyler.Apply(this, _settings.Layout);
-            ApplyTheme();
+            DialogTableStyle.Apply(dataGridViewAlerts);
+            DialogTableStyle.ApplyDetails(dataGridViewDetails);
             LoadAlerts();
 
             AppAlertLog.Changed += AppAlertLog_Changed;
@@ -58,12 +61,13 @@ namespace WTF
         private void InitializeComponent()
         {
             Text = LocalizationService.GetText("AlertHistory.Title");
+            Icon = AppResources.ApplicationIcon;
             StartPosition = FormStartPosition.CenterParent;
             Size = new System.Drawing.Size(820, 500);
             MinimumSize = new System.Drawing.Size(640, 380);
             ShowInTaskbar = false;
 
-            dataGridViewAlerts = new LucidDataGridView
+            dataGridViewAlerts = new DataGridView
             {
                 Name = "dataGridViewAlerts",
                 Dock = DockStyle.Fill,
@@ -71,6 +75,11 @@ namespace WTF
                 AllowUserToDeleteRows = false,
                 AllowUserToResizeRows = false,
                 AutoGenerateColumns = false,
+                BorderStyle = BorderStyle.FixedSingle,
+                CellBorderStyle = DataGridViewCellBorderStyle.None,
+                ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single,
+                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
+                ColumnHeadersHeight = 24,
                 ReadOnly = true,
                 RowHeadersVisible = false,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
@@ -80,8 +89,11 @@ namespace WTF
             dataGridViewAlerts.Columns.Add(new DataGridViewImageColumn
             {
                 Name = "ColumnSeverity",
-                HeaderText = LocalizationService.GetText("AlertHistory.Type"),
-                Width = 90,
+                HeaderText = "Info",
+                DataPropertyName = "Severity",
+                MinimumWidth = 50,
+                Width = 50,
+                SortMode = DataGridViewColumnSortMode.Programmatic,
                 ImageLayout = DataGridViewImageCellLayout.Normal,
                 DefaultCellStyle =
                 {
@@ -92,6 +104,7 @@ namespace WTF
             dataGridViewAlerts.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnCategory",
+                SortMode = DataGridViewColumnSortMode.Programmatic,
                 HeaderText = LocalizationService.GetText("AlertHistory.Category"),
                 DataPropertyName = "Category",
                 Width = 140
@@ -100,6 +113,7 @@ namespace WTF
             dataGridViewAlerts.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnMessage",
+                SortMode = DataGridViewColumnSortMode.Programmatic,
                 HeaderText = LocalizationService.GetText("AlertHistory.Message"),
                 DataPropertyName = "Message",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
@@ -108,6 +122,7 @@ namespace WTF
             dataGridViewAlerts.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnCreatedAt",
+                SortMode = DataGridViewColumnSortMode.Programmatic,
                 HeaderText = LocalizationService.GetText("AlertHistory.CreatedAt"),
                 DataPropertyName = "CreatedAtText",
                 Width = 140
@@ -116,12 +131,14 @@ namespace WTF
             dataGridViewAlerts.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "ColumnConfirmed",
+                SortMode = DataGridViewColumnSortMode.Programmatic,
                 HeaderText = LocalizationService.GetText("AlertHistory.Confirmed"),
                 DataPropertyName = "ConfirmedText",
                 Width = 80
             });
 
             dataGridViewAlerts.CellFormatting += dataGridViewAlerts_CellFormatting;
+            dataGridViewAlerts.ColumnHeaderMouseClick += dataGridViewAlerts_ColumnHeaderMouseClick;
             dataGridViewAlerts.SelectionChanged += dataGridViewAlerts_SelectionChanged;
 
             LucidLabel labelDetails = new LucidLabel
@@ -131,26 +148,47 @@ namespace WTF
                 Dock = DockStyle.Top,
                 Height = 20,
                 TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-                Padding = new Padding(8, 0, 0, 0)
+                Padding = Padding.Empty
             };
 
-            textBoxDetails = new LucidTextBox
+            dataGridViewDetails = new DataGridView
             {
-                Name = "textBoxDetails",
+                Name = "dataGridViewDetails",
                 Dock = DockStyle.Fill,
-                Multiline = true,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                AllowUserToResizeColumns = false,
+                AllowUserToResizeRows = false,
+                AutoGenerateColumns = false,
+                BorderStyle = BorderStyle.FixedSingle,
+                CellBorderStyle = DataGridViewCellBorderStyle.None,
+                ColumnHeadersVisible = false,
                 ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical
+                RowHeadersVisible = false,
+                SelectionMode = DataGridViewSelectionMode.CellSelect,
+                MultiSelect = false
             };
+
+            dataGridViewDetails.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "ColumnDetails",
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                DefaultCellStyle =
+                {
+                    Alignment = DataGridViewContentAlignment.TopLeft,
+                    WrapMode = DataGridViewTriState.True
+                }
+            });
 
             Panel detailsPanel = new Panel
             {
                 Name = "detailsPanel",
                 Dock = DockStyle.Fill,
-                Padding = new Padding(8, 0, 8, 4)
+                Padding = Padding.Empty
             };
 
-            detailsPanel.Controls.Add(textBoxDetails);
+            detailsPanel.Controls.Add(dataGridViewDetails);
             detailsPanel.Controls.Add(labelDetails);
 
             buttonConfirm = new LucidButton
@@ -191,7 +229,8 @@ namespace WTF
                 ButtonStyle = LucidButtonStyle.Normal,
                 Text = LocalizationService.GetText("Common.Close"),
                 Size = new System.Drawing.Size(90, 30),
-                DialogResult = DialogResult.OK
+                DialogResult = DialogResult.OK,
+                Margin = new Padding(3, 3, 0, 3)
             };
 
             buttonConfirm.Click += buttonConfirm_Click;
@@ -204,7 +243,7 @@ namespace WTF
                 Name = "buttonPanel",
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.RightToLeft,
-                Padding = new Padding(8),
+                Padding = new Padding(0, 8, 0, 8),
                 Height = 48
             };
 
@@ -219,11 +258,12 @@ namespace WTF
                 Name = "tableLayoutPanel",
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 3
+                RowCount = 3,
+                Padding = DialogTableStyle.CreateHorizontalPadding(8, 8)
             };
 
             tableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 96F));
+            tableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 160F));
             tableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
             tableLayoutPanel.Controls.Add(dataGridViewAlerts, 0, 0);
             tableLayoutPanel.Controls.Add(detailsPanel, 0, 1);
@@ -235,51 +275,6 @@ namespace WTF
 
             UpdateButtonState();
             UpdateDetails();
-        }
-
-        private void ApplyTheme()
-        {
-            Color backgroundColor = ThemeProvider.Theme.Colors.BackgroundPrimary;
-            Color secondaryBackgroundColor = ThemeProvider.Theme.Colors.BackgroundSecondary;
-            Color textColor = ThemeProvider.Theme.Colors.TextPrimary;
-            Color borderColor = ThemeProvider.Theme.Colors.SurfaceHighlight;
-
-            BackColor = backgroundColor;
-            ForeColor = textColor;
-
-            dataGridViewAlerts.BackgroundColor = backgroundColor;
-            dataGridViewAlerts.BackColor = backgroundColor;
-            dataGridViewAlerts.ForeColor = textColor;
-            dataGridViewAlerts.GridColor = borderColor;
-            dataGridViewAlerts.EnableHeadersVisualStyles = false;
-
-
-            textBoxDetails.BackColor = backgroundColor;
-            textBoxDetails.ForeColor = textColor;
-
-            foreach (Control control in Controls)
-            {
-                ApplyContainerTheme(control, backgroundColor, textColor);
-            }
-        }
-
-        private static void ApplyContainerTheme(
-            Control control,
-            Color backgroundColor,
-            Color textColor)
-        {
-            if (control is Panel ||
-                control is TableLayoutPanel ||
-                control is FlowLayoutPanel)
-            {
-                control.BackColor = backgroundColor;
-                control.ForeColor = textColor;
-            }
-
-            foreach (Control child in control.Controls)
-            {
-                ApplyContainerTheme(child, backgroundColor, textColor);
-            }
         }
 
         private void AppAlertLog_Changed(object sender, EventArgs e)
@@ -300,8 +295,15 @@ namespace WTF
         {
             List<AppAlertEntry> selectedEntries = GetSelectedEntries();
             HashSet<Guid> selectedIds = new HashSet<Guid>(selectedEntries.Select(entry => entry.Id));
+            List<AppAlertEntry> entries = AppAlertLog.GetEntries();
 
-            dataGridViewAlerts.DataSource = AppAlertLog.GetEntries();
+            if (!string.IsNullOrWhiteSpace(_sortColumnName))
+            {
+                entries = SortAlerts(entries, _sortColumnName, _sortDirection);
+            }
+
+            dataGridViewAlerts.DataSource = entries;
+            UpdateSortGlyph();
 
             foreach (DataGridViewRow row in dataGridViewAlerts.Rows)
             {
@@ -313,6 +315,77 @@ namespace WTF
 
             UpdateButtonState();
             UpdateDetails();
+        }
+
+        private void dataGridViewAlerts_ColumnHeaderMouseClick(
+            object sender,
+            DataGridViewCellMouseEventArgs e)
+        {
+            if (e.ColumnIndex < 0 || e.ColumnIndex >= dataGridViewAlerts.Columns.Count)
+                return;
+
+            DataGridViewColumn column = dataGridViewAlerts.Columns[e.ColumnIndex];
+
+            if (column.SortMode == DataGridViewColumnSortMode.NotSortable)
+                return;
+
+            if (string.Equals(_sortColumnName, column.Name, StringComparison.Ordinal))
+            {
+                _sortDirection = _sortDirection == ListSortDirection.Ascending
+                    ? ListSortDirection.Descending
+                    : ListSortDirection.Ascending;
+            }
+            else
+            {
+                _sortColumnName = column.Name;
+                _sortDirection = ListSortDirection.Ascending;
+            }
+
+            LoadAlerts();
+        }
+
+        private static List<AppAlertEntry> SortAlerts(
+            IEnumerable<AppAlertEntry> entries,
+            string columnName,
+            ListSortDirection direction)
+        {
+            Func<AppAlertEntry, object> keySelector = columnName switch
+            {
+                "ColumnSeverity" => entry => entry.Severity,
+                "ColumnCategory" => entry => entry.Category,
+                "ColumnMessage" => entry => entry.Message,
+                "ColumnCreatedAt" => entry => entry.CreatedAt,
+                "ColumnConfirmed" => entry => entry.IsConfirmed,
+                _ => entry => entry.CreatedAt
+            };
+
+            return direction == ListSortDirection.Ascending
+                ? entries.OrderBy(keySelector).ToList()
+                : entries.OrderByDescending(keySelector).ToList();
+        }
+
+        private void UpdateSortGlyph()
+        {
+            foreach (DataGridViewColumn column in dataGridViewAlerts.Columns)
+            {
+                column.HeaderCell.SortGlyphDirection = SortOrder.None;
+            }
+
+            if (string.IsNullOrWhiteSpace(_sortColumnName))
+                return;
+
+            DataGridViewColumn sortedColumn = dataGridViewAlerts.Columns
+                .Cast<DataGridViewColumn>()
+                .FirstOrDefault(column =>
+                    string.Equals(column.Name, _sortColumnName, StringComparison.Ordinal));
+
+            if (sortedColumn == null)
+                return;
+
+            sortedColumn.HeaderCell.SortGlyphDirection =
+                _sortDirection == ListSortDirection.Ascending
+                    ? SortOrder.Ascending
+                    : SortOrder.Descending;
         }
 
         private void dataGridViewAlerts_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
@@ -392,22 +465,37 @@ namespace WTF
         private void UpdateDetails()
         {
             List<AppAlertEntry> selectedEntries = GetSelectedEntries();
+            string detailsText = string.Empty;
 
-            if (selectedEntries.Count != 1)
+            if (selectedEntries.Count == 1)
             {
-                textBoxDetails.Text = string.Empty;
+                AppAlertEntry selectedEntry = selectedEntries[0];
+                detailsText = !string.IsNullOrWhiteSpace(selectedEntry.Details)
+                    ? selectedEntry.Details
+                    : selectedEntry.Message ?? string.Empty;
+            }
+
+            dataGridViewDetails.Rows.Clear();
+
+            if (string.IsNullOrEmpty(detailsText))
+            {
+                dataGridViewDetails.ClearSelection();
                 return;
             }
 
-            AppAlertEntry selectedEntry = selectedEntries[0];
+            int rowIndex = dataGridViewDetails.Rows.Add(detailsText);
+            DataGridViewRow row = dataGridViewDetails.Rows[rowIndex];
+            row.Height = Math.Max(
+                dataGridViewDetails.ClientSize.Height - 2,
+                TextRenderer.MeasureText(
+                    detailsText,
+                    dataGridViewDetails.Font,
+                    new Size(
+                        Math.Max(1, dataGridViewDetails.ClientSize.Width - 24),
+                        int.MaxValue),
+                    TextFormatFlags.WordBreak).Height + 8);
 
-            if (!string.IsNullOrWhiteSpace(selectedEntry.Details))
-            {
-                textBoxDetails.Text = selectedEntry.Details;
-                return;
-            }
-
-            textBoxDetails.Text = selectedEntry.Message ?? string.Empty;
+            dataGridViewDetails.ClearSelection();
         }
     }
 }

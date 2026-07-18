@@ -1,11 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
-using Lucid.Controls.GridView;
 using Lucid.Theming;
 
 namespace WTF
@@ -30,8 +29,8 @@ namespace WTF
         }
 
         private readonly FileSystemEntry _rootEntry;
-        private readonly LucidDataGridView _fileTypeGrid = new LucidDataGridView();
-        private readonly LucidDataGridView _largestFilesGrid = new LucidDataGridView();
+        private readonly DataGridView _fileTypeGrid = new DataGridView();
+        private readonly DataGridView _largestFilesGrid = new DataGridView();
         private List<FileTypeRow> _fileTypeRows = new List<FileTypeRow>();
         private List<LargestFileRow> _largestFileRows = new List<LargestFileRow>();
         private string _fileTypeSortProperty = nameof(FileTypeRow.SizeBytes);
@@ -60,7 +59,12 @@ namespace WTF
             tabs.TabPages.Add(CreateFileTypesPage());
             tabs.TabPages.Add(CreateLargestFilesPage());
 
-            Controls.Add(tabs);
+            Panel tableHostPanel = DialogTableStyle.CreateTableHost(
+                tabs,
+                ThemeProvider.Theme.Colors.BackgroundPrimary,
+                0,
+                0);
+            Controls.Add(tableHostPanel);
 
             WindowsFormStyler.Apply(this, settings.Layout);
             ApplyTheme();
@@ -244,7 +248,7 @@ namespace WTF
             };
         }
 
-        private static void ApplySortGlyph(LucidDataGridView grid, string propertyName, bool ascending)
+        private static void ApplySortGlyph(DataGridView grid, string propertyName, bool ascending)
         {
             foreach (DataGridViewColumn column in grid.Columns)
             {
@@ -278,7 +282,7 @@ namespace WTF
             }
         }
 
-        private static void ConfigureGrid(LucidDataGridView grid)
+        private static void ConfigureGrid(DataGridView grid)
         {
             grid.Dock = DockStyle.Fill;
             grid.ReadOnly = true;
@@ -289,20 +293,18 @@ namespace WTF
             grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             grid.MultiSelect = false;
             grid.RowHeadersVisible = false;
-            grid.BorderStyle = BorderStyle.None;
-            grid.BackgroundColor = ThemeProvider.Theme.Colors.BackgroundPrimary;
-            grid.BackColor = ThemeProvider.Theme.Colors.BackgroundPrimary;
-            grid.ForeColor = ThemeProvider.Theme.Colors.TextPrimary;
         }
 
         private static TabPage CreatePage(string title, Control control)
         {
             TabPage page = new TabPage(title)
             {
-                BackColor = ThemeProvider.Theme.Colors.BackgroundPrimary,
-                ForeColor = ThemeProvider.Theme.Colors.TextPrimary,
-                Padding = Padding.Empty
+                ForeColor = ThemeProvider.Theme.Colors.TextPrimary
             };
+
+            DialogTableStyle.ConfigureTablePage(
+                page,
+                ThemeProvider.Theme.Colors.BackgroundPrimary);
 
             control.Dock = DockStyle.Fill;
             page.Controls.Add(control);
@@ -318,19 +320,9 @@ namespace WTF
             ApplyGridTheme(_largestFilesGrid);
         }
 
-        private static void ApplyGridTheme(LucidDataGridView grid)
+        private static void ApplyGridTheme(DataGridView grid)
         {
-            Color backgroundColor = ThemeProvider.Theme.Colors.BackgroundPrimary;
-            Color headerColor = ThemeProvider.Theme.Colors.BackgroundSecondary;
-            Color textColor = ThemeProvider.Theme.Colors.TextPrimary;
-            Color borderColor = ThemeProvider.Theme.Colors.SurfaceHighlight;
-
-            grid.BackgroundColor = backgroundColor;
-            grid.BackColor = backgroundColor;
-            grid.ForeColor = textColor;
-            grid.GridColor = borderColor;
-            grid.EnableHeadersVisualStyles = false;
-
+            DialogTableStyle.Apply(grid);
         }
 
         private sealed class AnalysisTabControl : TabControl

@@ -1,13 +1,16 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Microsoft.Data.Sqlite;
 
 namespace WTF
 {
     public static class ScanHistoryDatabaseService
     {
-        private const int ScanHistoryVersion = 4;
+        private const int ScanHistoryVersion = 7;
+        private const int ChangeTypeUpsert = 1;
+        private const int ChangeTypeDelete = 2;
         private const string DatabaseFileName = "scan_history.db";
 
         private static readonly object SyncRoot = new object();
@@ -21,6 +24,7 @@ namespace WTF
             DatabaseFileName);
 
         private static string databaseFilePath = DefaultDatabaseFilePath;
+        private static int maximumScansPerPath = 30;
 
         public static string DefaultDatabasePath => DefaultDatabaseFilePath;
 
@@ -29,6 +33,33 @@ namespace WTF
         public static void ConfigureDatabasePath(string databasePath)
         {
             databaseFilePath = NormalizeDatabasePath(databasePath);
+        }
+
+        public static void ConfigureRetention(int maximumScans)
+        {
+            maximumScansPerPath = Math.Max(1, maximumScans);
+        }
+
+        public static bool IsMaintenanceRequired()
+        {
+            lock (SyncRoot)
+            {
+                if (!File.Exists(databaseFilePath))
+                    return false;
+
+                using SqliteConnection connection = OpenConnection();
+
+                if (GetDatabaseVersion(connection) < ScanHistoryVersion)
+                    return true;
+
+                using SqliteCommand command = connection.CreateCommand();
+                command.CommandText =
+                    "SELECT COUNT(*) " +
+                    "FROM sqlite_master " +
+                    "WHERE type = 'table' AND name = 'entries';";
+
+                return Convert.ToInt32(command.ExecuteScalar()) > 0;
+            }
         }
 
         public static string NormalizeDatabasePath(string databasePath)
@@ -105,57 +136,81 @@ namespace WTF
             if (string.IsNullOrWhiteSpace(rootEntry.FullPath))
                 throw new InvalidOperationException("Scan root path is empty.");
 
-            Directory.CreateDirectory(GetDatabaseDirectoryPath());
-            EnsureDatabase();
-
-            string scanId = Guid.NewGuid().ToString("N");
-            DateTime createdUtc = DateTime.UtcNow;
-
-            using SqliteConnection connection = OpenConnection();
-            using SqliteTransaction transaction = connection.BeginTransaction();
-
-            using (SqliteCommand scanCommand = connection.CreateCommand())
+            lock (SyncRoot)
             {
-                scanCommand.Transaction = transaction;
-                scanCommand.CommandText =
-                    "INSERT INTO scans " +
-                    "(scan_id, created_utc_ticks, root_path, root_size_bytes, file_count, directory_count) " +
-                    "VALUES ($scan_id, $created_utc_ticks, $root_path, $root_size_bytes, 0, 0);";
+                Directory.CreateDirectory(GetDatabaseDirectoryPath());
+                EnsureDatabase();
 
-                scanCommand.Parameters.Add("$scan_id", SqliteType.Text).Value = scanId;
-                scanCommand.Parameters.Add("$created_utc_ticks", SqliteType.Integer).Value = createdUtc.Ticks;
-                scanCommand.Parameters.Add("$root_path", SqliteType.Text).Value = rootEntry.FullPath;
-                scanCommand.Parameters.Add("$root_size_bytes", SqliteType.Integer).Value = rootEntry.SizeBytes;
+                string scanId = Guid.NewGuid().ToString("N");
+                DateTime createdUtc = DateTime.UtcNow;
+                Dictionary<string, EntryData> currentEntries = CollectEntries(
+                    rootEntry,
+                    out int fileCount,
+                    out int directoryCount);
 
-                scanCommand.ExecuteNonQuery();
+                using SqliteConnection connection = OpenConnection();
+                string previousScanId = GetLatestScanId(connection, rootEntry.FullPath);
+                Dictionary<string, EntryData> previousEntries =
+                    string.IsNullOrWhiteSpace(previousScanId)
+                        ? new Dictionary<string, EntryData>(StringComparer.OrdinalIgnoreCase)
+                        : LoadEntryState(connection, previousScanId);
+
+                using SqliteTransaction transaction = connection.BeginTransaction();
+
+                InsertScan(
+                    connection,
+                    transaction,
+                    scanId,
+                    createdUtc,
+                    rootEntry,
+                    fileCount,
+                    directoryCount,
+                    previousScanId,
+                    string.IsNullOrWhiteSpace(previousScanId));
+
+                foreach (KeyValuePair<string, EntryData> currentEntry in currentEntries)
+                {
+                    if (previousEntries.TryGetValue(currentEntry.Key, out EntryData previousEntry) &&
+                        previousEntry.HasSameVersion(currentEntry.Value))
+                    {
+                        continue;
+                    }
+
+                    InsertDeltaEntry(
+                        connection,
+                        transaction,
+                        scanId,
+                        currentEntry.Value,
+                        ChangeTypeUpsert);
+                }
+
+                foreach (KeyValuePair<string, EntryData> previousEntry in previousEntries)
+                {
+                    if (currentEntries.ContainsKey(previousEntry.Key))
+                        continue;
+
+                    InsertDeltaEntry(
+                        connection,
+                        transaction,
+                        scanId,
+                        previousEntry.Value,
+                        ChangeTypeDelete);
+                }
+
+                transaction.Commit();
+
+                bool pruned = ApplyRetention(connection, rootEntry.FullPath);
+
+                if (pruned)
+                {
+                    CleanupOrphans(connection);
+                    connection.Close();
+                    SqliteConnection.ClearAllPools();
+                    VacuumDatabase();
+                }
+
+                return scanId;
             }
-
-            ScanHistoryEntryCounter counter = new ScanHistoryEntryCounter();
-
-            using (SqliteCommand entryCommand = CreateInsertEntryCommand(connection, transaction))
-            {
-                HashSet<string> insertedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                InsertEntry(entryCommand, scanId, rootEntry, insertedPaths, counter);
-            }
-
-            using (SqliteCommand updateScanCommand = connection.CreateCommand())
-            {
-                updateScanCommand.Transaction = transaction;
-                updateScanCommand.CommandText =
-                    "UPDATE scans " +
-                    "SET file_count = $file_count, directory_count = $directory_count " +
-                    "WHERE scan_id = $scan_id;";
-
-                updateScanCommand.Parameters.Add("$file_count", SqliteType.Integer).Value = counter.FileCount;
-                updateScanCommand.Parameters.Add("$directory_count", SqliteType.Integer).Value = counter.DirectoryCount;
-                updateScanCommand.Parameters.Add("$scan_id", SqliteType.Text).Value = scanId;
-
-                updateScanCommand.ExecuteNonQuery();
-            }
-
-            transaction.Commit();
-
-            return scanId;
         }
 
         public static IReadOnlyList<ScanHistoryInfo> List()
@@ -203,7 +258,8 @@ namespace WTF
             using SqliteConnection connection = OpenConnection();
 
             ScanHistorySnapshot snapshot = LoadSnapshotHeader(connection, scanId);
-            snapshot.RootEntry = LoadRootEntry(connection, snapshot);
+            Dictionary<string, EntryData> entries = LoadEntryState(connection, scanId);
+            snapshot.RootEntry = BuildRootEntry(snapshot, entries);
 
             return snapshot;
         }
@@ -214,7 +270,7 @@ namespace WTF
             {
                 Directory.CreateDirectory(GetDatabaseDirectoryPath());
 
-                bool vacuumDatabase;
+                bool vacuumDatabase = false;
 
                 using (SqliteConnection connection = OpenConnection())
                 {
@@ -222,14 +278,26 @@ namespace WTF
 
                     CreateScanTable(connection);
                     CreateDeduplicatedTables(connection);
-                    vacuumDatabase =
-                        MigrateLegacyEntries(connection) ||
-                        databaseVersion < ScanHistoryVersion;
+                    EnsureDeltaColumns(connection);
+
+                    if (MigrateLegacyEntries(connection))
+                    {
+                        vacuumDatabase = true;
+                    }
+
                     CreateIndexes(connection);
+
+                    if (databaseVersion < ScanHistoryVersion)
+                    {
+                        RebuildAllHistoriesAsDeltas(connection);
+                        CleanupOrphans(connection);
+                        vacuumDatabase = true;
+                    }
                 }
 
                 if (vacuumDatabase)
                 {
+                    SqliteConnection.ClearAllPools();
                     VacuumDatabase();
                 }
 
@@ -248,7 +316,9 @@ namespace WTF
                 "root_path TEXT NOT NULL, " +
                 "root_size_bytes INTEGER NOT NULL, " +
                 "file_count INTEGER NOT NULL, " +
-                "directory_count INTEGER NOT NULL);";
+                "directory_count INTEGER NOT NULL, " +
+                "previous_scan_id TEXT NULL, " +
+                "is_baseline INTEGER NOT NULL DEFAULT 1);";
 
             command.ExecuteNonQuery();
         }
@@ -273,9 +343,55 @@ namespace WTF
                 "scan_id TEXT NOT NULL, " +
                 "path_id INTEGER NOT NULL, " +
                 "version_id INTEGER NOT NULL, " +
+                "change_type INTEGER NOT NULL DEFAULT 1, " +
                 "PRIMARY KEY (scan_id, path_id));";
 
             command.ExecuteNonQuery();
+        }
+
+        private static void EnsureDeltaColumns(SqliteConnection connection)
+        {
+            EnsureColumn(
+                connection,
+                "scans",
+                "previous_scan_id",
+                "ALTER TABLE scans ADD COLUMN previous_scan_id TEXT NULL;");
+
+            EnsureColumn(
+                connection,
+                "scans",
+                "is_baseline",
+                "ALTER TABLE scans ADD COLUMN is_baseline INTEGER NOT NULL DEFAULT 1;");
+
+            EnsureColumn(
+                connection,
+                "scan_entries",
+                "change_type",
+                "ALTER TABLE scan_entries ADD COLUMN change_type INTEGER NOT NULL DEFAULT 1;");
+        }
+
+        private static void EnsureColumn(
+            SqliteConnection connection,
+            string tableName,
+            string columnName,
+            string alterStatement)
+        {
+            using SqliteCommand checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = "PRAGMA table_info(" + tableName + ");";
+
+            using SqliteDataReader reader = checkCommand.ExecuteReader();
+
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+
+            reader.Close();
+
+            using SqliteCommand alterCommand = connection.CreateCommand();
+            alterCommand.CommandText = alterStatement;
+            alterCommand.ExecuteNonQuery();
         }
 
         private static bool MigrateLegacyEntries(SqliteConnection connection)
@@ -305,8 +421,8 @@ namespace WTF
                 "INNER JOIN paths ON " +
                 "paths.full_path = entries.full_path COLLATE NOCASE AND " +
                 "paths.is_directory = entries.is_directory; " +
-                "INSERT OR REPLACE INTO scan_entries (scan_id, path_id, version_id) " +
-                "SELECT entries.scan_id, paths.path_id, entry_versions.version_id " +
+                "INSERT OR REPLACE INTO scan_entries (scan_id, path_id, version_id, change_type) " +
+                "SELECT entries.scan_id, paths.path_id, entry_versions.version_id, 1 " +
                 "FROM entries " +
                 "INNER JOIN paths ON " +
                 "paths.full_path = entries.full_path COLLATE NOCASE AND " +
@@ -315,6 +431,7 @@ namespace WTF
                 "entry_versions.path_id = paths.path_id AND " +
                 "entry_versions.size_bytes = entries.size_bytes AND " +
                 "entry_versions.last_write_utc_ticks = entries.last_write_utc_ticks; " +
+                "UPDATE scans SET previous_scan_id = NULL, is_baseline = 1; " +
                 "DROP TABLE entries;";
 
             command.ExecuteNonQuery();
@@ -329,10 +446,14 @@ namespace WTF
             command.CommandText =
                 "CREATE INDEX IF NOT EXISTS IX_scans_created_utc_ticks " +
                 "ON scans (created_utc_ticks); " +
+                "CREATE INDEX IF NOT EXISTS IX_scans_root_created " +
+                "ON scans (root_path COLLATE NOCASE, created_utc_ticks); " +
                 "CREATE INDEX IF NOT EXISTS IX_paths_full_path " +
                 "ON paths (full_path COLLATE NOCASE); " +
                 "CREATE INDEX IF NOT EXISTS IX_entry_versions_path_id " +
-                "ON entry_versions (path_id);";
+                "ON entry_versions (path_id); " +
+                "CREATE INDEX IF NOT EXISTS IX_scan_entries_scan_id " +
+                "ON scan_entries (scan_id);";
 
             command.ExecuteNonQuery();
         }
@@ -388,88 +509,607 @@ namespace WTF
             return connection;
         }
 
-        private static SqliteCommand CreateInsertEntryCommand(
+        private static void InsertScan(
             SqliteConnection connection,
-            SqliteTransaction transaction)
+            SqliteTransaction transaction,
+            string scanId,
+            DateTime createdUtc,
+            FileSystemEntry rootEntry,
+            int fileCount,
+            int directoryCount,
+            string previousScanId,
+            bool isBaseline)
         {
-            SqliteCommand command = connection.CreateCommand();
+            using SqliteCommand command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText =
-                "INSERT OR IGNORE INTO paths " +
-                "(full_path, name, is_directory) " +
-                "VALUES ($full_path, $name, $is_directory); " +
-                "INSERT OR IGNORE INTO entry_versions " +
-                "(path_id, size_bytes, last_write_utc_ticks) " +
-                "SELECT path_id, $size_bytes, $last_write_utc_ticks " +
-                "FROM paths " +
-                "WHERE full_path = $full_path AND is_directory = $is_directory; " +
-                "INSERT INTO scan_entries " +
-                "(scan_id, path_id, version_id) " +
-                "SELECT $scan_id, paths.path_id, entry_versions.version_id " +
-                "FROM paths " +
-                "INNER JOIN entry_versions ON " +
-                "entry_versions.path_id = paths.path_id AND " +
-                "entry_versions.size_bytes = $size_bytes AND " +
-                "entry_versions.last_write_utc_ticks = $last_write_utc_ticks " +
-                "WHERE paths.full_path = $full_path AND paths.is_directory = $is_directory " +
-                "ON CONFLICT (scan_id, path_id) DO UPDATE SET version_id = excluded.version_id;";
+                "INSERT INTO scans " +
+                "(scan_id, created_utc_ticks, root_path, root_size_bytes, file_count, directory_count, previous_scan_id, is_baseline) " +
+                "VALUES ($scan_id, $created_utc_ticks, $root_path, $root_size_bytes, $file_count, $directory_count, $previous_scan_id, $is_baseline);";
 
-            command.Parameters.Add("$scan_id", SqliteType.Text);
-            command.Parameters.Add("$full_path", SqliteType.Text);
-            command.Parameters.Add("$name", SqliteType.Text);
-            command.Parameters.Add("$is_directory", SqliteType.Integer);
-            command.Parameters.Add("$size_bytes", SqliteType.Integer);
-            command.Parameters.Add("$last_write_utc_ticks", SqliteType.Integer);
+            command.Parameters.Add("$scan_id", SqliteType.Text).Value = scanId;
+            command.Parameters.Add("$created_utc_ticks", SqliteType.Integer).Value = createdUtc.Ticks;
+            command.Parameters.Add("$root_path", SqliteType.Text).Value = rootEntry.FullPath;
+            command.Parameters.Add("$root_size_bytes", SqliteType.Integer).Value = rootEntry.SizeBytes;
+            command.Parameters.Add("$file_count", SqliteType.Integer).Value = fileCount;
+            command.Parameters.Add("$directory_count", SqliteType.Integer).Value = directoryCount;
+            command.Parameters.Add("$previous_scan_id", SqliteType.Text).Value =
+                string.IsNullOrWhiteSpace(previousScanId)
+                    ? DBNull.Value
+                    : previousScanId;
+            command.Parameters.Add("$is_baseline", SqliteType.Integer).Value = isBaseline ? 1 : 0;
 
-            return command;
+            command.ExecuteNonQuery();
         }
 
-        private static void InsertEntry(
-            SqliteCommand command,
+        private static string GetLatestScanId(
+            SqliteConnection connection,
+            string rootPath)
+        {
+            using SqliteCommand command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT scan_id " +
+                "FROM scans " +
+                "WHERE root_path = $root_path COLLATE NOCASE " +
+                "ORDER BY created_utc_ticks DESC " +
+                "LIMIT 1;";
+
+            command.Parameters.Add("$root_path", SqliteType.Text).Value = rootPath;
+            object result = command.ExecuteScalar();
+
+            return result == null || result == DBNull.Value
+                ? null
+                : Convert.ToString(result);
+        }
+
+        private static void InsertDeltaEntry(
+            SqliteConnection connection,
+            SqliteTransaction transaction,
             string scanId,
+            EntryData entry,
+            int changeType)
+        {
+            long pathId = EnsurePath(connection, transaction, entry);
+            long versionId = changeType == ChangeTypeDelete
+                ? 0
+                : EnsureVersion(connection, transaction, pathId, entry);
+
+            using SqliteCommand command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText =
+                "INSERT OR REPLACE INTO scan_entries " +
+                "(scan_id, path_id, version_id, change_type) " +
+                "VALUES ($scan_id, $path_id, $version_id, $change_type);";
+
+            command.Parameters.Add("$scan_id", SqliteType.Text).Value = scanId;
+            command.Parameters.Add("$path_id", SqliteType.Integer).Value = pathId;
+            command.Parameters.Add("$version_id", SqliteType.Integer).Value = versionId;
+            command.Parameters.Add("$change_type", SqliteType.Integer).Value = changeType;
+
+            command.ExecuteNonQuery();
+        }
+
+        private static long EnsurePath(
+            SqliteConnection connection,
+            SqliteTransaction transaction,
+            EntryData entry)
+        {
+            using (SqliteCommand insertCommand = connection.CreateCommand())
+            {
+                insertCommand.Transaction = transaction;
+                insertCommand.CommandText =
+                    "INSERT OR IGNORE INTO paths " +
+                    "(full_path, name, is_directory) " +
+                    "VALUES ($full_path, $name, $is_directory);";
+
+                insertCommand.Parameters.Add("$full_path", SqliteType.Text).Value = entry.FullPath;
+                insertCommand.Parameters.Add("$name", SqliteType.Text).Value = entry.Name;
+                insertCommand.Parameters.Add("$is_directory", SqliteType.Integer).Value =
+                    entry.IsDirectory ? 1 : 0;
+
+                insertCommand.ExecuteNonQuery();
+            }
+
+            using SqliteCommand selectCommand = connection.CreateCommand();
+            selectCommand.Transaction = transaction;
+            selectCommand.CommandText =
+                "SELECT path_id " +
+                "FROM paths " +
+                "WHERE full_path = $full_path COLLATE NOCASE AND is_directory = $is_directory;";
+
+            selectCommand.Parameters.Add("$full_path", SqliteType.Text).Value = entry.FullPath;
+            selectCommand.Parameters.Add("$is_directory", SqliteType.Integer).Value =
+                entry.IsDirectory ? 1 : 0;
+
+            return Convert.ToInt64(selectCommand.ExecuteScalar());
+        }
+
+        private static long EnsureVersion(
+            SqliteConnection connection,
+            SqliteTransaction transaction,
+            long pathId,
+            EntryData entry)
+        {
+            using (SqliteCommand insertCommand = connection.CreateCommand())
+            {
+                insertCommand.Transaction = transaction;
+                insertCommand.CommandText =
+                    "INSERT OR IGNORE INTO entry_versions " +
+                    "(path_id, size_bytes, last_write_utc_ticks) " +
+                    "VALUES ($path_id, $size_bytes, $last_write_utc_ticks);";
+
+                insertCommand.Parameters.Add("$path_id", SqliteType.Integer).Value = pathId;
+                insertCommand.Parameters.Add("$size_bytes", SqliteType.Integer).Value = entry.SizeBytes;
+                insertCommand.Parameters.Add("$last_write_utc_ticks", SqliteType.Integer).Value =
+                    entry.LastWriteUtcTicks;
+
+                insertCommand.ExecuteNonQuery();
+            }
+
+            using SqliteCommand selectCommand = connection.CreateCommand();
+            selectCommand.Transaction = transaction;
+            selectCommand.CommandText =
+                "SELECT version_id " +
+                "FROM entry_versions " +
+                "WHERE path_id = $path_id AND size_bytes = $size_bytes AND last_write_utc_ticks = $last_write_utc_ticks;";
+
+            selectCommand.Parameters.Add("$path_id", SqliteType.Integer).Value = pathId;
+            selectCommand.Parameters.Add("$size_bytes", SqliteType.Integer).Value = entry.SizeBytes;
+            selectCommand.Parameters.Add("$last_write_utc_ticks", SqliteType.Integer).Value =
+                entry.LastWriteUtcTicks;
+
+            return Convert.ToInt64(selectCommand.ExecuteScalar());
+        }
+
+        private static Dictionary<string, EntryData> CollectEntries(
+            FileSystemEntry rootEntry,
+            out int fileCount,
+            out int directoryCount)
+        {
+            Dictionary<string, EntryData> entries =
+                new Dictionary<string, EntryData>(StringComparer.OrdinalIgnoreCase);
+
+            fileCount = 0;
+            directoryCount = 0;
+
+            AddEntry(rootEntry, entries, ref fileCount, ref directoryCount);
+
+            return entries;
+        }
+
+        private static void AddEntry(
             FileSystemEntry entry,
-            HashSet<string> insertedPaths,
-            ScanHistoryEntryCounter counter)
+            Dictionary<string, EntryData> entries,
+            ref int fileCount,
+            ref int directoryCount)
         {
             if (entry == null || string.IsNullOrWhiteSpace(entry.FullPath))
                 return;
 
-            if (!insertedPaths.Add(entry.FullPath))
+            if (entries.ContainsKey(entry.FullPath))
                 return;
 
-            command.Parameters["$scan_id"].Value = scanId;
-            command.Parameters["$full_path"].Value = entry.FullPath;
-            command.Parameters["$name"].Value =
-                string.IsNullOrWhiteSpace(entry.Name)
-                    ? GetEntryName(entry.FullPath)
-                    : entry.Name;
-            command.Parameters["$is_directory"].Value = entry.IsDirectory ? 1 : 0;
-            command.Parameters["$size_bytes"].Value = entry.SizeBytes;
-            command.Parameters["$last_write_utc_ticks"].Value = GetUtcTicks(entry.LastWriteTimeUtc);
-
-            command.ExecuteNonQuery();
+            entries[entry.FullPath] = EntryData.FromFileSystemEntry(entry);
 
             if (entry.IsDirectory)
-            {
-                counter.DirectoryCount++;
-            }
+                directoryCount++;
             else
-            {
-                counter.FileCount++;
-            }
+                fileCount++;
 
             if (entry.AllFiles != null)
             {
                 foreach (FileSystemEntry file in entry.AllFiles)
                 {
-                    InsertEntry(command, scanId, file, insertedPaths, counter);
+                    AddEntry(file, entries, ref fileCount, ref directoryCount);
                 }
             }
 
             foreach (FileSystemEntry child in entry.Children)
             {
-                InsertEntry(command, scanId, child, insertedPaths, counter);
+                AddEntry(child, entries, ref fileCount, ref directoryCount);
             }
+        }
+
+        private static Dictionary<string, EntryData> LoadEntryState(
+            SqliteConnection connection,
+            string scanId)
+        {
+            List<string> chain = LoadScanChain(connection, scanId);
+            Dictionary<string, EntryData> entries =
+                new Dictionary<string, EntryData>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string chainScanId in chain)
+            {
+                using SqliteCommand command = connection.CreateCommand();
+                command.CommandText =
+                    "SELECT paths.full_path, paths.name, paths.is_directory, " +
+                    "scan_entries.change_type, entry_versions.size_bytes, entry_versions.last_write_utc_ticks " +
+                    "FROM scan_entries " +
+                    "INNER JOIN paths ON paths.path_id = scan_entries.path_id " +
+                    "LEFT JOIN entry_versions ON entry_versions.version_id = scan_entries.version_id " +
+                    "WHERE scan_entries.scan_id = $scan_id;";
+
+                command.Parameters.Add("$scan_id", SqliteType.Text).Value = chainScanId;
+
+                using SqliteDataReader reader = command.ExecuteReader();
+
+                while (reader.Read())
+                {
+                    string fullPath = reader.GetString(0);
+                    int changeType = reader.GetInt32(3);
+
+                    if (changeType == ChangeTypeDelete)
+                    {
+                        entries.Remove(fullPath);
+                        continue;
+                    }
+
+                    entries[fullPath] = new EntryData
+                    {
+                        FullPath = fullPath,
+                        Name = reader.GetString(1),
+                        IsDirectory = reader.GetInt32(2) != 0,
+                        SizeBytes = reader.IsDBNull(4) ? 0 : reader.GetInt64(4),
+                        LastWriteUtcTicks = reader.IsDBNull(5)
+                            ? DateTime.MinValue.Ticks
+                            : reader.GetInt64(5)
+                    };
+                }
+            }
+
+            return entries;
+        }
+
+        private static List<string> LoadScanChain(
+            SqliteConnection connection,
+            string scanId)
+        {
+            List<string> chain = new List<string>();
+            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string currentScanId = scanId;
+
+            while (!string.IsNullOrWhiteSpace(currentScanId))
+            {
+                if (!visited.Add(currentScanId))
+                    throw new InvalidDataException("Scan history chain contains a cycle.");
+
+                using SqliteCommand command = connection.CreateCommand();
+                command.CommandText =
+                    "SELECT previous_scan_id, is_baseline " +
+                    "FROM scans " +
+                    "WHERE scan_id = $scan_id;";
+
+                command.Parameters.Add("$scan_id", SqliteType.Text).Value = currentScanId;
+
+                using SqliteDataReader reader = command.ExecuteReader();
+
+                if (!reader.Read())
+                    throw new FileNotFoundException("Scan history entry was not found.", currentScanId);
+
+                chain.Add(currentScanId);
+
+                bool isBaseline = reader.GetInt32(1) != 0;
+
+                if (isBaseline)
+                    break;
+
+                currentScanId = reader.IsDBNull(0)
+                    ? null
+                    : reader.GetString(0);
+            }
+
+            chain.Reverse();
+            return chain;
+        }
+
+        private static bool ApplyRetention(
+            SqliteConnection connection,
+            string rootPath)
+        {
+            List<string> scanIds = new List<string>();
+
+            using (SqliteCommand command = connection.CreateCommand())
+            {
+                command.CommandText =
+                    "SELECT scan_id " +
+                    "FROM scans " +
+                    "WHERE root_path = $root_path COLLATE NOCASE " +
+                    "ORDER BY created_utc_ticks ASC;";
+
+                command.Parameters.Add("$root_path", SqliteType.Text).Value = rootPath;
+
+                using SqliteDataReader reader = command.ExecuteReader();
+
+                while (reader.Read())
+                {
+                    scanIds.Add(reader.GetString(0));
+                }
+            }
+
+            if (scanIds.Count <= maximumScansPerPath)
+                return false;
+
+            int removeCount = scanIds.Count - maximumScansPerPath;
+            string newBaselineScanId = scanIds[removeCount];
+            Dictionary<string, EntryData> newBaselineEntries =
+                LoadEntryState(connection, newBaselineScanId);
+
+            using SqliteTransaction transaction = connection.BeginTransaction();
+
+            using (SqliteCommand deleteEntriesCommand = connection.CreateCommand())
+            {
+                deleteEntriesCommand.Transaction = transaction;
+                deleteEntriesCommand.CommandText =
+                    "DELETE FROM scan_entries WHERE scan_id = $scan_id;";
+                deleteEntriesCommand.Parameters.Add("$scan_id", SqliteType.Text).Value =
+                    newBaselineScanId;
+                deleteEntriesCommand.ExecuteNonQuery();
+            }
+
+            foreach (EntryData entry in newBaselineEntries.Values)
+            {
+                InsertDeltaEntry(
+                    connection,
+                    transaction,
+                    newBaselineScanId,
+                    entry,
+                    ChangeTypeUpsert);
+            }
+
+            using (SqliteCommand updateBaselineCommand = connection.CreateCommand())
+            {
+                updateBaselineCommand.Transaction = transaction;
+                updateBaselineCommand.CommandText =
+                    "UPDATE scans " +
+                    "SET previous_scan_id = NULL, is_baseline = 1 " +
+                    "WHERE scan_id = $scan_id;";
+
+                updateBaselineCommand.Parameters.Add("$scan_id", SqliteType.Text).Value =
+                    newBaselineScanId;
+                updateBaselineCommand.ExecuteNonQuery();
+            }
+
+            for (int index = 0; index < removeCount; index++)
+            {
+                string scanIdToDelete = scanIds[index];
+
+                using SqliteCommand deleteEntriesCommand = connection.CreateCommand();
+                deleteEntriesCommand.Transaction = transaction;
+                deleteEntriesCommand.CommandText =
+                    "DELETE FROM scan_entries WHERE scan_id = $scan_id;";
+                deleteEntriesCommand.Parameters.Add("$scan_id", SqliteType.Text).Value =
+                    scanIdToDelete;
+                deleteEntriesCommand.ExecuteNonQuery();
+
+                using SqliteCommand deleteScanCommand = connection.CreateCommand();
+                deleteScanCommand.Transaction = transaction;
+                deleteScanCommand.CommandText =
+                    "DELETE FROM scans WHERE scan_id = $scan_id;";
+                deleteScanCommand.Parameters.Add("$scan_id", SqliteType.Text).Value =
+                    scanIdToDelete;
+                deleteScanCommand.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+            return true;
+        }
+
+
+        private static void RebuildAllHistoriesAsDeltas(
+            SqliteConnection connection)
+        {
+            List<string> rootPaths = new List<string>();
+
+            using (SqliteCommand command = connection.CreateCommand())
+            {
+                command.CommandText =
+                    "SELECT DISTINCT root_path " +
+                    "FROM scans " +
+                    "ORDER BY root_path COLLATE NOCASE ASC;";
+
+                using SqliteDataReader reader = command.ExecuteReader();
+
+                while (reader.Read())
+                {
+                    rootPaths.Add(reader.GetString(0));
+                }
+            }
+
+            foreach (string rootPath in rootPaths)
+            {
+                RebuildHistoryAsDeltas(connection, rootPath);
+            }
+        }
+
+        private static void RebuildHistoryAsDeltas(
+            SqliteConnection connection,
+            string rootPath)
+        {
+            List<string> scanIds = new List<string>();
+
+            using (SqliteCommand command = connection.CreateCommand())
+            {
+                command.CommandText =
+                    "SELECT scan_id " +
+                    "FROM scans " +
+                    "WHERE root_path = $root_path COLLATE NOCASE " +
+                    "ORDER BY created_utc_ticks ASC;";
+
+                command.Parameters.Add("$root_path", SqliteType.Text).Value = rootPath;
+
+                using SqliteDataReader reader = command.ExecuteReader();
+
+                while (reader.Read())
+                {
+                    scanIds.Add(reader.GetString(0));
+                }
+            }
+
+            if (scanIds.Count == 0)
+                return;
+
+            int firstRetainedIndex = Math.Max(
+                0,
+                scanIds.Count - maximumScansPerPath);
+
+            List<string> retainedScanIds = scanIds
+                .Skip(firstRetainedIndex)
+                .ToList();
+
+            Dictionary<string, EntryData> previousEntries = null;
+            string previousScanId = null;
+
+            foreach (string retainedScanId in retainedScanIds)
+            {
+                Dictionary<string, EntryData> currentEntries =
+                    LoadEntryState(connection, retainedScanId);
+
+                RewriteScanAsDelta(
+                    connection,
+                    retainedScanId,
+                    previousScanId,
+                    previousEntries,
+                    currentEntries);
+
+                previousScanId = retainedScanId;
+                previousEntries = currentEntries;
+            }
+
+            if (firstRetainedIndex == 0)
+                return;
+
+            using SqliteTransaction transaction = connection.BeginTransaction();
+
+            for (int index = 0; index < firstRetainedIndex; index++)
+            {
+                string scanIdToDelete = scanIds[index];
+
+                using (SqliteCommand deleteEntriesCommand = connection.CreateCommand())
+                {
+                    deleteEntriesCommand.Transaction = transaction;
+                    deleteEntriesCommand.CommandText =
+                        "DELETE FROM scan_entries WHERE scan_id = $scan_id;";
+
+                    deleteEntriesCommand.Parameters.Add("$scan_id", SqliteType.Text).Value =
+                        scanIdToDelete;
+
+                    deleteEntriesCommand.ExecuteNonQuery();
+                }
+
+                using SqliteCommand deleteScanCommand = connection.CreateCommand();
+                deleteScanCommand.Transaction = transaction;
+                deleteScanCommand.CommandText =
+                    "DELETE FROM scans WHERE scan_id = $scan_id;";
+
+                deleteScanCommand.Parameters.Add("$scan_id", SqliteType.Text).Value =
+                    scanIdToDelete;
+
+                deleteScanCommand.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+        }
+
+        private static void RewriteScanAsDelta(
+            SqliteConnection connection,
+            string scanId,
+            string previousScanId,
+            Dictionary<string, EntryData> previousEntries,
+            Dictionary<string, EntryData> currentEntries)
+        {
+            using SqliteTransaction transaction = connection.BeginTransaction();
+
+            using (SqliteCommand deleteEntriesCommand = connection.CreateCommand())
+            {
+                deleteEntriesCommand.Transaction = transaction;
+                deleteEntriesCommand.CommandText =
+                    "DELETE FROM scan_entries WHERE scan_id = $scan_id;";
+
+                deleteEntriesCommand.Parameters.Add("$scan_id", SqliteType.Text).Value =
+                    scanId;
+
+                deleteEntriesCommand.ExecuteNonQuery();
+            }
+
+            if (previousEntries == null)
+            {
+                foreach (EntryData currentEntry in currentEntries.Values)
+                {
+                    InsertDeltaEntry(
+                        connection,
+                        transaction,
+                        scanId,
+                        currentEntry,
+                        ChangeTypeUpsert);
+                }
+            }
+            else
+            {
+                foreach (KeyValuePair<string, EntryData> currentEntry in currentEntries)
+                {
+                    if (previousEntries.TryGetValue(
+                            currentEntry.Key,
+                            out EntryData previousEntry) &&
+                        previousEntry.HasSameVersion(currentEntry.Value))
+                    {
+                        continue;
+                    }
+
+                    InsertDeltaEntry(
+                        connection,
+                        transaction,
+                        scanId,
+                        currentEntry.Value,
+                        ChangeTypeUpsert);
+                }
+
+                foreach (KeyValuePair<string, EntryData> previousEntry in previousEntries)
+                {
+                    if (currentEntries.ContainsKey(previousEntry.Key))
+                        continue;
+
+                    InsertDeltaEntry(
+                        connection,
+                        transaction,
+                        scanId,
+                        previousEntry.Value,
+                        ChangeTypeDelete);
+                }
+            }
+
+            using SqliteCommand updateScanCommand = connection.CreateCommand();
+            updateScanCommand.Transaction = transaction;
+            updateScanCommand.CommandText =
+                "UPDATE scans " +
+                "SET previous_scan_id = $previous_scan_id, is_baseline = $is_baseline " +
+                "WHERE scan_id = $scan_id;";
+
+            updateScanCommand.Parameters.Add("$previous_scan_id", SqliteType.Text).Value =
+                string.IsNullOrWhiteSpace(previousScanId)
+                    ? DBNull.Value
+                    : previousScanId;
+
+            updateScanCommand.Parameters.Add("$is_baseline", SqliteType.Integer).Value =
+                previousEntries == null ? 1 : 0;
+
+            updateScanCommand.Parameters.Add("$scan_id", SqliteType.Text).Value =
+                scanId;
+
+            updateScanCommand.ExecuteNonQuery();
+            transaction.Commit();
+        }
+
+        private static void CleanupOrphans(SqliteConnection connection)
+        {
+            using SqliteCommand command = connection.CreateCommand();
+            command.CommandText =
+                "DELETE FROM entry_versions " +
+                "WHERE version_id NOT IN (" +
+                "SELECT version_id FROM scan_entries WHERE change_type = 1); " +
+                "DELETE FROM paths " +
+                "WHERE path_id NOT IN (SELECT path_id FROM scan_entries);";
+
+            command.ExecuteNonQuery();
         }
 
         private static ScanHistorySnapshot LoadSnapshotHeader(
@@ -499,9 +1139,9 @@ namespace WTF
             };
         }
 
-        private static FileSystemEntry LoadRootEntry(
-            SqliteConnection connection,
-            ScanHistorySnapshot snapshot)
+        private static FileSystemEntry BuildRootEntry(
+            ScanHistorySnapshot snapshot,
+            Dictionary<string, EntryData> entries)
         {
             FileSystemEntry rootEntry = new FileSystemEntry
             {
@@ -512,69 +1152,55 @@ namespace WTF
                 LastWriteTimeUtc = DateTime.MinValue
             };
 
-            Dictionary<string, FileSystemEntry> directories =
+            Dictionary<string, FileSystemEntry> materializedEntries =
                 new Dictionary<string, FileSystemEntry>(StringComparer.OrdinalIgnoreCase)
                 {
                     [rootEntry.FullPath] = rootEntry
                 };
 
-            using SqliteCommand command = connection.CreateCommand();
-            command.CommandText =
-                "SELECT paths.full_path, paths.name, paths.is_directory, " +
-                "entry_versions.size_bytes, entry_versions.last_write_utc_ticks " +
-                "FROM scan_entries " +
-                "INNER JOIN paths ON paths.path_id = scan_entries.path_id " +
-                "INNER JOIN entry_versions ON entry_versions.version_id = scan_entries.version_id " +
-                "WHERE scan_entries.scan_id = $scan_id " +
-                "ORDER BY paths.is_directory DESC, paths.full_path COLLATE NOCASE ASC;";
-
-            command.Parameters.Add("$scan_id", SqliteType.Text).Value = snapshot.ScanId;
-
-            using SqliteDataReader reader = command.ExecuteReader();
-
-            while (reader.Read())
+            foreach (EntryData entryData in entries.Values
+                         .OrderBy(entry => entry.IsDirectory ? 0 : 1)
+                         .ThenBy(entry => entry.FullPath, StringComparer.OrdinalIgnoreCase))
             {
-                string fullPath = reader.GetString(0);
-                string name = reader.GetString(1);
-                bool isDirectory = reader.GetInt32(2) != 0;
-                long sizeBytes = reader.GetInt64(3);
-                long lastWriteUtcTicks = reader.GetInt64(4);
+                FileSystemEntry entry;
 
                 if (string.Equals(
-                        fullPath,
+                        entryData.FullPath,
                         rootEntry.FullPath,
                         StringComparison.OrdinalIgnoreCase))
                 {
-                    rootEntry.Name = name;
-                    rootEntry.SizeBytes = sizeBytes;
-                    rootEntry.LastWriteTimeUtc =
-                        CreateUtcDateTimeOrMinValue(lastWriteUtcTicks);
-                    continue;
-                }
-
-                string parentPath = GetParentPath(fullPath);
-
-                FileSystemEntry entry = new FileSystemEntry
-                {
-                    Name = name,
-                    FullPath = fullPath,
-                    SizeBytes = sizeBytes,
-                    IsDirectory = isDirectory,
-                    LastWriteTimeUtc = CreateUtcDateTimeOrMinValue(lastWriteUtcTicks)
-                };
-
-                if (isDirectory)
-                {
-                    directories[fullPath] = entry;
+                    entry = rootEntry;
                 }
                 else
                 {
-                    rootEntry.AllFiles.Add(entry);
+                    entry = new FileSystemEntry
+                    {
+                        Name = entryData.Name,
+                        FullPath = entryData.FullPath,
+                        SizeBytes = entryData.SizeBytes,
+                        IsDirectory = entryData.IsDirectory,
+                        LastWriteTimeUtc = CreateUtcDateTimeOrMinValue(
+                            entryData.LastWriteUtcTicks)
+                    };
                 }
 
-                if (directories.TryGetValue(parentPath, out FileSystemEntry parentDirectory))
+                materializedEntries[entry.FullPath] = entry;
+            }
+
+            foreach (FileSystemEntry entry in materializedEntries.Values
+                         .Where(entry => !ReferenceEquals(entry, rootEntry))
+                         .OrderBy(entry => entry.FullPath, StringComparer.OrdinalIgnoreCase))
+            {
+                string parentPath = GetParentPath(entry.FullPath);
+
+                if (materializedEntries.TryGetValue(parentPath, out FileSystemEntry parentEntry))
                 {
-                    parentDirectory.Children.Add(entry);
+                    parentEntry.Children.Add(entry);
+                }
+
+                if (!entry.IsDirectory)
+                {
+                    rootEntry.AllFiles.Add(entry);
                 }
             }
 
@@ -654,10 +1280,37 @@ namespace WTF
             return CreateUtcDateTime(ticks);
         }
 
-        private sealed class ScanHistoryEntryCounter
+        private sealed class EntryData
         {
-            public int FileCount { get; set; }
-            public int DirectoryCount { get; set; }
+            public string FullPath { get; set; }
+            public string Name { get; set; }
+            public bool IsDirectory { get; set; }
+            public long SizeBytes { get; set; }
+            public long LastWriteUtcTicks { get; set; }
+
+            public static EntryData FromFileSystemEntry(FileSystemEntry entry)
+            {
+                return new EntryData
+                {
+                    FullPath = entry.FullPath,
+                    Name = string.IsNullOrWhiteSpace(entry.Name)
+                        ? GetEntryName(entry.FullPath)
+                        : entry.Name,
+                    IsDirectory = entry.IsDirectory,
+                    SizeBytes = entry.SizeBytes,
+                    LastWriteUtcTicks = GetUtcTicks(entry.LastWriteTimeUtc)
+                };
+            }
+
+            public bool HasSameVersion(EntryData other)
+            {
+                if (other == null)
+                    return false;
+
+                return IsDirectory == other.IsDirectory &&
+                       SizeBytes == other.SizeBytes &&
+                       LastWriteUtcTicks == other.LastWriteUtcTicks;
+            }
         }
     }
 }
