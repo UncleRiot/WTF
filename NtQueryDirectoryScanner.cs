@@ -115,6 +115,7 @@ namespace WTF
                     throw;
                 }
 
+                FinalizeDirectorySizes(rootEntry);
                 SortChildrenRecursive(rootEntry);
                 ReportProgress(rootPath, progress, true);
 
@@ -581,20 +582,17 @@ namespace WTF
 
         private void AddSizeToEntries(FileSystemEntry[] entries, long sizeBytes)
         {
-            if (entries == null)
+            if (entries == null || entries.Length == 0)
                 return;
 
-            for (int index = 0; index < entries.Length; index++)
+            FileSystemEntry parentEntry = entries[entries.Length - 1];
+
+            if (parentEntry == null)
+                return;
+
+            lock (parentEntry)
             {
-                FileSystemEntry entry = entries[index];
-
-                if (entry == null)
-                    continue;
-
-                lock (entry)
-                {
-                    entry.SizeBytes += sizeBytes;
-                }
+                parentEntry.SizeBytes += sizeBytes;
             }
         }
 

@@ -17,7 +17,7 @@ namespace WTF
         private readonly Image _errorSymbolImage = StatusSymbolRenderer.CreateBitmap(StatusSymbolKind.Error);
 
         private DataGridView dataGridViewAlerts;
-        private DataGridView dataGridViewDetails;
+        private RichTextBox richTextBoxDetails;
         private string _sortColumnName;
         private ListSortDirection _sortDirection = ListSortDirection.Ascending;
         private LucidButton buttonConfirm;
@@ -34,7 +34,6 @@ namespace WTF
             InitializeComponent();
             WindowsFormStyler.Apply(this, _settings.Layout);
             DialogTableStyle.Apply(dataGridViewAlerts);
-            DialogTableStyle.ApplyDetails(dataGridViewDetails);
             LoadAlerts();
 
             AppAlertLog.Changed += AppAlertLog_Changed;
@@ -151,35 +150,18 @@ namespace WTF
                 Padding = Padding.Empty
             };
 
-            dataGridViewDetails = new DataGridView
+            richTextBoxDetails = new RichTextBox
             {
-                Name = "dataGridViewDetails",
+                Name = "richTextBoxDetails",
                 Dock = DockStyle.Fill,
-                AllowUserToAddRows = false,
-                AllowUserToDeleteRows = false,
-                AllowUserToResizeColumns = false,
-                AllowUserToResizeRows = false,
-                AutoGenerateColumns = false,
-                BorderStyle = BorderStyle.FixedSingle,
-                CellBorderStyle = DataGridViewCellBorderStyle.None,
-                ColumnHeadersVisible = false,
                 ReadOnly = true,
-                RowHeadersVisible = false,
-                SelectionMode = DataGridViewSelectionMode.CellSelect,
-                MultiSelect = false
+                DetectUrls = false,
+                WordWrap = true,
+                ScrollBars = RichTextBoxScrollBars.Vertical,
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = ThemeProvider.Theme.Colors.BackgroundSecondary,
+                ForeColor = ThemeProvider.Theme.Colors.TextPrimary
             };
-
-            dataGridViewDetails.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "ColumnDetails",
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-                SortMode = DataGridViewColumnSortMode.NotSortable,
-                DefaultCellStyle =
-                {
-                    Alignment = DataGridViewContentAlignment.TopLeft,
-                    WrapMode = DataGridViewTriState.True
-                }
-            });
 
             Panel detailsPanel = new Panel
             {
@@ -188,7 +170,7 @@ namespace WTF
                 Padding = Padding.Empty
             };
 
-            detailsPanel.Controls.Add(dataGridViewDetails);
+            detailsPanel.Controls.Add(richTextBoxDetails);
             detailsPanel.Controls.Add(labelDetails);
 
             buttonConfirm = new LucidButton
@@ -475,27 +457,10 @@ namespace WTF
                     : selectedEntry.Message ?? string.Empty;
             }
 
-            dataGridViewDetails.Rows.Clear();
-
-            if (string.IsNullOrEmpty(detailsText))
-            {
-                dataGridViewDetails.ClearSelection();
-                return;
-            }
-
-            int rowIndex = dataGridViewDetails.Rows.Add(detailsText);
-            DataGridViewRow row = dataGridViewDetails.Rows[rowIndex];
-            row.Height = Math.Max(
-                dataGridViewDetails.ClientSize.Height - 2,
-                TextRenderer.MeasureText(
-                    detailsText,
-                    dataGridViewDetails.Font,
-                    new Size(
-                        Math.Max(1, dataGridViewDetails.ClientSize.Width - 24),
-                        int.MaxValue),
-                    TextFormatFlags.WordBreak).Height + 8);
-
-            dataGridViewDetails.ClearSelection();
+            richTextBoxDetails.Text = detailsText;
+            richTextBoxDetails.SelectionStart = 0;
+            richTextBoxDetails.SelectionLength = 0;
+            richTextBoxDetails.ScrollToCaret();
         }
     }
 }
