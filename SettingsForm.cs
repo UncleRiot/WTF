@@ -18,12 +18,14 @@ namespace WTF
         private LucidButton buttonColorsTab;
         private LucidButton buttonLayoutTab;
         private LucidButton buttonStatisticsTab;
+        private LucidButton buttonLoggingTab;
         private Panel panelPageHost;
         private Panel panelGeneral;
         private Panel panelExport;
         private Panel panelColors;
         private Panel panelLayout;
         private Panel panelStatistics;
+        private Panel panelLogging;
         private LucidCheckBox checkBoxShowFilesInTree;
         private LucidCheckBox checkBoxSkipReparsePoints;
         private LucidCheckBox checkBoxShowPartitionPanel;
@@ -67,6 +69,12 @@ namespace WTF
         private LucidLabel labelScanHistoryDatabaseSize;
         private LucidLabel labelScanHistoryMaximumScansPerPath;
         private LucidTextBox textBoxScanHistoryMaximumScansPerPath;
+        private LucidLabel labelLogLevel;
+        private ComboBox comboBoxLogLevel;
+        private LucidCheckBox checkBoxAutoSaveLog;
+        private LucidLabel labelMaximumLogFileSizeMb;
+        private LucidTextBox textBoxMaximumLogFileSizeMb;
+        private LucidLabel labelMaximumLogFileSizeUnit;
         private LucidButton buttonOk;
         private LucidButton buttonCancel;
         private DatabasePathSelectionMode selectedDatabasePathSelectionMode;
@@ -110,7 +118,7 @@ namespace WTF
                 Name = "buttonGeneralTab",
                 Text = LocalizationService.GetText("Settings.General"),
                 Location = new Point(18, 16),
-                Size = new Size(92, 32),
+                Size = new Size(80, 32),
                 ButtonStyle = LucidButtonStyle.Normal
             };
             buttonGeneralTab.Click += buttonGeneralTab_Click;
@@ -119,8 +127,8 @@ namespace WTF
             {
                 Name = "buttonExportTab",
                 Text = LocalizationService.GetText("Settings.Export"),
-                Location = new Point(114, 16),
-                Size = new Size(92, 32),
+                Location = new Point(102, 16),
+                Size = new Size(80, 32),
                 ButtonStyle = LucidButtonStyle.Normal
             };
             buttonExportTab.Click += buttonExportTab_Click;
@@ -139,8 +147,8 @@ namespace WTF
             {
                 Name = "buttonLayoutTab",
                 Text = LocalizationService.GetText("Settings.LayoutTab"),
-                Location = new Point(210, 16),
-                Size = new Size(92, 32),
+                Location = new Point(186, 16),
+                Size = new Size(80, 32),
                 ButtonStyle = LucidButtonStyle.Normal
             };
             buttonLayoutTab.Click += buttonLayoutTab_Click;
@@ -149,11 +157,21 @@ namespace WTF
             {
                 Name = "buttonStatisticsTab",
                 Text = LocalizationService.GetText("Settings.Statistics"),
-                Location = new Point(306, 16),
+                Location = new Point(270, 16),
                 Size = new Size(100, 32),
                 ButtonStyle = LucidButtonStyle.Normal
             };
             buttonStatisticsTab.Click += buttonStatisticsTab_Click;
+
+            buttonLoggingTab = new LucidButton
+            {
+                Name = "buttonLoggingTab",
+                Text = LocalizationService.GetText("Settings.Logging"),
+                Location = new Point(374, 16),
+                Size = new Size(100, 32),
+                ButtonStyle = LucidButtonStyle.Normal
+            };
+            buttonLoggingTab.Click += buttonLoggingTab_Click;
 
             panelPageHost = new Panel
             {
@@ -198,6 +216,14 @@ namespace WTF
             panelStatistics = new Panel
             {
                 Name = "panelStatistics",
+                Dock = DockStyle.Fill,
+                BackColor = backgroundSecondary,
+                Visible = false
+            };
+
+            panelLogging = new Panel
+            {
+                Name = "panelLogging",
                 Dock = DockStyle.Fill,
                 BackColor = backgroundSecondary,
                 Visible = false
@@ -531,7 +557,8 @@ namespace WTF
                 Name = "labelScanHistoryMaximumScansPerPath",
                 Text = LocalizationService.GetText("Settings.ScanHistoryMaximumScansPerPath"),
                 Location = new Point(24, 182),
-                Size = new Size(300, 25),
+                // Labelsize
+                Size = new Size(184, 25),
                 TextAlign = ContentAlignment.MiddleLeft,
                 Visible = false
             };
@@ -539,11 +566,72 @@ namespace WTF
             textBoxScanHistoryMaximumScansPerPath = new LucidTextBox
             {
                 Name = "textBoxScanHistoryMaximumScansPerPath",
-                Location = new Point(334, 182),
-                Size = new Size(60, 25),
+                Location = new Point(208, 182),
+                // Textbox
+                Size = new Size(30, 25),
                 TextAlign = HorizontalAlignment.Right,
                 MaxLength = 5,
                 Visible = false
+            };
+
+            labelLogLevel = new LucidLabel
+            {
+                Name = "labelLogLevel",
+                Text = LocalizationService.GetText("Settings.LogLevel"),
+                Location = new Point(21, 24),
+                AutoSize = true,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            // Pos: Log Level
+            comboBoxLogLevel = new ComboBox
+            {
+                Name = "comboBoxLogLevel",
+                Location = new Point(100, 22),
+                Size = new Size(150, 28),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FlatStyle = FlatStyle.Standard,
+                BackColor = backgroundSecondary,
+                ForeColor = ThemeProvider.Theme.Colors.TextPrimary,
+                Font = SystemFonts.MessageBoxFont
+            };
+            comboBoxLogLevel.Items.Add(AppLogLevel.Normal);
+            comboBoxLogLevel.Items.Add(AppLogLevel.Verbose);
+
+            checkBoxAutoSaveLog = CreateCheckBox(
+                "checkBoxAutoSaveLog",
+                LocalizationService.GetText("Settings.AutoSaveLog"),
+                60,
+                backgroundSecondary);
+            checkBoxAutoSaveLog.CheckedChanged += checkBoxAutoSaveLog_CheckedChanged;
+
+            labelMaximumLogFileSizeMb = new LucidLabel
+            {
+                Name = "labelMaximumLogFileSizeMb",
+                Text = LocalizationService.GetText("Settings.MaximumLogFileSizeMb"),
+                Location = new Point(21, 96),
+                AutoSize = true,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            // Pos: MaxLogSize
+            textBoxMaximumLogFileSizeMb = new LucidTextBox
+            {
+                Name = "textBoxMaximumLogFileSizeMb",
+                Location = new Point(126, 94),
+                Size = new Size(40, 25),
+                TextAlign = HorizontalAlignment.Right,
+                MaxLength = 5
+            };
+
+            // Pos: MaxLogSize MB
+            labelMaximumLogFileSizeUnit = new LucidLabel
+            {
+                Name = "labelMaximumLogFileSizeUnit",
+                Text = "(MB)",
+                Location = new Point(170, 96),
+                AutoSize = true,
+                TextAlign = ContentAlignment.MiddleLeft
             };
 
             panelGeneral.Controls.Add(checkBoxShowFilesInTree);
@@ -591,10 +679,18 @@ namespace WTF
             panelStatistics.Controls.Add(labelScanHistoryMaximumScansPerPath);
             panelStatistics.Controls.Add(textBoxScanHistoryMaximumScansPerPath);
 
+            panelLogging.Controls.Add(labelLogLevel);
+            panelLogging.Controls.Add(comboBoxLogLevel);
+            panelLogging.Controls.Add(checkBoxAutoSaveLog);
+            panelLogging.Controls.Add(labelMaximumLogFileSizeMb);
+            panelLogging.Controls.Add(textBoxMaximumLogFileSizeMb);
+            panelLogging.Controls.Add(labelMaximumLogFileSizeUnit);
+
             panelPageHost.Controls.Add(panelGeneral);
             panelPageHost.Controls.Add(panelExport);
             panelPageHost.Controls.Add(panelLayout);
             panelPageHost.Controls.Add(panelStatistics);
+            panelPageHost.Controls.Add(panelLogging);
 
             buttonOk = new LucidButton
             {
@@ -622,6 +718,7 @@ namespace WTF
             Controls.Add(buttonExportTab);
             Controls.Add(buttonLayoutTab);
             Controls.Add(buttonStatisticsTab);
+            Controls.Add(buttonLoggingTab);
             Controls.Add(panelPageHost);
             Controls.Add(buttonOk);
             Controls.Add(buttonCancel);
@@ -715,6 +812,24 @@ namespace WTF
         private void buttonStatisticsTab_Click(object sender, EventArgs e)
         {
             ShowPage(panelStatistics);
+        }
+
+        private void buttonLoggingTab_Click(object sender, EventArgs e)
+        {
+            ShowPage(panelLogging);
+        }
+
+        private void checkBoxAutoSaveLog_CheckedChanged(object sender, EventArgs e)
+        {
+            UpdateLoggingControls();
+        }
+
+        private void UpdateLoggingControls()
+        {
+            bool autoSaveLog = checkBoxAutoSaveLog.Checked;
+            labelMaximumLogFileSizeMb.Enabled = autoSaveLog;
+            textBoxMaximumLogFileSizeMb.Enabled = autoSaveLog;
+            labelMaximumLogFileSizeUnit.Enabled = autoSaveLog;
         }
 
         private void checkBoxSaveScanHistory_CheckedChanged(object sender, EventArgs e)
@@ -1057,11 +1172,13 @@ namespace WTF
             panelColors.Visible = page == panelColors;
             panelLayout.Visible = page == panelLayout;
             panelStatistics.Visible = page == panelStatistics;
+            panelLogging.Visible = page == panelLogging;
             buttonGeneralTab.Enabled = page != panelGeneral;
             buttonExportTab.Enabled = page != panelExport;
             buttonColorsTab.Enabled = page != panelColors;
             buttonLayoutTab.Enabled = page != panelLayout;
             buttonStatisticsTab.Enabled = page != panelStatistics;
+            buttonLoggingTab.Enabled = page != panelLogging;
             page.BringToFront();
         }
 
@@ -1098,7 +1215,16 @@ namespace WTF
             textBoxScanHistoryMaximumScansPerPath.Text =
                 _settings.ScanHistoryMaximumScansPerPath.ToString();
             checkBoxSaveScanHistory.Checked = _settings.SaveScanHistory;
+            comboBoxLogLevel.SelectedItem = _settings.LogLevel;
+            if (comboBoxLogLevel.SelectedIndex < 0)
+            {
+                comboBoxLogLevel.SelectedItem = AppLogLevel.Normal;
+            }
+            checkBoxAutoSaveLog.Checked = _settings.AutoSaveLog;
+            textBoxMaximumLogFileSizeMb.Text =
+                _settings.MaximumLogFileSizeMb.ToString();
             UpdateScanHistoryDatabasePathVisibility();
+            UpdateLoggingControls();
 
             partitionFillLightColor = Color.FromArgb(_settings.PartitionFillColorLightArgb);
             partitionFillDarkColor = Color.FromArgb(_settings.PartitionFillColorDarkArgb);
@@ -1156,6 +1282,23 @@ namespace WTF
         private bool TrySaveSettings()
         {
             int? exportMaxDepth = null;
+
+            if (!int.TryParse(
+                    textBoxMaximumLogFileSizeMb.Text.Trim(),
+                    out int maximumLogFileSizeMb) ||
+                maximumLogFileSizeMb < 1)
+            {
+                MessageBox.Show(
+                    this,
+                    LocalizationService.GetText("Settings.MaximumLogFileSizeMbInvalid"),
+                    Text,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                ShowPage(panelLogging);
+                textBoxMaximumLogFileSizeMb.Focus();
+                textBoxMaximumLogFileSizeMb.SelectAll();
+                return false;
+            }
 
             if (!int.TryParse(
                     textBoxScanHistoryMaximumScansPerPath.Text.Trim(),
@@ -1243,6 +1386,16 @@ namespace WTF
             _settings.ScanHistoryDatabasePath = selectedScanHistoryDatabasePath;
             _settings.ScanHistoryMaximumScansPerPath = scanHistoryMaximumScansPerPath;
             ScanHistoryService.ConfigureRetention(scanHistoryMaximumScansPerPath);
+
+            _settings.LogLevel = comboBoxLogLevel.SelectedItem is AppLogLevel selectedLogLevel
+                ? selectedLogLevel
+                : AppLogLevel.Normal;
+            _settings.AutoSaveLog = checkBoxAutoSaveLog.Checked;
+            _settings.MaximumLogFileSizeMb = maximumLogFileSizeMb;
+            AppAlertLog.Configure(
+                _settings.LogLevel,
+                _settings.AutoSaveLog,
+                _settings.MaximumLogFileSizeMb);
 
             if (comboBoxLanguage.SelectedItem is LanguageItem selectedLanguageItem)
             {

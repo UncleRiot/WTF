@@ -10,7 +10,8 @@ namespace WTF
     {
         public ScanHistoryComparisonResult Compare(
             ScanHistoryInfo baselineScanInfo,
-            ScanHistoryInfo compareScanInfo)
+            ScanHistoryInfo compareScanInfo,
+            IProgress<int> progress)
         {
             if (baselineScanInfo == null)
                 throw new ArgumentNullException(nameof(baselineScanInfo));
@@ -18,11 +19,26 @@ namespace WTF
             if (compareScanInfo == null)
                 throw new ArgumentNullException(nameof(compareScanInfo));
 
+            progress?.Report(0);
             ScanHistorySnapshot baselineSnapshot = ScanHistoryService.Load(baselineScanInfo.FilePath);
-            ScanHistorySnapshot compareSnapshot = ScanHistoryService.Load(compareScanInfo.FilePath);
+            progress?.Report(5);
 
-            Dictionary<string, FileSystemEntry> baselineFiles = FlattenFiles(baselineSnapshot.RootEntry);
-            Dictionary<string, FileSystemEntry> compareFiles = FlattenFiles(compareSnapshot.RootEntry);
+            ScanHistorySnapshot compareSnapshot = ScanHistoryService.Load(compareScanInfo.FilePath);
+            progress?.Report(10);
+
+            Dictionary<string, FileSystemEntry> baselineFiles = FlattenFiles(
+                baselineSnapshot.RootEntry,
+                baselineScanInfo.FileCount,
+                progress,
+                10,
+                35);
+
+            Dictionary<string, FileSystemEntry> compareFiles = FlattenFiles(
+                compareSnapshot.RootEntry,
+                compareScanInfo.FileCount,
+                progress,
+                35,
+                60);
 
             ScanHistoryComparisonResult result = new ScanHistoryComparisonResult
             {
@@ -36,6 +52,9 @@ namespace WTF
 
             result.SizeDeltaBytes = result.CompareSizeBytes - result.BaselineSizeBytes;
 
+            int compareProcessed = 0;
+            int compareTotal = Math.Max(1, compareFiles.Count);
+
             foreach (KeyValuePair<string, FileSystemEntry> compareFile in compareFiles)
             {
                 if (!baselineFiles.TryGetValue(compareFile.Key, out FileSystemEntry baselineFile))
@@ -47,6 +66,7 @@ namespace WTF
 
                     result.NewFiles.Add(newFile);
                     AddFolderDeltas(result.FolderGrowth, compareSnapshot.RootPath, newFile.ParentPath, 0, compareFile.Value.SizeBytes, true, false);
+                    ReportLoopProgress(progress, ref compareProcessed, compareTotal, 60, 80);
                     continue;
                 }
 
@@ -67,12 +87,20 @@ namespace WTF
                         false,
                         true);
                 }
+
+                ReportLoopProgress(progress, ref compareProcessed, compareTotal, 60, 80);
             }
+
+            int baselineProcessed = 0;
+            int baselineTotal = Math.Max(1, baselineFiles.Count);
 
             foreach (KeyValuePair<string, FileSystemEntry> baselineFile in baselineFiles)
             {
                 if (compareFiles.ContainsKey(baselineFile.Key))
+                {
+                    ReportLoopProgress(progress, ref baselineProcessed, baselineTotal, 80, 95);
                     continue;
+                }
 
                 ScanHistoryFileChange deletedFile = CreateFileChange(
                     baselineFile.Value,
@@ -81,39 +109,99 @@ namespace WTF
 
                 result.DeletedFiles.Add(deletedFile);
                 AddFolderDeltas(result.FolderGrowth, baselineSnapshot.RootPath, deletedFile.ParentPath, baselineFile.Value.SizeBytes, 0, false, false);
+                ReportLoopProgress(progress, ref baselineProcessed, baselineTotal, 80, 95);
             }
 
             result.NewFileCount = result.NewFiles.Count;
             result.DeletedFileCount = result.DeletedFiles.Count;
             result.ChangedFileCount = result.ChangedFiles.Count;
 
+            progress?.Report(96);
+
             result.NewFiles.Sort(CompareFileChangeByLargestDelta);
             result.DeletedFiles.Sort(CompareFileChangeByLargestDelta);
             result.ChangedFiles.Sort(CompareFileChangeByLargestDelta);
             result.FolderGrowth.Sort(CompareFolderGrowthByLargestDelta);
 
+            progress?.Report(100);
             return result;
         }
 
-        private static Dictionary<string, FileSystemEntry> FlattenFiles(FileSystemEntry rootEntry)
+        private static void ReportLoopProgress(
+            IProgress<int> progress,
+            ref int processed,
+            int total,
+            int startPercent,
+            int endPercent)
         {
-            Dictionary<string, FileSystemEntry> files = new Dictionary<string, FileSystemEntry>(StringComparer.OrdinalIgnoreCase);
+            processed++;
+
+            if (progress == null ||
+                (processed < total && processed % 10000 != 0))
+            {
+                return;
+            }
+
+            int range = Math.Max(0, endPercent - startPercent);
+            int percent = startPercent +
+                          (int)((long)processed * range / Math.Max(1, total));
+
+            progress.Report(Math.Min(endPercent, percent));
+        }
+
+        private static Dictionary<string, FileSystemEntry> FlattenFiles(
+            FileSystemEntry rootEntry,
+            int expectedFileCount,
+            IProgress<int> progress,
+            int startPercent,
+            int endPercent)
+        {
+            Dictionary<string, FileSystemEntry> files =
+                new Dictionary<string, FileSystemEntry>(
+                    StringComparer.OrdinalIgnoreCase);
 
             if (rootEntry == null)
+            {
+                progress?.Report(endPercent);
                 return files;
+            }
 
-            AddFiles(rootEntry, files);
+            int processedFileCount = 0;
+            AddFiles(
+                rootEntry,
+                files,
+                Math.Max(1, expectedFileCount),
+                progress,
+                startPercent,
+                endPercent,
+                ref processedFileCount);
+
+            progress?.Report(endPercent);
             return files;
         }
 
-        private static void AddFiles(FileSystemEntry entry, Dictionary<string, FileSystemEntry> files)
+        private static void AddFiles(
+            FileSystemEntry entry,
+            Dictionary<string, FileSystemEntry> files,
+            int expectedFileCount,
+            IProgress<int> progress,
+            int startPercent,
+            int endPercent,
+            ref int processedFileCount)
         {
             if (entry == null)
                 return;
 
             if (!entry.IsDirectory)
             {
-                AddFile(entry, files);
+                AddFile(
+                    entry,
+                    files,
+                    expectedFileCount,
+                    progress,
+                    startPercent,
+                    endPercent,
+                    ref processedFileCount);
                 return;
             }
 
@@ -121,22 +209,62 @@ namespace WTF
             {
                 foreach (FileSystemEntry file in entry.AllFiles)
                 {
-                    AddFile(file, files);
+                    AddFile(
+                        file,
+                        files,
+                        expectedFileCount,
+                        progress,
+                        startPercent,
+                        endPercent,
+                        ref processedFileCount);
                 }
             }
 
             foreach (FileSystemEntry child in entry.Children)
             {
-                AddFiles(child, files);
+                AddFiles(
+                    child,
+                    files,
+                    expectedFileCount,
+                    progress,
+                    startPercent,
+                    endPercent,
+                    ref processedFileCount);
             }
         }
 
-        private static void AddFile(FileSystemEntry file, Dictionary<string, FileSystemEntry> files)
+        private static void AddFile(
+            FileSystemEntry file,
+            Dictionary<string, FileSystemEntry> files,
+            int expectedFileCount,
+            IProgress<int> progress,
+            int startPercent,
+            int endPercent,
+            ref int processedFileCount)
         {
-            if (file == null || file.IsDirectory || string.IsNullOrWhiteSpace(file.FullPath))
+            if (file == null ||
+                file.IsDirectory ||
+                string.IsNullOrWhiteSpace(file.FullPath) ||
+                files.ContainsKey(file.FullPath))
+            {
                 return;
+            }
 
-            files[file.FullPath] = file;
+            files.Add(file.FullPath, file);
+            processedFileCount++;
+
+            if (progress == null ||
+                processedFileCount % 2048 != 0)
+            {
+                return;
+            }
+
+            int range = Math.Max(0, endPercent - startPercent);
+            int percent = startPercent +
+                          (int)((long)processedFileCount * range /
+                                expectedFileCount);
+
+            progress.Report(Math.Min(endPercent, percent));
         }
 
         private static ScanHistoryFileChange CreateFileChange(

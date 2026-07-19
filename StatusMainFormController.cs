@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -191,6 +191,27 @@ namespace WTF
             double value = Math.Max(0D, Math.Min(100D, percent.Value));
             items[0].Text = value.ToString("0.0") + " %";
             SetMainWindowTitle(value);
+        }
+
+        public void SetScanHistorySaveProgress(int percent)
+        {
+            int value = Math.Max(0, Math.Min(100, percent));
+            _statusLabel.Text = LocalizationService.Format("Status.ScanHistorySaving", value);
+
+            if (_statusStripMain != null)
+            {
+                ToolStripItem[] items = _statusStripMain.Items.Find("toolStripProgressLabel", false);
+
+                if (items.Length > 0)
+                {
+                    items[0].Text = value.ToString("0") + " %";
+                }
+            }
+
+            _owner.Text =
+                LocalizationService.GetText("App.Title") +
+                " - " +
+                LocalizationService.Format("Status.ScanHistorySavingTitle", value);
         }
 
         public void ReportSkippedDirectories(int skippedDirectories, List<string> skippedDirectoryDetails)

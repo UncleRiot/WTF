@@ -1,6 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace WTF
 {
@@ -9,6 +12,12 @@ namespace WTF
         Information,
         Warning,
         Error
+    }
+
+    public enum AppLogLevel
+    {
+        Normal,
+        Verbose
     }
 
     public sealed class AppAlertEntry
@@ -52,63 +61,126 @@ namespace WTF
 
     public static class AppAlertLog
     {
+        private const string LogDirectoryName = "Logs";
+        private const string LogFileName = "WTF.log";
+        private const string PreviousLogFileName = "WTF.previous.log";
+        private const string CsvHeader = "Timestamp,Severity,Category,Message,Details";
+
         private static readonly object SyncRoot = new object();
         private static readonly List<AppAlertEntry> Entries = new List<AppAlertEntry>();
 
+        private static AppLogLevel _logLevel = AppLogLevel.Normal;
+        private static bool _autoSaveLog;
+        private static int _maximumLogFileSizeMb = 4;
+
         public static event EventHandler Changed;
+
+        public static void Configure(
+            AppLogLevel logLevel,
+            bool autoSaveLog,
+            int maximumLogFileSizeMb)
+        {
+            lock (SyncRoot)
+            {
+                _logLevel = logLevel;
+                _autoSaveLog = autoSaveLog;
+                _maximumLogFileSizeMb = Math.Max(1, maximumLogFileSizeMb);
+            }
+        }
 
         public static void AddInformation(string category, string message)
         {
-            Add(AppAlertSeverity.Information, category, message, null);
+            Add(AppAlertSeverity.Information, category, message, null, false);
         }
 
         public static void AddInformation(string category, string message, string details)
         {
-            Add(AppAlertSeverity.Information, category, message, details);
+            Add(AppAlertSeverity.Information, category, message, details, false);
+        }
+
+        public static void AddVerboseInformation(string category, string message)
+        {
+            Add(AppAlertSeverity.Information, category, message, null, true);
+        }
+
+        public static void AddVerboseInformation(
+            string category,
+            string message,
+            string details)
+        {
+            Add(AppAlertSeverity.Information, category, message, details, true);
         }
 
         public static void AddWarning(string category, string message)
         {
-            Add(AppAlertSeverity.Warning, category, message, null);
+            Add(AppAlertSeverity.Warning, category, message, null, false);
         }
 
         public static void AddWarning(string category, string message, string details)
         {
-            Add(AppAlertSeverity.Warning, category, message, details);
+            Add(AppAlertSeverity.Warning, category, message, details, false);
         }
 
         public static void AddError(string category, string message)
         {
-            Add(AppAlertSeverity.Error, category, message, null);
+            Add(AppAlertSeverity.Error, category, message, null, false);
         }
 
         public static void AddError(string category, string message, string details)
         {
-            Add(AppAlertSeverity.Error, category, message, details);
+            Add(AppAlertSeverity.Error, category, message, details, false);
         }
 
         public static void Add(AppAlertSeverity severity, string category, string message)
         {
-            Add(severity, category, message, null);
+            Add(severity, category, message, null, false);
         }
 
-        public static void Add(AppAlertSeverity severity, string category, string message, string details)
+        public static void Add(
+            AppAlertSeverity severity,
+            string category,
+            string message,
+            string details)
+        {
+            Add(severity, category, message, details, false);
+        }
+
+        private static void Add(
+            AppAlertSeverity severity,
+            string category,
+            string message,
+            string details,
+            bool verboseOnly)
         {
             if (string.IsNullOrWhiteSpace(message))
                 return;
 
+            AppAlertEntry entry;
+
             lock (SyncRoot)
             {
-                Entries.Add(new AppAlertEntry
+                if (verboseOnly && _logLevel != AppLogLevel.Verbose)
+                    return;
+
+                entry = new AppAlertEntry
                 {
                     Id = Guid.NewGuid(),
                     Severity = severity,
-                    Category = string.IsNullOrWhiteSpace(category) ? LocalizationService.GetText("Common.General") : category,
+                    Category = string.IsNullOrWhiteSpace(category)
+                        ? LocalizationService.GetText("Common.General")
+                        : category,
                     Message = message,
                     Details = details,
                     CreatedAt = DateTime.Now,
                     IsConfirmed = false
-                });
+                };
+
+                Entries.Add(entry);
+
+                if (_autoSaveLog)
+                {
+                    TryWriteEntryToFile(entry);
+                }
             }
 
             OnChanged();
@@ -190,6 +262,84 @@ namespace WTF
             }
 
             OnChanged();
+        }
+
+        private static void TryWriteEntryToFile(AppAlertEntry entry)
+        {
+            try
+            {
+                string logDirectoryPath = Path.Combine(
+                    AppContext.BaseDirectory,
+                    LogDirectoryName);
+                string logFilePath = Path.Combine(logDirectoryPath, LogFileName);
+                string previousLogFilePath = Path.Combine(
+                    logDirectoryPath,
+                    PreviousLogFileName);
+
+                Directory.CreateDirectory(logDirectoryPath);
+
+                string csvLine = CreateCsvLine(entry);
+                byte[] lineBytes = Encoding.UTF8.GetBytes(csvLine + Environment.NewLine);
+                byte[] headerBytes = Encoding.UTF8.GetBytes(
+                    CsvHeader + Environment.NewLine);
+                long maximumLength = (long)_maximumLogFileSizeMb * 1024L * 1024L;
+                long currentLength = File.Exists(logFilePath)
+                    ? new FileInfo(logFilePath).Length
+                    : 0L;
+                long requiredLength = lineBytes.Length +
+                    (currentLength == 0L ? headerBytes.Length : 0L);
+
+                if (currentLength > 0L &&
+                    currentLength + requiredLength > maximumLength)
+                {
+                    if (File.Exists(previousLogFilePath))
+                    {
+                        File.Delete(previousLogFilePath);
+                    }
+
+                    File.Move(logFilePath, previousLogFilePath);
+                    currentLength = 0L;
+                }
+
+                using FileStream stream = new FileStream(
+                    logFilePath,
+                    FileMode.Append,
+                    FileAccess.Write,
+                    FileShare.Read);
+
+                if (currentLength == 0L)
+                {
+                    stream.Write(headerBytes, 0, headerBytes.Length);
+                }
+
+                stream.Write(lineBytes, 0, lineBytes.Length);
+            }
+            catch
+            {
+            }
+        }
+
+        private static string CreateCsvLine(AppAlertEntry entry)
+        {
+            return string.Join(
+                ",",
+                EscapeCsv(entry.CreatedAt.ToString(
+                    "yyyy-MM-dd HH:mm:ss.fff",
+                    CultureInfo.InvariantCulture)),
+                EscapeCsv(entry.Severity.ToString()),
+                EscapeCsv(entry.Category),
+                EscapeCsv(entry.Message),
+                EscapeCsv(entry.Details));
+        }
+
+        private static string EscapeCsv(string value)
+        {
+            string text = value ?? string.Empty;
+
+            if (text.IndexOfAny(new[] { ',', '"', '\r', '\n' }) < 0)
+                return text;
+
+            return "\"" + text.Replace("\"", "\"\"") + "\"";
         }
 
         private static AppAlertEntry Clone(AppAlertEntry entry)

@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Lucid.Controls;
 using Lucid.Controls.GridView;
 
 namespace WTF
@@ -53,6 +54,8 @@ namespace WTF
         private ToolStripButton toolStripButtonTable;
         private ToolStripButton toolStripButtonPieChart;
         private ToolStripButton toolStripButtonBarChart;
+        private LucidCheckBox checkBoxShowFiles;
+        private ToolStripControlHost checkBoxShowFilesHost;
         private ToolStripButton toolStripButtonExportCsv;
         private ToolStripButton toolStripButtonAnalysis;
         private ToolStripButton toolStripButtonStorageHistory;
@@ -64,6 +67,7 @@ namespace WTF
         private ToolStripMenuItem contextMenuItemOpenInExplorer;
         private ToolStripMenuItem contextMenuItemExport;
         private ToolStripMenuItem contextMenuItemCopyToClipboard;
+        private ToolStripMenuItem contextMenuItemCopyTreeText;
         private ToolStripMenuItem contextMenuItemCopyPath;
         private ImageList imageListEntries;
         private LucidDataGridView listViewPartitions;
@@ -72,6 +76,9 @@ namespace WTF
         private Panel panelRightViewHost;
         private Chart_PieChart pieChartView;
         private Chart_BarChart barChartView;
+        private StorageHistoryForm storageHistoryView;
+        private AdvancedFeaturesForm analysisView;
+        private FileSystemEntry _selectedEntry;
         private StatusStrip statusStripAlerts;
         private ToolStripStatusLabel toolStripAlertInformationLabel;
         private ToolStripStatusLabel toolStripAlertWarningLabel;
@@ -190,7 +197,8 @@ namespace WTF
                 contextMenuItemOpenInExplorer,
                 contextMenuItemExport,
                 contextMenuItemCopyToClipboard,
-                entry => _layoutMainFormController.BindGrid(entry));
+                SelectedEntryChanged,
+                ShowTreeEntryContextMenu);
             AppAlertLog.Changed += _statusMainFormController.AppAlertLogChanged;
             _statusMainFormController.ConfigureAlertStatusStrip();
             _driveComboBoxController.Configure();
@@ -224,6 +232,7 @@ namespace WTF
             _partitionGridController.AdjustColumns();
             _partitionGridController.UpdatePartitionPanelVisibility();
             _layoutMainFormController.SetViewMode(_settings.SelectedViewMode, _suspendPersistentSettingsSave);
+            checkBoxShowFilesHost.Visible = _settings.SelectedViewMode == ViewMode.Table;
             _layoutMainFormController.UpdateRightViewBounds();
             SetScanningState(false);
 
@@ -433,6 +442,18 @@ namespace WTF
             toolStripButtonTable = new ToolStripButton(LocalizationService.GetText("Toolbar.Table"));
             toolStripButtonPieChart = new ToolStripButton(LocalizationService.GetText("Toolbar.PieChart"));
             toolStripButtonBarChart = new ToolStripButton(LocalizationService.GetText("Toolbar.BarChart"));
+            checkBoxShowFiles = new LucidCheckBox
+            {
+                AutoSize = true,
+                Text = LocalizationService.GetText("Common.Files"),
+                Margin = new Padding(6, 2, 4, 0)
+            };
+            checkBoxShowFiles.CheckedChanged += checkBoxShowFiles_CheckedChanged;
+            checkBoxShowFilesHost = new ToolStripControlHost(checkBoxShowFiles)
+            {
+                AutoSize = true,
+                Margin = new Padding(2, 0, 2, 0)
+            };
 
             toolStripButtonTable.DisplayStyle = ToolStripItemDisplayStyle.Text;
             toolStripButtonPieChart.DisplayStyle = ToolStripItemDisplayStyle.Text;
@@ -443,6 +464,7 @@ namespace WTF
             toolStripButtonBarChart.Click += toolStripButtonBarChart_Click;
 
             toolStripViewMode.Items.Add(toolStripButtonTable);
+            toolStripViewMode.Items.Add(checkBoxShowFilesHost);
             toolStripViewMode.Items.Add(toolStripButtonPieChart);
             toolStripViewMode.Items.Add(toolStripButtonBarChart);
 
@@ -475,12 +497,12 @@ namespace WTF
             toolStripButtonAnalysis.Image = CreateAnalysisButtonImage();
             toolStripButtonAnalysis.Click += menuItemAdvancedFeatures_Click;
 
-            toolStripButtonStorageHistory = new ToolStripButton(LocalizationService.GetText("Menu.StorageHistory"));
+            toolStripButtonStorageHistory = new ToolStripButton("Space History");
             toolStripButtonStorageHistory.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
             toolStripButtonStorageHistory.Image = CreateStorageHistoryButtonImage();
             toolStripButtonStorageHistory.Click += menuItemStorageHistory_Click;
 
-            toolStripButtonScanHistory = new ToolStripButton(LocalizationService.GetText("Menu.ScanHistory"));
+            toolStripButtonScanHistory = new ToolStripButton("Compare Scans");
             toolStripButtonScanHistory.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
             toolStripButtonScanHistory.Image = CreateScanHistoryButtonImage();
             toolStripButtonScanHistory.Click += menuItemScanHistory_Click;
@@ -527,15 +549,22 @@ namespace WTF
             contextMenuStripTreeEntries = new ContextMenuStrip();
             contextMenuItemOpenInExplorer = new ToolStripMenuItem(LocalizationService.GetText("Context.OpenInExplorer"));
             contextMenuItemExport = new ToolStripMenuItem(LocalizationService.GetText("Context.Export"));
-            contextMenuItemCopyToClipboard = new ToolStripMenuItem(LocalizationService.GetText("Context.CopyToClipboard"));
-            contextMenuItemCopyPath = new ToolStripMenuItem(LocalizationService.GetText("Context.CopyPath"));
+            contextMenuItemCopyPath = new ToolStripMenuItem(
+                "Copy: Selected item");
+            contextMenuItemCopyTreeText = new ToolStripMenuItem(
+                GetTreeCopyMenuText("Text"));
+            contextMenuItemCopyToClipboard = new ToolStripMenuItem(
+                GetTreeCopyMenuText(".CSV"));
             contextMenuItemOpenInExplorer.Click += contextMenuItemOpenInExplorer_Click;
             contextMenuItemExport.Click += contextMenuItemExport_Click;
-            contextMenuItemCopyToClipboard.Click += contextMenuItemCopyToClipboard_Click;
             contextMenuItemCopyPath.Click += contextMenuItemCopyPath_Click;
+            contextMenuItemCopyTreeText.Click += contextMenuItemCopyTreeText_Click;
+            contextMenuItemCopyToClipboard.Click += contextMenuItemCopyToClipboard_Click;
             contextMenuStripTreeEntries.Items.Add(contextMenuItemExport);
-            contextMenuStripTreeEntries.Items.Add(contextMenuItemCopyToClipboard);
             contextMenuStripTreeEntries.Items.Add(contextMenuItemCopyPath);
+            contextMenuStripTreeEntries.Items.Add(contextMenuItemCopyTreeText);
+            contextMenuStripTreeEntries.Items.Add(contextMenuItemCopyToClipboard);
+            contextMenuStripTreeEntries.Items.Add(new ToolStripSeparator());
             contextMenuStripTreeEntries.Items.Add(contextMenuItemOpenInExplorer);
 
             imageListPartitions = new ImageList();
@@ -593,9 +622,18 @@ namespace WTF
                 Dock = DockStyle.Fill
             };
 
+            storageHistoryView = new StorageHistoryForm(_settings, true)
+            {
+                TopLevel = false,
+                FormBorderStyle = FormBorderStyle.None,
+                Dock = DockStyle.Fill,
+                Visible = false
+            };
+
             panelRightViewHost.Controls.Add(dataGridViewEntries);
             panelRightViewHost.Controls.Add(pieChartView);
             panelRightViewHost.Controls.Add(barChartView);
+            panelRightViewHost.Controls.Add(storageHistoryView);
 
             splitContainerLeft.Panel1.Controls.Add(treeViewEntries);
             splitContainerLeft.Panel2.Controls.Add(listViewPartitions);
@@ -655,6 +693,8 @@ namespace WTF
             TableLayoutPanel tableLayoutPanelMain = new TableLayoutPanel();
             tableLayoutPanelMain.Dock = DockStyle.Fill;
             tableLayoutPanelMain.ColumnCount = 1;
+            tableLayoutPanelMain.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Percent, 100F));
             tableLayoutPanelMain.RowCount = 4;
             tableLayoutPanelMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tableLayoutPanelMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -709,13 +749,14 @@ namespace WTF
             toolStripButtonExportCsv.Text = LocalizationService.GetText("Toolbar.Export");
             toolStripButtonExportCsv.ToolTipText = LocalizationService.GetText("Toolbar.ExportCsv");
             toolStripButtonAnalysis.Text = LocalizationService.GetText("Menu.Analysis");
-            toolStripButtonStorageHistory.Text = LocalizationService.GetText("Menu.StorageHistory");
-            toolStripButtonScanHistory.Text = LocalizationService.GetText("Menu.ScanHistory");
+            toolStripButtonStorageHistory.Text = "Space History";
+            toolStripButtonScanHistory.Text = "Compare Scans";
 
             contextMenuItemOpenInExplorer.Text = LocalizationService.GetText("Context.OpenInExplorer");
             contextMenuItemExport.Text = LocalizationService.GetText("Context.Export");
-            contextMenuItemCopyToClipboard.Text = LocalizationService.GetText("Context.CopyToClipboard");
-            contextMenuItemCopyPath.Text = LocalizationService.GetText("Context.CopyPath");
+            contextMenuItemCopyPath.Text = "Copy: Selected item";
+            contextMenuItemCopyTreeText.Text = GetTreeCopyMenuText("Text");
+            contextMenuItemCopyToClipboard.Text = GetTreeCopyMenuText(".CSV");
 
             _statusMainFormController?.ApplyLocalizedTexts();
 
@@ -971,6 +1012,10 @@ namespace WTF
                 if (!IsCurrentScanSession(session))
                     return;
 
+                Stopwatch uiTransitionStopwatch = Stopwatch.StartNew();
+
+                ApplyDriveTotalSizeToRootEntry(rootPath, rootEntry);
+
                 session.RootEntry = rootEntry;
                 session.LatestProgress = null;
                 StorageHistoryService.AddRecord(rootEntry.FullPath, rootEntry.SizeBytes);
@@ -989,7 +1034,20 @@ namespace WTF
                     _statusMainFormController.ReportSkippedDirectories(session.SkippedDirectories, session.SkippedDirectoryDetails);
                 }
 
-                await SaveScanHistoryIfEnabledAsync(rootEntry);
+                uiTransitionStopwatch.Stop();
+
+                AppAlertLog.AddVerboseInformation(
+                    "Performance",
+                    string.Format(
+                        "UI result transition: {0:N0} ms",
+                        uiTransitionStopwatch.Elapsed.TotalMilliseconds),
+                    string.Format(
+                        "Path: {0}{1}ElapsedMilliseconds: {2:N0}",
+                        rootPath,
+                        Environment.NewLine,
+                        uiTransitionStopwatch.Elapsed.TotalMilliseconds));
+
+                await SaveScanHistoryIfEnabledAsync(rootEntry, session);
             }
             catch (OperationCanceledException)
             {
@@ -1021,20 +1079,44 @@ namespace WTF
                 ReferenceEquals(currentSession, session);
         }
 
-        private async Task SaveScanHistoryIfEnabledAsync(FileSystemEntry rootEntry)
+        private async Task SaveScanHistoryIfEnabledAsync(
+            FileSystemEntry rootEntry,
+            ScanSession session)
         {
             if (!_settings.SaveScanHistory || rootEntry == null)
                 return;
 
+            Progress<int> progress = new Progress<int>(percent =>
+            {
+                if (!IsCurrentScanSession(session) || !IsSelectedScanPath(session.RootPath))
+                    return;
+
+                _statusMainFormController.SetScanHistorySaveProgress(percent);
+            });
+
             try
             {
-                await Task.Run(() => ScanHistoryService.Save(rootEntry));
+                if (IsCurrentScanSession(session) && IsSelectedScanPath(session.RootPath))
+                {
+                    SetScanHistorySavingState();
+                    _statusMainFormController.SetScanHistorySaveProgress(0);
+                }
+
+                await Task.Run(() => ScanHistoryService.Save(rootEntry, progress));
             }
             catch (Exception exception)
             {
                 AppAlertLog.AddWarning(
                     LocalizationService.GetText("Alert.Scan"),
                     LocalizationService.Format("Alert.ScanHistorySaveFailed", exception.Message));
+            }
+            finally
+            {
+                if (IsCurrentScanSession(session) && IsSelectedScanPath(session.RootPath))
+                {
+                    _statusMainFormController.UpdateStatusStripForDrive(rootEntry.FullPath);
+                    _statusMainFormController.SetStatusProgressText(100D);
+                }
             }
         }
 
@@ -1172,6 +1254,48 @@ namespace WTF
             }
         }
 
+        private static void ApplyDriveTotalSizeToRootEntry(
+            string rootPath,
+            FileSystemEntry rootEntry)
+        {
+            if (rootEntry == null || string.IsNullOrWhiteSpace(rootPath))
+                return;
+
+            try
+            {
+                string fullPath = Path.GetFullPath(rootPath);
+                string pathRoot = Path.GetPathRoot(fullPath);
+
+                if (string.IsNullOrWhiteSpace(pathRoot))
+                    return;
+
+                string normalizedFullPath = fullPath.TrimEnd(
+                    Path.DirectorySeparatorChar,
+                    Path.AltDirectorySeparatorChar);
+                string normalizedPathRoot = pathRoot.TrimEnd(
+                    Path.DirectorySeparatorChar,
+                    Path.AltDirectorySeparatorChar);
+
+                if (!string.Equals(
+                        normalizedFullPath,
+                        normalizedPathRoot,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                DriveInfo driveInfo = new DriveInfo(pathRoot);
+
+                if (!driveInfo.IsReady)
+                    return;
+
+                rootEntry.SizeBytes = driveInfo.TotalSize;
+            }
+            catch
+            {
+            }
+        }
+
 
 
         private void SetDoubleBuffered(Control control, bool enabled)
@@ -1189,6 +1313,26 @@ namespace WTF
             propertyInfo.SetValue(control, enabled, null);
         }
 
+        private void SetScanHistorySavingState()
+        {
+            Image oldImage = toolStripButtonScan.Image;
+            toolStripButtonScan.Image = CreateScanButtonImage();
+            oldImage?.Dispose();
+
+            toolStripButtonScan.Text = string.Empty;
+            toolStripButtonScan.DisplayStyle = ToolStripItemDisplayStyle.Image;
+            toolStripButtonScan.ToolTipText = LocalizationService.GetText("Toolbar.ScanHistorySaving");
+            toolStripButtonScan.Enabled = false;
+            _driveComboBoxController.SetEnabled(false);
+            toolStripButtonOpenFolder.Enabled = false;
+            toolStripButtonPause.Enabled = false;
+            menuItemExportCsv.Enabled = false;
+            menuItemSaveScanResult.Enabled = false;
+            menuItemAdvancedFeatures.Enabled = false;
+            toolStripButtonAnalysis.Enabled = false;
+            toolStripButtonExportCsv.Enabled = false;
+        }
+
         private void SetScanningState(bool scanning)
         {
             Image oldImage = toolStripButtonScan.Image;
@@ -1198,6 +1342,7 @@ namespace WTF
             toolStripButtonScan.Text = string.Empty;
             toolStripButtonScan.DisplayStyle = ToolStripItemDisplayStyle.Image;
             toolStripButtonScan.ToolTipText = scanning ? LocalizationService.GetText("Toolbar.ScanCancel") : LocalizationService.GetText("Toolbar.ScanStart");
+            toolStripButtonScan.Enabled = true;
             _driveComboBoxController.SetEnabled(true);
             toolStripButtonOpenFolder.Enabled = !scanning;
             toolStripButtonPause.Enabled = scanning;
@@ -1226,15 +1371,124 @@ namespace WTF
 
         private void toolStripButtonTable_Click(object sender, EventArgs e)
         {
+            HideAnalysisView();
+            HideStorageHistoryView();
             _layoutMainFormController.SetViewMode(ViewMode.Table, _suspendPersistentSettingsSave);
+            checkBoxShowFilesHost.Visible = true;
         }
+
         private void toolStripButtonPieChart_Click(object sender, EventArgs e)
         {
+            HideAnalysisView();
+            HideStorageHistoryView();
             _layoutMainFormController.SetViewMode(ViewMode.PieChart, _suspendPersistentSettingsSave);
+            checkBoxShowFilesHost.Visible = false;
         }
+
         private void toolStripButtonBarChart_Click(object sender, EventArgs e)
         {
+            HideAnalysisView();
+            HideStorageHistoryView();
             _layoutMainFormController.SetViewMode(ViewMode.BarChart, _suspendPersistentSettingsSave);
+            checkBoxShowFilesHost.Visible = false;
+        }
+
+        private void checkBoxShowFiles_CheckedChanged(object sender, EventArgs e)
+        {
+            dataGridViewEntries.SetShowFiles(checkBoxShowFiles.Checked);
+
+            if (_selectedEntry != null)
+            {
+                dataGridViewEntries.SetEntry(_selectedEntry);
+            }
+        }
+
+        private void SelectedEntryChanged(FileSystemEntry entry)
+        {
+            _selectedEntry = entry;
+            _layoutMainFormController.BindGrid(entry);
+
+            if (analysisView != null && analysisView.Visible)
+            {
+                analysisView.BringToFront();
+            }
+            else if (storageHistoryView.Visible)
+            {
+                storageHistoryView.BringToFront();
+            }
+        }
+
+        private void HideAnalysisView()
+        {
+            if (analysisView != null)
+            {
+                analysisView.Visible = false;
+            }
+
+            toolStripButtonAnalysis.Checked = false;
+        }
+
+        private void ShowAnalysisView()
+        {
+            if (analysisView != null)
+            {
+                panelRightViewHost.Controls.Remove(analysisView);
+                analysisView.Dispose();
+            }
+
+            analysisView = new AdvancedFeaturesForm(_currentRootEntry, _settings, dataGridViewEntries)
+            {
+                TopLevel = false,
+                FormBorderStyle = FormBorderStyle.None,
+                AutoSize = false,
+                MinimumSize = Size.Empty,
+                MaximumSize = Size.Empty,
+                Dock = DockStyle.Fill,
+                Visible = false
+            };
+
+            panelRightViewHost.Controls.Add(analysisView);
+
+            HideStorageHistoryView();
+
+            analysisView.Visible = true;
+            analysisView.Show();
+            analysisView.BringToFront();
+
+            dataGridViewEntries.Visible = false;
+            pieChartView.Visible = false;
+            barChartView.Visible = false;
+
+            toolStripButtonTable.Checked = false;
+            toolStripButtonPieChart.Checked = false;
+            toolStripButtonBarChart.Checked = false;
+            toolStripButtonAnalysis.Checked = true;
+            checkBoxShowFilesHost.Visible = false;
+        }
+
+        private void HideStorageHistoryView()
+        {
+            storageHistoryView.Visible = false;
+            toolStripButtonStorageHistory.Checked = false;
+        }
+
+        private void ShowStorageHistoryView()
+        {
+            HideAnalysisView();
+            storageHistoryView.RefreshHistory();
+            storageHistoryView.Visible = true;
+            storageHistoryView.Show();
+            storageHistoryView.BringToFront();
+
+            dataGridViewEntries.Visible = false;
+            pieChartView.Visible = false;
+            barChartView.Visible = false;
+
+            toolStripButtonTable.Checked = false;
+            toolStripButtonPieChart.Checked = false;
+            toolStripButtonBarChart.Checked = false;
+            toolStripButtonStorageHistory.Checked = true;
+            checkBoxShowFilesHost.Visible = false;
         }
 
         private void toolStripButtonExportCsv_Click(object sender, EventArgs e)
@@ -1247,6 +1501,54 @@ namespace WTF
             _exportEntryController.ExportEntry(_currentRootEntry);
         }
 
+
+        private string GetTreeCopyMenuText(string format)
+        {
+            string depth = _settings.ExportMaxDepth.HasValue
+                ? _settings.ExportMaxDepth.Value + " lvl"
+                : "Unlimited";
+
+            return $"Copy: Tree ({depth}) -> {format}";
+        }
+
+        private void ShowTreeEntryContextMenu(
+            FileSystemEntry entry,
+            Point screenLocation)
+        {
+            if (entry == null || string.IsNullOrWhiteSpace(entry.FullPath))
+                return;
+
+            List<NativeShellContextMenuCommand> commands =
+                new List<NativeShellContextMenuCommand>
+                {
+                    new NativeShellContextMenuCommand(
+                        LocalizationService.GetText("Context.Export"),
+                        () => _exportEntryController.ExportEntry(entry)),
+                    new NativeShellContextMenuCommand(
+                        "Copy: Selected item",
+                        () => _exportEntryController.CopyEntryNameToClipboard(entry)),
+                    new NativeShellContextMenuCommand(
+                        GetTreeCopyMenuText("Text"),
+                        () => _exportEntryController.CopyEntryTreeTextToClipboard(entry)),
+                    new NativeShellContextMenuCommand(
+                        GetTreeCopyMenuText(".CSV"),
+                        () => _exportEntryController.CopyEntryExportToClipboard(entry))
+                };
+
+            bool shown = NativeShellContextMenu.Show(
+                this,
+                entry.FullPath,
+                screenLocation,
+                commands,
+                _settings.Layout);
+
+            if (!shown)
+            {
+                contextMenuStripTreeEntries.Show(
+                    treeViewEntries,
+                    treeViewEntries.PointToClient(screenLocation));
+            }
+        }
 
         private void contextMenuItemOpenInExplorer_Click(object sender, EventArgs e)
         {
@@ -1277,6 +1579,11 @@ namespace WTF
             _exportEntryController.CopyEntryExportToClipboard(_treeEntryController.ContextMenuEntry);
         }
 
+        private void contextMenuItemCopyTreeText_Click(object sender, EventArgs e)
+        {
+            _exportEntryController.CopyEntryTreeTextToClipboard(_treeEntryController.ContextMenuEntry);
+        }
+
         private void toolStripButtonPause_Click(object sender, EventArgs e)
         {
             string rootPath = NormalizeScanPath(_driveComboBoxController.GetSelectedScanPath());
@@ -1300,12 +1607,8 @@ namespace WTF
 
         private void contextMenuItemCopyPath_Click(object sender, EventArgs e)
         {
-            FileSystemEntry entry = _treeEntryController.ContextMenuEntry;
-
-            if (entry == null || string.IsNullOrWhiteSpace(entry.FullPath))
-                return;
-
-            Clipboard.SetText(entry.FullPath);
+            _exportEntryController.CopyEntryNameToClipboard(
+                _treeEntryController.ContextMenuEntry);
         }
 
         private void menuItemSaveScanResult_Click(object sender, EventArgs e)
@@ -1351,15 +1654,12 @@ namespace WTF
             if (_currentRootEntry == null)
                 return;
 
-            using AdvancedFeaturesForm form = new AdvancedFeaturesForm(_currentRootEntry, _settings, dataGridViewEntries);
-            form.ShowDialog(this);
-            RenderScanResult(_currentRootEntry);
+            ShowAnalysisView();
         }
 
         private void menuItemStorageHistory_Click(object sender, EventArgs e)
         {
-            using StorageHistoryForm storageHistoryForm = new StorageHistoryForm(_settings);
-            storageHistoryForm.ShowDialog(this);
+            ShowStorageHistoryView();
         }
 
         private void menuItemScanHistory_Click(object sender, EventArgs e)
@@ -1383,12 +1683,47 @@ namespace WTF
                 dataGridViewEntries.Columns["ColumnPath"].Visible = _settings.EntryColumnPathVisible;
         }
 
-        private void menuItemSettings_Click(object sender, EventArgs e)
+        private async void menuItemSettings_Click(object sender, EventArgs e)
         {
+            bool previousShowFilesInTree = _settings.ShowFilesInTree;
+
             using SettingsForm settingsForm = new SettingsForm(_settings);
 
             if (settingsForm.ShowDialog(this) != DialogResult.OK)
                 return;
+
+            if (previousShowFilesInTree != _settings.ShowFilesInTree)
+            {
+                FileSystemEntry currentRootEntry = _currentRootEntry;
+                bool showFilesInTree = _settings.ShowFilesInTree;
+
+                if (currentRootEntry != null)
+                {
+                    FileSystemEntry updatedRootEntry = await Task.Run(() =>
+                        CreateRootEntryForShowFilesSetting(
+                            currentRootEntry,
+                            showFilesInTree));
+
+                    foreach (ScanSession session in _scanSessions.Values)
+                    {
+                        if (ReferenceEquals(
+                                session.RootEntry,
+                                currentRootEntry))
+                        {
+                            session.RootEntry = updatedRootEntry;
+                        }
+                    }
+
+                    if (ReferenceEquals(
+                            _currentRootEntry,
+                            currentRootEntry))
+                    {
+                        _currentRootEntry = updatedRootEntry;
+                    }
+                }
+
+                checkBoxShowFiles.Checked = showFilesInTree;
+            }
 
             _settings.Save();
             LocalizationService.Load(_settings.LanguageCode);
@@ -1409,6 +1744,128 @@ namespace WTF
             if (_currentRootEntry != null)
             {
                 RenderScanResult(_currentRootEntry);
+            }
+
+            if (analysisView != null && analysisView.Visible)
+            {
+                ShowAnalysisView();
+            }
+        }
+
+        private static FileSystemEntry CreateRootEntryForShowFilesSetting(
+            FileSystemEntry rootEntry,
+            bool showFiles)
+        {
+            Dictionary<string, FileSystemEntry> directoriesByPath =
+                new Dictionary<string, FileSystemEntry>(
+                    StringComparer.OrdinalIgnoreCase);
+
+            FileSystemEntry copiedRootEntry =
+                CopyDirectoryTree(
+                    rootEntry,
+                    directoriesByPath);
+
+            if (!showFiles)
+                return copiedRootEntry;
+
+            List<FileSystemEntry> files;
+
+            lock (rootEntry.AllFiles)
+            {
+                files = new List<FileSystemEntry>(
+                    rootEntry.AllFiles);
+            }
+
+            copiedRootEntry.AllFiles = files;
+
+            foreach (FileSystemEntry file in files)
+            {
+                if (file == null || file.IsDirectory)
+                    continue;
+
+                string parentPath = Path.GetDirectoryName(
+                    file.FullPath);
+
+                if (string.IsNullOrWhiteSpace(parentPath))
+                    continue;
+
+                string normalizedParentPath =
+                    NormalizeEntryPath(parentPath);
+
+                if (!directoriesByPath.TryGetValue(
+                        normalizedParentPath,
+                        out FileSystemEntry parentEntry))
+                {
+                    continue;
+                }
+
+                parentEntry.Children.Add(file);
+            }
+
+            return copiedRootEntry;
+        }
+
+        private static FileSystemEntry CopyDirectoryTree(
+            FileSystemEntry sourceEntry,
+            Dictionary<string, FileSystemEntry> directoriesByPath)
+        {
+            FileSystemEntry copiedEntry = new FileSystemEntry
+            {
+                Name = sourceEntry.Name,
+                FullPath = sourceEntry.FullPath,
+                SizeBytes = sourceEntry.SizeBytes,
+                IsDirectory = sourceEntry.IsDirectory,
+                LastWriteTimeUtc = sourceEntry.LastWriteTimeUtc
+            };
+
+            lock (sourceEntry.AllFiles)
+            {
+                copiedEntry.AllFiles =
+                    new List<FileSystemEntry>(
+                        sourceEntry.AllFiles);
+            }
+
+            if (!sourceEntry.IsDirectory)
+                return copiedEntry;
+
+            directoriesByPath[
+                NormalizeEntryPath(sourceEntry.FullPath)] =
+                copiedEntry;
+
+            List<FileSystemEntry> childDirectories;
+
+            lock (sourceEntry.Children)
+            {
+                childDirectories = sourceEntry.Children
+                    .FindAll(child =>
+                        child != null &&
+                        child.IsDirectory);
+            }
+
+            foreach (FileSystemEntry childDirectory in childDirectories)
+            {
+                copiedEntry.Children.Add(
+                    CopyDirectoryTree(
+                        childDirectory,
+                        directoriesByPath));
+            }
+
+            return copiedEntry;
+        }
+
+        private static string NormalizeEntryPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return string.Empty;
+
+            try
+            {
+                return Path.TrimEndingDirectorySeparator(
+                    Path.GetFullPath(path));
+            }
+            catch
+            {
+                return Path.TrimEndingDirectorySeparator(path);
             }
         }
 

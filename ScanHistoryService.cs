@@ -35,9 +35,9 @@ namespace WTF
             ScanHistoryDatabaseService.MoveDatabase(targetDatabasePath);
         }
 
-        public static string Save(FileSystemEntry rootEntry)
+        public static string Save(FileSystemEntry rootEntry, IProgress<int> progress = null)
         {
-            return ScanHistoryDatabaseService.Save(rootEntry);
+            return ScanHistoryDatabaseService.Save(rootEntry, progress);
         }
 
         public static IReadOnlyList<ScanHistoryInfo> List()

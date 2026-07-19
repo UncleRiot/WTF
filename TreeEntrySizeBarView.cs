@@ -797,7 +797,28 @@ namespace WTF
             if (entry == null)
                 return string.Empty;
 
-            return SizeFormatter.Format(entry.SizeBytes) + "  " + entry.Name;
+            long displaySizeBytes = entry.SizeBytes;
+
+            if (entry.IsDirectory &&
+                !string.IsNullOrWhiteSpace(entry.FullPath) &&
+                entry.FullPath.EndsWith(@":\", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    System.IO.DriveInfo driveInfo =
+                        new System.IO.DriveInfo(entry.FullPath);
+
+                    if (driveInfo.IsReady)
+                    {
+                        displaySizeBytes = driveInfo.TotalSize;
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return SizeFormatter.Format(displaySizeBytes) + "  " + entry.Name;
         }
 
         private void ToggleNode(TreeEntrySizeBarNode node)

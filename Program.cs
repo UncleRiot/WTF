@@ -16,6 +16,10 @@ namespace WTF
             Application.SetCompatibleTextRenderingDefault(false);
 
             AppSettings settings = AppSettings.Load();
+            AppAlertLog.Configure(
+                settings.LogLevel,
+                settings.AutoSaveLog,
+                settings.MaximumLogFileSizeMb);
             LocalizationService.Initialize(settings.LanguageCode);
             ShellContextMenuService.Apply(settings.ShellContextMenuEnabled);
 

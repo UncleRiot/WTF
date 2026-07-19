@@ -62,6 +62,7 @@ namespace WTF
 
             private NativeQuestionIconControl nativeQuestionIconControl;
             private Label labelMessage;
+            private Label labelImportant;
             private CheckBox checkBoxOption;
             private Button buttonYes;
             private Button buttonNo;
@@ -89,12 +90,13 @@ namespace WTF
 
                 InitializeComponent();
                 WindowsFormStyler.Apply(this, _settings.Layout);
+                ApplyImportantLabelStyle();
             }
 
             private void InitializeComponent()
             {
                 StartPosition = FormStartPosition.CenterScreen;
-                ClientSize = new System.Drawing.Size(480, 170);
+                ClientSize = new System.Drawing.Size(480, 220);
                 MinimumSize = Size;
                 MaximumSize = Size;
                 MaximizeBox = false;
@@ -119,11 +121,23 @@ namespace WTF
                     Text = _messageText
                 };
 
+                labelImportant = new Label
+                {
+                    Name = "labelImportant",
+                    AutoSize = false,
+                    Location = new System.Drawing.Point(74, 82),
+                    Size = new System.Drawing.Size(384, 52),
+                    BackColor = System.Drawing.Color.Transparent,
+                    Text = "Important: MFT scanning is much faster but requires" +
+                           Environment.NewLine +
+                           "administrator rights."
+                };
+
                 checkBoxOption = new CheckBox
                 {
                     Name = "checkBoxOption",
                     AutoSize = true,
-                    Location = new System.Drawing.Point(24, 98),
+                    Location = new System.Drawing.Point(24, 143),
                     Text = _checkBoxText,
                     BackColor = System.Drawing.Color.Transparent
                 };
@@ -133,7 +147,7 @@ namespace WTF
                     Name = "buttonYes",
                     Text = _yesButtonText,
                     Size = new System.Drawing.Size(84, 30),
-                    Location = new System.Drawing.Point(294, 128),
+                    Location = new System.Drawing.Point(294, 178),
                     DialogResult = DialogResult.Yes
                 };
 
@@ -142,18 +156,32 @@ namespace WTF
                     Name = "buttonNo",
                     Text = _noButtonText,
                     Size = new System.Drawing.Size(84, 30),
-                    Location = new System.Drawing.Point(386, 128),
+                    Location = new System.Drawing.Point(386, 178),
                     DialogResult = DialogResult.No
                 };
 
                 Controls.Add(nativeQuestionIconControl);
                 Controls.Add(labelMessage);
+                Controls.Add(labelImportant);
                 Controls.Add(checkBoxOption);
                 Controls.Add(buttonYes);
                 Controls.Add(buttonNo);
 
                 AcceptButton = buttonYes;
                 CancelButton = buttonNo;
+            }
+
+            private void ApplyImportantLabelStyle()
+            {
+                labelImportant.Font = new System.Drawing.Font(
+                    labelImportant.Font.FontFamily,
+                    labelImportant.Font.Size,
+                    System.Drawing.FontStyle.Bold);
+
+                labelImportant.ForeColor =
+                    BackColor.GetBrightness() < 0.5f
+                        ? System.Drawing.Color.Gold
+                        : System.Drawing.Color.Red;
             }
         }
 

@@ -14,6 +14,7 @@ namespace WTF
     public sealed class StorageHistoryForm : Form
     {
         private readonly AppSettings _settings;
+        private readonly bool _embeddedMode;
         private readonly ShellIconService _shellIconService;
         private readonly ComboBox comboBoxPaths;
         private readonly LucidComboBox comboBoxDisplayMode;
@@ -28,9 +29,10 @@ namespace WTF
         private string _sortColumnName = "ColumnDate";
         private SortOrder _sortOrder = SortOrder.Descending;
 
-        public StorageHistoryForm(AppSettings settings)
+        public StorageHistoryForm(AppSettings settings, bool embeddedMode = false)
         {
             _settings = settings;
+            _embeddedMode = embeddedMode;
             _shellIconService = new ShellIconService();
             LucidThemeService.Apply(_settings.Layout);
 
@@ -47,10 +49,15 @@ namespace WTF
 
             Text = LocalizationService.GetText("StorageHistory.Title");
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(900, 500);
+            AutoSize = false;
+            MinimumSize = _embeddedMode
+                ? Size.Empty
+                : new Size(900, 500);
+            MaximumSize = Size.Empty;
             Size = new Size(1120, 650);
 
-            if (_settings.HasStorageHistoryWindowBounds &&
+            if (!_embeddedMode &&
+                _settings.HasStorageHistoryWindowBounds &&
                 _settings.StorageHistoryWindowWidth >= MinimumSize.Width &&
                 _settings.StorageHistoryWindowHeight >= MinimumSize.Height)
             {
@@ -216,13 +223,15 @@ namespace WTF
                 BackgroundColor = windowBackColor,
                 BackColor = windowBackColor,
                 ForeColor = textColor,
-                BorderStyle = BorderStyle.FixedSingle,
+                BorderStyle = BorderStyle.None,
+                CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal,
+                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
+                ColumnHeadersHeight = 28,
                 MultiSelect = false,
                 ReadOnly = true,
                 RowHeadersVisible = false,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect
             };
-            dataGridViewRecords.CellFormatting += dataGridViewRecords_CellFormatting;
             dataGridViewRecords.ColumnHeaderMouseClick += dataGridViewRecords_ColumnHeaderMouseClick;
             dataGridViewRecords.DataBindingComplete += dataGridViewRecords_DataBindingComplete;
 
@@ -281,7 +290,10 @@ namespace WTF
                 FlowDirection = FlowDirection.RightToLeft,
                 Padding = new Padding(8)
             };
-            bottomLayout.Controls.Add(buttonClose);
+            if (!_embeddedMode)
+            {
+                bottomLayout.Controls.Add(buttonClose);
+            }
 
             TableLayoutPanel chartLayout = new TableLayoutPanel
             {
@@ -313,14 +325,31 @@ namespace WTF
             mainLayout.Controls.Add(splitContainer, 0, 1);
 
             Controls.Add(mainLayout);
-            AcceptButton = buttonClose;
-            CancelButton = buttonClose;
+            if (!_embeddedMode)
+            {
+                AcceptButton = buttonClose;
+                CancelButton = buttonClose;
+            }
 
             Shown += (sender, e) =>
             {
-                splitContainer.Panel1MinSize = 280;
-                splitContainer.Panel2MinSize = 320;
-                splitContainer.SplitterDistance = 416;
+                if (_embeddedMode)
+                {
+                    splitContainer.Panel1MinSize = 0;
+                    splitContainer.Panel2MinSize = 0;
+                    splitContainer.SplitterDistance = Math.Max(
+                        0,
+                        Math.Min(
+                            416,
+                            splitContainer.ClientSize.Width - splitContainer.SplitterWidth));
+                }
+                else
+                {
+                    splitContainer.Panel1MinSize = 280;
+                    splitContainer.Panel2MinSize = 320;
+                    splitContainer.SplitterDistance = 416;
+                }
+
                 ApplyHistoryGridScrollBarTheme();
             };
 
@@ -345,20 +374,23 @@ namespace WTF
         {
             base.OnFormClosing(e);
 
-            Rectangle windowBounds = WindowState == FormWindowState.Normal
-                ? Bounds
-                : RestoreBounds;
-
             _settings.StorageHistoryGradientIntensityPercent = trackBarGradientIntensity.Value;
 
-            if (windowBounds.Width >= MinimumSize.Width &&
-                windowBounds.Height >= MinimumSize.Height)
+            if (!_embeddedMode)
             {
-                _settings.HasStorageHistoryWindowBounds = true;
-                _settings.StorageHistoryWindowLeft = windowBounds.Left;
-                _settings.StorageHistoryWindowTop = windowBounds.Top;
-                _settings.StorageHistoryWindowWidth = windowBounds.Width;
-                _settings.StorageHistoryWindowHeight = windowBounds.Height;
+                Rectangle windowBounds = WindowState == FormWindowState.Normal
+                    ? Bounds
+                    : RestoreBounds;
+
+                if (windowBounds.Width >= MinimumSize.Width &&
+                    windowBounds.Height >= MinimumSize.Height)
+                {
+                    _settings.HasStorageHistoryWindowBounds = true;
+                    _settings.StorageHistoryWindowLeft = windowBounds.Left;
+                    _settings.StorageHistoryWindowTop = windowBounds.Top;
+                    _settings.StorageHistoryWindowWidth = windowBounds.Width;
+                    _settings.StorageHistoryWindowHeight = windowBounds.Height;
+                }
             }
 
             try
@@ -368,6 +400,11 @@ namespace WTF
             catch
             {
             }
+        }
+
+        public void RefreshHistory()
+        {
+            LoadPaths();
         }
 
         private void LoadPaths()
@@ -786,26 +823,7 @@ namespace WTF
 
         private void ApplyHistoryGridScrollBarTheme()
         {
-            if (!dataGridViewRecords.IsHandleCreated)
-                return;
-
-            try
-            {
-                string themeName = IsDarkMode() ? "DarkMode_Explorer" : "Explorer";
-
-                SetWindowTheme(dataGridViewRecords.Handle, themeName, null);
-
-                foreach (Control child in dataGridViewRecords.Controls)
-                {
-                    if (child.IsHandleCreated)
-                        SetWindowTheme(child.Handle, themeName, null);
-                }
-
-                dataGridViewRecords.Invalidate();
-            }
-            catch
-            {
-            }
+            DialogTableStyle.Apply(dataGridViewRecords);
         }
 
         private sealed class StorageHistoryPathComboBox : ComboBox

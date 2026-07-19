@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Filesystem.Ntfs;
 using System.Linq;
@@ -61,6 +62,15 @@ namespace WTF
         {
             return Task.Factory.StartNew(() =>
             {
+                Stopwatch totalStopwatch = Stopwatch.StartNew();
+                Stopwatch phaseStopwatch = new Stopwatch();
+                long allocatedBytesBefore = GC.GetAllocatedBytesForCurrentThread();
+                long workingSetBefore = Process.GetCurrentProcess().WorkingSet64;
+                int gen0CollectionsBefore = GC.CollectionCount(0);
+                int gen1CollectionsBefore = GC.CollectionCount(1);
+                int gen2CollectionsBefore = GC.CollectionCount(2);
+                int progressReportCount = 0;
+
                 cancellationToken.ThrowIfCancellationRequested();
                 pauseToken.WaitWhilePaused(cancellationToken);
 
@@ -72,13 +82,25 @@ namespace WTF
                 }
 
                 DriveInfo driveInfo = new DriveInfo(driveRoot);
-                NtfsReader reader = new NtfsReader(driveInfo, RetrieveMode.Minimal);
+
+                phaseStopwatch.Restart();
+                NtfsReader reader = new NtfsReader(
+                    driveInfo,
+                    RetrieveMode.Minimal | RetrieveMode.StandardInformations);
                 List<INode> nodes = reader.GetNodes(driveRoot);
+                phaseStopwatch.Stop();
+                TimeSpan mftReadElapsed = phaseStopwatch.Elapsed;
+
+                phaseStopwatch.Restart();
 
                 FileSystemEntry rootEntry = CreateRootEntry(driveRoot);
+                string normalizedRootPath = NormalizeDirectoryPath(rootEntry.FullPath);
+                bool hasExcludedPaths = _settings.ExcludedPaths != null &&
+                    _settings.ExcludedPaths.Any(path => !string.IsNullOrWhiteSpace(path));
+
                 Dictionary<string, FileSystemEntry> directoryEntriesByPath = new Dictionary<string, FileSystemEntry>(StringComparer.OrdinalIgnoreCase)
                 {
-                    [NormalizeDirectoryPath(rootEntry.FullPath)] = rootEntry
+                    [normalizedRootPath] = rootEntry
                 };
 
                 int scannedDirectories = 1;
@@ -96,16 +118,19 @@ namespace WTF
 
                     string fullPath = NormalizePath(node.FullName);
 
-                    if (string.Equals(NormalizeDirectoryPath(fullPath), NormalizeDirectoryPath(rootEntry.FullPath), StringComparison.OrdinalIgnoreCase))
-                        continue;
-
                     if (!fullPath.StartsWith(rootEntry.FullPath, StringComparison.OrdinalIgnoreCase))
                         continue;
 
-                    if (ScanPathFilter.IsExcluded(fullPath, _settings.ExcludedPaths))
-                        continue;
-
                     bool isDirectory = node.Attributes.HasFlag(System.IO.Filesystem.Ntfs.Attributes.Directory);
+
+                    if (isDirectory &&
+                        string.Equals(NormalizeDirectoryPath(fullPath), normalizedRootPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    if (hasExcludedPaths && ScanPathFilter.IsExcluded(fullPath, _settings.ExcludedPaths))
+                        continue;
 
                     if (isDirectory)
                     {
@@ -138,7 +163,8 @@ namespace WTF
                                     Name = Path.GetFileName(fullPath),
                                     FullPath = fullPath,
                                     SizeBytes = nodeSize,
-                                    IsDirectory = false
+                                    IsDirectory = false,
+                                    LastWriteTimeUtc = node.LastChangeTime
                                 };
 
                                 rootEntry.AllFiles.Add(fileEntry);
@@ -155,6 +181,7 @@ namespace WTF
 
                     if (processedNodes % ProgressReportIntervalNodes == 0)
                     {
+                        progressReportCount++;
                         progress?.Report(new ScanProgress
                         {
                             CurrentPath = fullPath,
@@ -166,17 +193,65 @@ namespace WTF
                     }
                 }
 
-                PropagateDirectorySizes(rootEntry);
-                SortChildrenRecursive(rootEntry);
+                phaseStopwatch.Stop();
+                TimeSpan nodeProcessingElapsed = phaseStopwatch.Elapsed;
 
+                phaseStopwatch.Restart();
+                PropagateDirectorySizes(rootEntry);
+                phaseStopwatch.Stop();
+                TimeSpan sizeAggregationElapsed = phaseStopwatch.Elapsed;
+
+                phaseStopwatch.Restart();
+                SortChildrenRecursive(rootEntry);
+                phaseStopwatch.Stop();
+                TimeSpan sortingElapsed = phaseStopwatch.Elapsed;
+
+                phaseStopwatch.Restart();
+                FileSystemEntry finalSnapshot = CreateLiveSnapshot(rootEntry);
+                phaseStopwatch.Stop();
+                TimeSpan finalSnapshotElapsed = phaseStopwatch.Elapsed;
+
+                progressReportCount++;
                 progress?.Report(new ScanProgress
                 {
                     CurrentPath = LocalizationService.GetText("Status.MftFastScanCompleted"),
                     ScannedBytes = rootEntry.SizeBytes,
                     ScannedDirectories = scannedDirectories,
                     ScannedFiles = scannedFiles,
-                    LiveRootEntry = CreateLiveSnapshot(rootEntry)
+                    LiveRootEntry = finalSnapshot
                 });
+
+                totalStopwatch.Stop();
+
+                long allocatedBytesAfter = GC.GetAllocatedBytesForCurrentThread();
+                long workingSetAfter = Process.GetCurrentProcess().WorkingSet64;
+
+                AppAlertLog.AddVerboseInformation(
+                    "Performance",
+                    string.Format(
+                        "NtfsMftScanner benchmark: {0:N0} ms",
+                        totalStopwatch.Elapsed.TotalMilliseconds),
+                    string.Join(
+                        Environment.NewLine,
+                        string.Format("Path: {0}", rootPath),
+                        string.Format("NodesReturned: {0:N0}", nodes.Count),
+                        string.Format("ProcessedNodes: {0:N0}", processedNodes),
+                        string.Format("Directories: {0:N0}", scannedDirectories),
+                        string.Format("Files: {0:N0}", scannedFiles),
+                        string.Format("Bytes: {0:N0}", rootEntry.SizeBytes),
+                        string.Format("MftReadMilliseconds: {0:N0}", mftReadElapsed.TotalMilliseconds),
+                        string.Format("NodeProcessingMilliseconds: {0:N0}", nodeProcessingElapsed.TotalMilliseconds),
+                        string.Format("SizeAggregationMilliseconds: {0:N0}", sizeAggregationElapsed.TotalMilliseconds),
+                        string.Format("SortingMilliseconds: {0:N0}", sortingElapsed.TotalMilliseconds),
+                        string.Format("FinalSnapshotMilliseconds: {0:N0}", finalSnapshotElapsed.TotalMilliseconds),
+                        string.Format("TotalMilliseconds: {0:N0}", totalStopwatch.Elapsed.TotalMilliseconds),
+                        string.Format("AllocatedBytesCurrentThread: {0:N0}", Math.Max(0, allocatedBytesAfter - allocatedBytesBefore)),
+                        string.Format("WorkingSetBeforeBytes: {0:N0}", workingSetBefore),
+                        string.Format("WorkingSetAfterBytes: {0:N0}", workingSetAfter),
+                        string.Format("Gen0Collections: {0:N0}", GC.CollectionCount(0) - gen0CollectionsBefore),
+                        string.Format("Gen1Collections: {0:N0}", GC.CollectionCount(1) - gen1CollectionsBefore),
+                        string.Format("Gen2Collections: {0:N0}", GC.CollectionCount(2) - gen2CollectionsBefore),
+                        string.Format("ProgressReports: {0:N0}", progressReportCount)));
 
                 return rootEntry;
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
@@ -307,12 +382,17 @@ namespace WTF
 
         private string NormalizePath(string path)
         {
+            if (Path.IsPathFullyQualified(path))
+            {
+                return path;
+            }
+
             return Path.GetFullPath(path);
         }
 
         private string NormalizeDirectoryPath(string path)
         {
-            string normalizedPath = Path.GetFullPath(path);
+            string normalizedPath = NormalizePath(path);
 
             if (!normalizedPath.EndsWith("\\", StringComparison.Ordinal))
             {

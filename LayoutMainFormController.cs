@@ -160,8 +160,7 @@ namespace WTF
             if (!_settings.HasToolStripLayout)
                 return;
 
-            if (_settings.ToolStripLayoutVersion != 3 &&
-                _settings.ToolStripLayoutVersion != 4)
+            if (_settings.ToolStripLayoutVersion != 6)
                 return;
 
             _toolStripPanelMain.Join(
@@ -179,19 +178,16 @@ namespace WTF
                 Math.Max(0, _settings.ToolStripExportLeft),
                 Math.Max(0, _settings.ToolStripExportTop));
 
-            if (_settings.ToolStripLayoutVersion >= 4)
-            {
-                _toolStripPanelMain.Join(
-                    _toolStripFeatures,
-                    Math.Max(0, _settings.ToolStripFeaturesLeft),
-                    Math.Max(0, _settings.ToolStripFeaturesTop));
-            }
+            _toolStripPanelMain.Join(
+                _toolStripFeatures,
+                Math.Max(0, _settings.ToolStripFeaturesLeft),
+                Math.Max(0, _settings.ToolStripFeaturesTop));
         }
 
         public void SaveToolStripLayout()
         {
             _settings.HasToolStripLayout = true;
-            _settings.ToolStripLayoutVersion = 4;
+            _settings.ToolStripLayoutVersion = 6;
 
             _settings.ToolStripMainLeft = _toolStripMain.Left;
             _settings.ToolStripMainTop = _toolStripMain.Top;

@@ -4,18 +4,19 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using Lucid.Controls;
 using Lucid.Theming;
 
 namespace WTF
 {
     public sealed class ScanHistoryGrowthOverviewControl : UserControl
     {
-        private readonly Label labelTotalGrowth;
-        private readonly Label labelNewFiles;
-        private readonly Label labelChangedFiles;
-        private readonly Label labelDeletedFiles;
-        private readonly Label labelDriveTitle;
-        private readonly ComboBox comboBoxView;
+        private readonly LucidLabel labelTotalGrowth;
+        private readonly LucidLabel labelNewFiles;
+        private readonly LucidLabel labelChangedFiles;
+        private readonly LucidLabel labelDeletedFiles;
+        private readonly LucidLabel labelDriveTitle;
+        private readonly LucidComboBox comboBoxView;
         private readonly ComparisonChartPanel driveChart;
         private readonly ComparisonChartPanel detailChart;
 
@@ -61,7 +62,7 @@ namespace WTF
             summaryLayout.Controls.Add(labelChangedFiles, 2, 0);
             summaryLayout.Controls.Add(labelDeletedFiles, 3, 0);
 
-            labelDriveTitle = new Label
+            labelDriveTitle = new LucidLabel
             {
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
@@ -84,7 +85,7 @@ namespace WTF
                 Padding = new Padding(0, 2, 0, 2)
             };
 
-            comboBoxView = new ComboBox
+            comboBoxView = new LucidComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Dock = DockStyle.Left,
@@ -174,7 +175,7 @@ namespace WTF
             BackColor = backgroundPrimary;
             ForeColor = textPrimary;
 
-            foreach (Label summaryLabel in new[]
+            foreach (LucidLabel summaryLabel in new[]
                      {
                          labelTotalGrowth,
                          labelNewFiles,
@@ -196,9 +197,9 @@ namespace WTF
             detailChart.ApplyTheme(backgroundPrimary, backgroundSecondary, textPrimary, accent);
         }
 
-        private static Label CreateSummaryLabel()
+        private static LucidLabel CreateSummaryLabel()
         {
-            return new Label
+            return new LucidLabel
             {
                 Dock = DockStyle.Fill,
                 AutoEllipsis = true,
@@ -365,6 +366,7 @@ namespace WTF
 
         private sealed class ComparisonChartPanel : Panel
         {
+            private readonly LucidScrollBar _verticalScrollBar;
             private List<ComparisonChartItem> _items = new List<ComparisonChartItem>();
             private Color _backgroundPrimary = Color.FromArgb(32, 32, 32);
             private Color _backgroundSecondary = Color.FromArgb(45, 45, 45);
@@ -375,8 +377,16 @@ namespace WTF
             {
                 DoubleBuffered = true;
                 ResizeRedraw = true;
-                AutoScroll = true;
                 RowHeight = 74;
+
+                _verticalScrollBar = new LucidScrollBar
+                {
+                    ScrollOrientation = LucidScrollOrientation.Vertical,
+                    Width = SystemInformation.VerticalScrollBarWidth,
+                    Visible = false
+                };
+                _verticalScrollBar.ValueChanged += verticalScrollBar_ValueChanged;
+                Controls.Add(_verticalScrollBar);
             }
 
             public int RowHeight { get; set; }
@@ -400,15 +410,35 @@ namespace WTF
             public void Bind(List<ComparisonChartItem> items)
             {
                 _items = items ?? new List<ComparisonChartItem>();
-                AutoScrollPosition = Point.Empty;
-                AutoScrollMinSize = new Size(0, Math.Max(ClientSize.Height, _items.Count * RowHeight));
+                _verticalScrollBar.Value = 0;
+                UpdateScrollBar();
                 Invalidate();
             }
 
             protected override void OnResize(EventArgs eventargs)
             {
                 base.OnResize(eventargs);
-                AutoScrollMinSize = new Size(0, Math.Max(ClientSize.Height, _items.Count * RowHeight));
+                UpdateScrollBar();
+                Invalidate();
+            }
+
+            protected override void OnMouseWheel(MouseEventArgs e)
+            {
+                base.OnMouseWheel(e);
+
+                if (!_verticalScrollBar.Visible)
+                    return;
+
+                int maximumValue = GetMaximumScrollValue();
+                int newValue = _verticalScrollBar.Value -
+                               Math.Sign(e.Delta) * RowHeight * 3;
+                newValue = Math.Max(0, Math.Min(maximumValue, newValue));
+
+                if (_verticalScrollBar.Value != newValue)
+                {
+                    _verticalScrollBar.Value = newValue;
+                    Invalidate();
+                }
             }
 
             protected override void OnPaint(PaintEventArgs e)
@@ -436,7 +466,9 @@ namespace WTF
                     maximumSizeBytes = 1;
                 }
 
-                int scrollOffsetY = AutoScrollPosition.Y;
+                int scrollOffsetY = _verticalScrollBar.Visible
+                    ? -_verticalScrollBar.Value
+                    : 0;
 
                 for (int index = 0; index < _items.Count; index++)
                 {
@@ -453,7 +485,9 @@ namespace WTF
             {
                 base.OnMouseDoubleClick(e);
 
-                int contentY = e.Y - AutoScrollPosition.Y;
+                int contentY = e.Y + (_verticalScrollBar.Visible
+                    ? _verticalScrollBar.Value
+                    : 0);
                 int index = contentY / RowHeight;
 
                 if (index < 0 || index >= _items.Count)
@@ -465,18 +499,68 @@ namespace WTF
                     new GrowthOverviewPathEventArgs(item.Path, item.IsFile));
             }
 
+            private void UpdateScrollBar()
+            {
+                int contentHeight = _items.Count * RowHeight;
+                int viewportHeight = Math.Max(1, ClientSize.Height);
+                bool visible = contentHeight > viewportHeight;
+
+                _verticalScrollBar.Visible = visible;
+
+                if (!visible)
+                {
+                    _verticalScrollBar.Value = 0;
+                    return;
+                }
+
+                _verticalScrollBar.Bounds = new Rectangle(
+                    ClientSize.Width - _verticalScrollBar.Width,
+                    0,
+                    _verticalScrollBar.Width,
+                    ClientSize.Height);
+
+                int maximum = Math.Max(1, contentHeight);
+                int viewSize = Math.Max(1, Math.Min(viewportHeight, maximum));
+                int maximumValue = Math.Max(0, maximum - viewSize);
+
+                _verticalScrollBar.Minimum = 0;
+                _verticalScrollBar.Maximum = maximum;
+                _verticalScrollBar.ViewSize = viewSize;
+                _verticalScrollBar.Value = Math.Max(
+                    0,
+                    Math.Min(maximumValue, _verticalScrollBar.Value));
+            }
+
+            private int GetMaximumScrollValue()
+            {
+                return Math.Max(
+                    0,
+                    _verticalScrollBar.Maximum - _verticalScrollBar.ViewSize);
+            }
+
+            private void verticalScrollBar_ValueChanged(
+                object sender,
+                ScrollValueEventArgs e)
+            {
+                Invalidate();
+            }
+
             private void DrawItem(
                 Graphics graphics,
                 ComparisonChartItem item,
                 int top,
                 long maximumSizeBytes)
             {
+                int contentWidth = ClientSize.Width -
+                                   (_verticalScrollBar.Visible
+                                       ? _verticalScrollBar.Width
+                                       : 0);
                 int horizontalPadding = 8;
                 int valueWidth = 112;
                 int deltaWidth = 96;
                 int captionWidth = 72;
                 int barLeft = horizontalPadding + captionWidth;
-                int barRight = ClientSize.Width - horizontalPadding - valueWidth - deltaWidth;
+                int barRight = contentWidth - horizontalPadding - valueWidth - deltaWidth;
                 int barWidth = Math.Max(20, barRight - barLeft);
                 int titleHeight = 22;
                 int barHeight = 16;
@@ -486,7 +570,7 @@ namespace WTF
                 Rectangle rowBounds = new Rectangle(
                     0,
                     top,
-                    Math.Max(0, ClientSize.Width - 1),
+                    Math.Max(0, contentWidth - 1),
                     RowHeight - 1);
 
                 using (SolidBrush rowBrush = new SolidBrush(
@@ -500,7 +584,7 @@ namespace WTF
                 Rectangle titleBounds = new Rectangle(
                     horizontalPadding,
                     top + 1,
-                    Math.Max(0, ClientSize.Width - horizontalPadding * 2),
+                    Math.Max(0, contentWidth - horizontalPadding * 2),
                     titleHeight);
 
                 TextRenderer.DrawText(
@@ -536,7 +620,7 @@ namespace WTF
                     _accent);
 
                 Rectangle deltaBounds = new Rectangle(
-                    ClientSize.Width - horizontalPadding - deltaWidth,
+                    contentWidth - horizontalPadding - deltaWidth,
                     afterTop,
                     deltaWidth,
                     barHeight);

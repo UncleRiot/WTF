@@ -1,44 +1,64 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
-using Lucid.Controls.GridView;
 
 namespace WTF
 {
-    public sealed class Chart_TableGridChart : LucidDataGridView
+    public sealed class Chart_TableGridChart : Chart_ResponsiveTableGrid
     {
-        private bool _applyingColumnWidths;
         private List<EntryChartItem> _rows = new List<EntryChartItem>();
         private string _sortProperty = nameof(EntryChartItem.SizeBytes);
         private bool _sortAscending;
+        private FileSystemEntry _entry;
+        private bool _showFiles;
 
         public Chart_TableGridChart()
         {
             ConfigureTableGridChart();
 
             ParentChanged += Chart_TableGridChart_ParentChanged;
-            SizeChanged += Chart_TableGridChart_SizeChanged;
             CellPainting += Chart_TableGridChart_CellPainting;
             CellToolTipTextNeeded += Chart_TableGridChart_CellToolTipTextNeeded;
-            ColumnWidthChanged += Chart_TableGridChart_ColumnWidthChanged;
             ColumnHeaderMouseClick += Chart_TableGridChart_ColumnHeaderMouseClick;
         }
 
         public void SetEntry(FileSystemEntry entry)
         {
-            if (entry == null)
+            _entry = entry;
+            BindEntryRows();
+        }
+
+        public void SetShowFiles(bool showFiles)
+        {
+            if (_showFiles == showFiles)
+                return;
+
+            _showFiles = showFiles;
+            BindEntryRows();
+        }
+
+        private void BindEntryRows()
+        {
+            if (_entry == null)
             {
+                _rows = new List<EntryChartItem>();
                 DataSource = null;
                 FitToCurrentBounds();
                 Invalidate();
                 return;
             }
 
-            long totalSize = entry.Children.Sum(child => child.SizeBytes);
+            List<FileSystemEntry> visibleEntries = _showFiles
+                ? GetLargestFilesRecursive(_entry, 100)
+                : _entry.Children
+                    .Where(child => child.IsDirectory)
+                    .ToList();
 
-            _rows = entry.Children
+            long totalSize = visibleEntries.Sum(child => child.SizeBytes);
+
+            _rows = visibleEntries
                 .Select(child => new EntryChartItem
                 {
                     Name = child.Name,
@@ -54,6 +74,49 @@ namespace WTF
             RemoveUnexpectedColumns();
             FitToCurrentBounds();
             Invalidate();
+        }
+
+        private static List<FileSystemEntry> GetLargestFilesRecursive(
+            FileSystemEntry rootEntry,
+            int maximumFileCount)
+        {
+            PriorityQueue<FileSystemEntry, long> largestFiles =
+                new PriorityQueue<FileSystemEntry, long>();
+            Stack<FileSystemEntry> pendingEntries =
+                new Stack<FileSystemEntry>();
+
+            pendingEntries.Push(rootEntry);
+
+            while (pendingEntries.Count > 0)
+            {
+                FileSystemEntry currentEntry = pendingEntries.Pop();
+
+                foreach (FileSystemEntry child in currentEntry.Children)
+                {
+                    if (child.IsDirectory)
+                    {
+                        pendingEntries.Push(child);
+                        continue;
+                    }
+
+                    largestFiles.Enqueue(child, child.SizeBytes);
+
+                    if (largestFiles.Count > maximumFileCount)
+                    {
+                        largestFiles.Dequeue();
+                    }
+                }
+            }
+
+            List<FileSystemEntry> result =
+                new List<FileSystemEntry>(largestFiles.Count);
+
+            while (largestFiles.Count > 0)
+            {
+                result.Add(largestFiles.Dequeue());
+            }
+
+            return result;
         }
 
         private void Chart_TableGridChart_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
@@ -89,13 +152,37 @@ namespace WTF
             };
 
             DataSource = sortedRows.ToList();
+            UpdateSortGlyphs();
+        }
+
+        private void UpdateSortGlyphs()
+        {
+            SortOrder sortOrder = _sortAscending
+                ? SortOrder.Ascending
+                : SortOrder.Descending;
 
             foreach (DataGridViewColumn column in Columns)
             {
-                column.HeaderCell.SortGlyphDirection = column.DataPropertyName == _sortProperty
-                    ? _sortAscending ? SortOrder.Ascending : SortOrder.Descending
-                    : SortOrder.None;
+                column.HeaderCell.SortGlyphDirection =
+                    IsSortedColumn(column)
+                        ? sortOrder
+                        : SortOrder.None;
             }
+
+            Invalidate();
+        }
+
+        private bool IsSortedColumn(DataGridViewColumn column)
+        {
+            if (column == null)
+                return false;
+
+            if (_sortProperty == nameof(EntryChartItem.SizeBytes))
+            {
+                return column.Name == "ColumnSize";
+            }
+
+            return column.DataPropertyName == _sortProperty;
         }
 
         public void ApplyEntryGridColumnWidths()
@@ -180,6 +267,32 @@ namespace WTF
 
             ConfigureEntryGridColumns();
             RemoveUnexpectedColumns();
+            ApplyLucidTableStyle();
+        }
+
+        private void ApplyLucidTableStyle()
+        {
+            ApplyLucidStyle();
+
+            DataGridView grid = Controls
+                .OfType<DataGridView>()
+                .FirstOrDefault();
+
+            if (grid == null)
+                return;
+
+            grid.GotFocus -= TableGrid_FocusChanged;
+            grid.GotFocus += TableGrid_FocusChanged;
+            grid.LostFocus -= TableGrid_FocusChanged;
+            grid.LostFocus += TableGrid_FocusChanged;
+        }
+
+        private static void TableGrid_FocusChanged(object sender, EventArgs e)
+        {
+            if (sender is DataGridView grid)
+            {
+                DialogTableStyle.Apply(grid);
+            }
         }
 
         public void ApplyLocalizedTexts()
@@ -287,153 +400,11 @@ namespace WTF
 
         private void FitToCurrentBounds()
         {
-            Dock = DockStyle.Fill;
-            AutoSize = false;
-            MinimumSize = System.Drawing.Size.Empty;
-            MaximumSize = System.Drawing.Size.Empty;
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
-            ScrollBars = ScrollBars.Vertical;
-
-            RemoveUnexpectedColumns();
-
-            if (!Columns.Contains("ColumnName"))
-                return;
-
-            if (!Columns.Contains("ColumnSize"))
-                return;
-
-            if (!Columns.Contains("ColumnPercent"))
-                return;
-
-            if (!Columns.Contains("ColumnPath"))
-                return;
-
-            if (TryApplySavedColumnWidths())
-                return;
-
-            int availableWidth = ClientSize.Width - 2;
-
-            if (RowCount > 0 && DisplayedRowCount(false) < RowCount)
-            {
-                availableWidth -= SystemInformation.VerticalScrollBarWidth;
-            }
-
-            availableWidth = Math.Max(availableWidth, 8);
-
-            int nameWidth = CalculateTextColumnWidth("ColumnName", 40);
-            int sizeWidth = CalculateTextColumnWidth("ColumnSize", 40);
-            int percentWidth = CalculatePercentColumnDefaultWidth();
-
-            int pathWidth = availableWidth - nameWidth - sizeWidth - percentWidth;
-
-            if (pathWidth < 2)
-            {
-                pathWidth = 2;
-            }
-
-            ApplyColumnWidths(nameWidth, sizeWidth, percentWidth, pathWidth);
-        }
-
-        private bool TryApplySavedColumnWidths()
-        {
-            AppSettings settings = AppSettings.Load();
-
-            if (!settings.HasEntryColumnLayout)
-                return false;
-
-            if (settings.EntryColumnNameWidth <= 0)
-                return false;
-
-            if (settings.EntryColumnSizeWidth <= 0)
-                return false;
-
-            if (settings.EntryColumnPercentWidth <= 0)
-                return false;
-
-            if (settings.EntryColumnPathWidth <= 0)
-                return false;
-
-            ApplyColumnWidths(
-                settings.EntryColumnNameWidth,
-                settings.EntryColumnSizeWidth,
-                settings.EntryColumnPercentWidth,
-                settings.EntryColumnPathWidth);
-
-            return true;
-        }
-
-        private void ApplyColumnWidths(int nameWidth, int sizeWidth, int percentWidth, int pathWidth)
-        {
-            SuspendLayout();
-            _applyingColumnWidths = true;
-
-            try
-            {
-                HorizontalScrollingOffset = 0;
-
-                Columns["ColumnName"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-                Columns["ColumnSize"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-                Columns["ColumnPercent"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-                Columns["ColumnPath"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-
-                int minimumNameWidth = CalculateTextColumnWidth("ColumnName", 2);
-                int minimumSizeWidth = CalculateTextColumnWidth("ColumnSize", 2);
-                int minimumPercentWidth = CalculatePercentColumnDefaultWidth();
-
-                Columns["ColumnName"].MinimumWidth = minimumNameWidth;
-                Columns["ColumnSize"].MinimumWidth = minimumSizeWidth;
-                Columns["ColumnPercent"].MinimumWidth = minimumPercentWidth;
-                Columns["ColumnPath"].MinimumWidth = 2;
-
-                Columns["ColumnName"].Width = Math.Max(minimumNameWidth, nameWidth);
-                Columns["ColumnSize"].Width = Math.Max(minimumSizeWidth, sizeWidth);
-                Columns["ColumnPercent"].Width = Math.Max(minimumPercentWidth, percentWidth);
-                Columns["ColumnPath"].Width = Math.Max(2, pathWidth);
-            }
-            finally
-            {
-                _applyingColumnWidths = false;
-                ResumeLayout();
-            }
-        }
-
-        private int CalculatePercentColumnDefaultWidth()
-        {
-            int headerWidth = TextRenderer.MeasureText(
-                LocalizationService.GetText("Chart.TableUsage"),
-                Font).Width + 15;
-
-            int textWidth = TextRenderer.MeasureText("100.0 %", Font).Width + 15;
-
-            return Math.Max(48, Math.Max(headerWidth, textWidth));
-        }
-
-        private int CalculateTextColumnWidth(string columnName, int fallbackWidth)
-        {
-            if (!Columns.Contains(columnName))
-                return fallbackWidth;
-
-            DataGridViewColumn column = Columns[columnName];
-
-            int width = TextRenderer.MeasureText(column.HeaderText ?? string.Empty, Font).Width + 15;
-
-            foreach (DataGridViewRow row in Rows)
-            {
-                if (row.IsNewRow)
-                    continue;
-
-                object value = row.Cells[column.Index].Value;
-                string text = value == null ? string.Empty : value.ToString();
-
-                int textWidth = TextRenderer.MeasureText(text, Font).Width + 15;
-
-                if (textWidth > width)
-                {
-                    width = textWidth;
-                }
-            }
-
-            return Math.Max(fallbackWidth, width);
+            SetResponsiveColumns(
+                ("ColumnName", 22),
+                ("ColumnSize", 14),
+                ("ColumnPercent", 14),
+                ("ColumnPath", 50));
         }
 
         private void Chart_TableGridChart_ParentChanged(object sender, EventArgs e)
@@ -441,49 +412,42 @@ namespace WTF
             FitToCurrentBounds();
         }
 
-        private void Chart_TableGridChart_SizeChanged(object sender, EventArgs e)
-        {
-            FitToCurrentBounds();
-            Invalidate();
-        }
-
-        private void Chart_TableGridChart_ColumnWidthChanged(object sender, DataGridViewColumnEventArgs e)
-        {
-            if (_applyingColumnWidths)
-                return;
-
-            SaveEntryGridColumnWidths();
-        }
-
-        private void SaveEntryGridColumnWidths()
-        {
-            RemoveUnexpectedColumns();
-
-            if (!Columns.Contains("ColumnName"))
-                return;
-
-            if (!Columns.Contains("ColumnSize"))
-                return;
-
-            if (!Columns.Contains("ColumnPercent"))
-                return;
-
-            if (!Columns.Contains("ColumnPath"))
-                return;
-
-            AppSettings settings = AppSettings.Load();
-
-            settings.HasEntryColumnLayout = true;
-            settings.EntryColumnNameWidth = Columns["ColumnName"].Width;
-            settings.EntryColumnSizeWidth = Columns["ColumnSize"].Width;
-            settings.EntryColumnPercentWidth = Columns["ColumnPercent"].Width;
-            settings.EntryColumnPathWidth = Columns["ColumnPath"].Width;
-
-            settings.Save();
-        }
-
         private void Chart_TableGridChart_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
         {
+            if (e.RowIndex == -1 &&
+                e.ColumnIndex >= 0 &&
+                e.ColumnIndex < Columns.Count &&
+                IsSortedColumn(Columns[e.ColumnIndex]))
+            {
+                e.CellStyle.SelectionBackColor = e.CellStyle.BackColor;
+                e.CellStyle.SelectionForeColor = e.CellStyle.ForeColor;
+                e.Paint(e.CellBounds, DataGridViewPaintParts.All);
+
+                int centerX = e.CellBounds.Right - 10;
+                int centerY = e.CellBounds.Top + e.CellBounds.Height / 2;
+
+                System.Drawing.Point[] points = _sortAscending
+                    ? new[]
+                    {
+                        new System.Drawing.Point(centerX, centerY - 4),
+                        new System.Drawing.Point(centerX - 4, centerY + 3),
+                        new System.Drawing.Point(centerX + 4, centerY + 3)
+                    }
+                    : new[]
+                    {
+                        new System.Drawing.Point(centerX - 4, centerY - 3),
+                        new System.Drawing.Point(centerX + 4, centerY - 3),
+                        new System.Drawing.Point(centerX, centerY + 4)
+                    };
+
+                using System.Drawing.SolidBrush glyphBrush =
+                    new System.Drawing.SolidBrush(e.CellStyle.ForeColor);
+
+                e.Graphics.FillPolygon(glyphBrush, points);
+                e.Handled = true;
+                return;
+            }
+
             if (e.RowIndex < 0)
                 return;
 

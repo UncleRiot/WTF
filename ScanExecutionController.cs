@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,28 +26,7 @@ namespace WTF
         {
             DirectoryScanner directoryScanner = new DirectoryScanner(_settings);
             NtQueryDirectoryScanner ntQueryDirectoryScanner = new NtQueryDirectoryScanner(_settings);
-
-            try
-            {
-                SetStatusTextByKey("Status.NtQueryRunning", statusKeyChanged);
-                return await ntQueryDirectoryScanner.ScanAsync(
-                    rootPath,
-                    progress,
-                    cancellationToken,
-                    pauseToken);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ntQueryException)
-            {
-                AppAlertLog.AddWarning(
-                    LocalizationService.GetText("Alert.Scan"),
-                    LocalizationService.Format(
-                        "Alert.NtQueryUnavailable",
-                        ntQueryException.Message));
-            }
+            Stopwatch scannerStopwatch = Stopwatch.StartNew();
 
             if (IsRootDrivePath(rootPath) && NtfsMftScanner.IsSupported(rootPath))
             {
@@ -54,12 +34,16 @@ namespace WTF
                 {
                     SetStatusTextByKey("Status.MftFastScanRunning", statusKeyChanged);
                     NtfsMftScanner ntfsMftScanner = new NtfsMftScanner(_settings);
+                    scannerStopwatch.Restart();
 
-                    return await ntfsMftScanner.ScanAsync(
+                    FileSystemEntry result = await ntfsMftScanner.ScanAsync(
                         rootPath,
                         progress,
                         cancellationToken,
                         pauseToken);
+
+                    LogScannerPerformance("NtfsMftScanner", rootPath, scannerStopwatch.Elapsed);
+                    return result;
                 }
                 catch (OperationCanceledException)
                 {
@@ -67,6 +51,7 @@ namespace WTF
                 }
                 catch (Exception mftException)
                 {
+                    LogScannerPerformance("NtfsMftScanner", rootPath, scannerStopwatch.Elapsed);
                     AppAlertLog.AddWarning(
                         LocalizationService.GetText("Alert.Scan"),
                         LocalizationService.Format(
@@ -75,13 +60,61 @@ namespace WTF
                 }
             }
 
-            SetStatusTextByKey("Status.NtQueryUnavailableNormal", statusKeyChanged);
+            try
+            {
+                SetStatusTextByKey("Status.NtQueryRunning", statusKeyChanged);
+                scannerStopwatch.Restart();
 
-            return await directoryScanner.ScanAsync(
+                FileSystemEntry result = await ntQueryDirectoryScanner.ScanAsync(
+                    rootPath,
+                    progress,
+                    cancellationToken,
+                    pauseToken);
+
+                LogScannerPerformance("NtQueryDirectoryScanner", rootPath, scannerStopwatch.Elapsed);
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ntQueryException)
+            {
+                LogScannerPerformance("NtQueryDirectoryScanner", rootPath, scannerStopwatch.Elapsed);
+                AppAlertLog.AddWarning(
+                    LocalizationService.GetText("Alert.Scan"),
+                    LocalizationService.Format(
+                        "Alert.NtQueryUnavailable",
+                        ntQueryException.Message));
+            }
+
+            SetStatusTextByKey("Status.NtQueryUnavailableNormal", statusKeyChanged);
+            scannerStopwatch.Restart();
+
+            FileSystemEntry directoryResult = await directoryScanner.ScanAsync(
                 rootPath,
                 progress,
                 cancellationToken,
                 pauseToken);
+
+            LogScannerPerformance("DirectoryScanner", rootPath, scannerStopwatch.Elapsed);
+            return directoryResult;
+        }
+
+        private static void LogScannerPerformance(string scannerName, string rootPath, TimeSpan elapsed)
+        {
+            AppAlertLog.AddVerboseInformation(
+                "Performance",
+                string.Format(
+                    "{0}: {1:N0} ms",
+                    scannerName,
+                    elapsed.TotalMilliseconds),
+                string.Format(
+                    "Scanner: {0}{1}Path: {2}{1}ElapsedMilliseconds: {3:N0}",
+                    scannerName,
+                    Environment.NewLine,
+                    rootPath,
+                    elapsed.TotalMilliseconds));
         }
 
         private void SetStatusTextByKey(string statusKey, Action<string> statusKeyChanged)

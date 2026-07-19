@@ -457,7 +457,7 @@ namespace WTF
                 scanHistoryInfos.Count);
         }
 
-        private void buttonCompare_Click(object sender, EventArgs e)
+        private async void buttonCompare_Click(object sender, EventArgs e)
         {
             if (comboBoxBaselineScan.SelectedItem is not ScanHistoryInfo baselineScanInfo ||
                 comboBoxCompareScan.SelectedItem is not ScanHistoryInfo compareScanInfo)
@@ -486,17 +486,47 @@ namespace WTF
             }
 
             Cursor oldCursor = Cursor.Current;
+            string originalTitle = LocalizationService.GetText("ScanHistory.Title");
+            int lastDisplayedPercent = -1;
+
+            Progress<int> progress = new Progress<int>(percent =>
+            {
+                int normalizedPercent = Math.Max(0, Math.Min(100, percent));
+
+                if (normalizedPercent == lastDisplayedPercent)
+                    return;
+
+                lastDisplayedPercent = normalizedPercent;
+                Text = LocalizationService.Format(
+                    "ScanHistory.CompareProgressTitle",
+                    normalizedPercent);
+            });
+
             Cursor.Current = Cursors.WaitCursor;
+            buttonCompare.Enabled = false;
+            buttonRefresh.Enabled = false;
+            comboBoxBaselineScan.Enabled = false;
+            comboBoxCompareScan.Enabled = false;
 
             try
             {
-                currentComparisonResult = _compareService.Compare(baselineScanInfo, compareScanInfo);
+                currentComparisonResult = await Task.Run(
+                    () => _compareService.Compare(
+                        baselineScanInfo,
+                        compareScanInfo,
+                        progress));
+
                 BindComparisonResult(currentComparisonResult);
                 tabControlResults.SelectedTab = tabPageOverview;
             }
             finally
             {
+                Text = originalTitle;
                 Cursor.Current = oldCursor;
+                buttonCompare.Enabled = scanHistoryInfos.Count >= 2;
+                buttonRefresh.Enabled = true;
+                comboBoxBaselineScan.Enabled = true;
+                comboBoxCompareScan.Enabled = true;
             }
         }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 
@@ -12,6 +12,7 @@ namespace WTF
         private readonly ToolStripMenuItem _contextMenuItemExport;
         private readonly ToolStripMenuItem _contextMenuItemCopyToClipboard;
         private readonly Action<FileSystemEntry> _selectedEntryChanged;
+        private readonly Action<FileSystemEntry, System.Drawing.Point> _showContextMenu;
         private System.Windows.Forms.Timer _liveTreeUpdateTimer;
         private readonly Dictionary<string, ScanProgress> _pendingLiveTreeScanProgressByRootPath = new Dictionary<string, ScanProgress>(StringComparer.OrdinalIgnoreCase);
         private bool _liveTreeUpdateInProgress;
@@ -24,7 +25,8 @@ namespace WTF
             ToolStripMenuItem contextMenuItemOpenInExplorer,
             ToolStripMenuItem contextMenuItemExport,
             ToolStripMenuItem contextMenuItemCopyToClipboard,
-            Action<FileSystemEntry> selectedEntryChanged)
+            Action<FileSystemEntry> selectedEntryChanged,
+            Action<FileSystemEntry, System.Drawing.Point> showContextMenu)
         {
             _treeViewEntries = treeViewEntries;
             _contextMenuStripTreeEntries = contextMenuStripTreeEntries;
@@ -32,6 +34,7 @@ namespace WTF
             _contextMenuItemExport = contextMenuItemExport;
             _contextMenuItemCopyToClipboard = contextMenuItemCopyToClipboard;
             _selectedEntryChanged = selectedEntryChanged;
+            _showContextMenu = showContextMenu;
 
             _treeViewEntries.EntryImageList = imageListEntries;
             _treeViewEntries.ShellIconService = shellIconService;
@@ -174,7 +177,18 @@ namespace WTF
                 _contextMenuItemOpenInExplorer.Enabled = true;
                 _contextMenuItemExport.Enabled = true;
                 _contextMenuItemCopyToClipboard.Enabled = true;
-                _contextMenuStripTreeEntries.Show(_treeViewEntries, e.Location);
+
+                if (_showContextMenu != null)
+                {
+                    _showContextMenu(
+                        e.Entry,
+                        _treeViewEntries.PointToScreen(e.Location));
+                }
+                else
+                {
+                    _contextMenuStripTreeEntries.Show(_treeViewEntries, e.Location);
+                }
+
                 return;
             }
 

@@ -487,18 +487,7 @@ namespace WTF
 
         private long FinalizeDirectorySizes(FileSystemEntry entry)
         {
-            if (!entry.IsDirectory)
-                return entry.SizeBytes;
-
-            long sizeBytes = entry.SizeBytes;
-
-            foreach (FileSystemEntry child in entry.Children)
-            {
-                sizeBytes += FinalizeDirectorySizes(child);
-            }
-
-            entry.SizeBytes = sizeBytes;
-            return sizeBytes;
+            return entry.SizeBytes;
         }
 
         private void SortChildrenRecursive(FileSystemEntry entry)
@@ -585,14 +574,15 @@ namespace WTF
             if (entries == null || entries.Length == 0)
                 return;
 
-            FileSystemEntry parentEntry = entries[entries.Length - 1];
-
-            if (parentEntry == null)
-                return;
-
-            lock (parentEntry)
+            foreach (FileSystemEntry entry in entries)
             {
-                parentEntry.SizeBytes += sizeBytes;
+                if (entry == null)
+                    continue;
+
+                lock (entry)
+                {
+                    entry.SizeBytes += sizeBytes;
+                }
             }
         }
 

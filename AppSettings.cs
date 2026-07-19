@@ -43,6 +43,9 @@ namespace WTF
         public bool SaveScanHistory { get; set; }
         public string ScanHistoryDatabasePath { get; set; } = ScanHistoryService.DefaultDatabasePath;
         public int ScanHistoryMaximumScansPerPath { get; set; } = 30;
+        public AppLogLevel LogLevel { get; set; } = AppLogLevel.Normal;
+        public bool AutoSaveLog { get; set; }
+        public int MaximumLogFileSizeMb { get; set; } = 4;
 
         public bool ExportPath { get; set; } = true;
         public bool ExportSizeGb { get; set; } = true;
@@ -121,6 +124,9 @@ namespace WTF
                 settings.ScanHistoryMaximumScansPerPath = Math.Max(
                     1,
                     settings.ScanHistoryMaximumScansPerPath);
+                settings.MaximumLogFileSizeMb = Math.Max(
+                    1,
+                    settings.MaximumLogFileSizeMb);
                 ScanHistoryService.ConfigureDatabasePath(settings.ScanHistoryDatabasePath);
                 ScanHistoryService.ConfigureRetention(
                     settings.ScanHistoryMaximumScansPerPath);
