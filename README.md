@@ -98,48 +98,65 @@ Windows may show this message because the file was downloaded from the internet.
 <img width="373" height="473" alt="grafik" src="https://github.com/user-attachments/assets/516a166c-11fc-425c-9847-8b06831c5ae3" />
 <br>
 
+
 ## Core Features
 
-- Scan drives or selected folders.
-- Sort folders and files by size, percentage, and path.
-- Switch between table view, pie chart, and bar chart.
-- Use fast scan paths where available:
-  - NTFS MFT scan for elevated NTFS fixed drives.
-  - NT API directory scan as fallback.
-  - Standard directory scan as final fallback.
-- Show live scan progress with scanned folders, files, bytes, and skipped folders.
-- Load cached scan data and verify changes on later scans.
-- Export scan results to CSV.
-- Copy export data to the clipboard.
-- Open selected items in Windows Explorer.
-- Optional Explorer context menu entry for folders and drives.
-- Optional display of files inside the tree.
-- Configurable layout (in progress):
-  - Windows default
-  - Windows light mode
-  - Windows dark mode
+* Scan entire drives or selected folders.
+* Sort folders and files by size, name, and modification date.
+* Switch between table, pie chart, and bar chart views.
+* Use fast scan methods where available:
 
-## Differences to others
+  * NTFS MFT scanning for elevated NTFS fixed drives.
+  * NT API directory scanning as a fallback.
+  * Standard directory scanning as the final fallback.
+* Show live scan progress, including scanned folders, files, bytes, and skipped folders.
+* Load cached scan data and verify changes during later scans.
+* Compare stored scans and identify new, modified, and deleted files.
+* Track folder growth between scans.
+* Analyze file types by extension.
+* Display the largest files within the scanned directory tree.
+* Export scan results to CSV.
+* Copy export data to the clipboard.
+* Copy selected names or directory structures as text or CSV.
+* Open selected items in Windows Explorer.
+* Use the native Windows Shell context menu.
+* Optionally register WTF in the Windows Explorer context menu for folders and drives.
+* Optionally display files inside the directory tree and table view.
+* Choose between the following layouts:
 
-- Simpler than professional software: No enterprise reporting, scheduled scans, duplicate search, advanced file search, or broad remote-storage feature set.
-- More focused: No treemap or extension statistics; instead it offers table, pie, and bar views.
-- Faster-first design: tries NTFS MFT scanning, then NT API scanning, then standard scanning.
-- Smaller scope: built for quick local Windows storage inspection, not full storage management.
-- WTF goes beyond showing what is large: it helps you understand what changed between scans.
-- It highlights new, modified, and deleted files, shows which folders have grown, and makes storage changes easy to trace.
-- Its focus is a clear, local, user-friendly history of where your disk space went.
+  * Windows default
+  * Windows light mode
+  * Windows dark mode
+
+## Differences to Others
+
+* Simpler than professional storage management software: no enterprise reporting, scheduled scans, duplicate search, advanced file search, or broad remote-storage support.
+* More focused: provides table, pie chart, bar chart, file type analysis, and largest-file views without adding a complex storage management feature set.
+* Faster-first design: attempts NTFS MFT scanning first, followed by NT API scanning and standard directory scanning.
+* Smaller scope: designed for quick local Windows storage inspection rather than full storage administration.
+* WTF goes beyond showing what consumes disk space by helping users understand what changed between scans.
+* It highlights new, modified, and deleted files, shows which folders have grown, and makes storage changes easier to trace.
+* Its focus is a clear, local, and user-friendly history of where disk space went.
 
 ## Special Notes
 
-- Built with .NET 8 Windows Forms.
-- Targets Windows x64.
-- Uses a single-file publish setup.
-- Uses per-user settings stored next to the application.
-- Context menu registration is written under the current user registry hive.
-- NTFS MFT scanning requires administrator rights and an NTFS fixed drive.
-- Reparse points / junctions can be skipped.
-- CSV export supports path, size in GB, size in MB, and maximum export depth.
+* Built with .NET 8 Windows Forms.
+* Targets Windows x64.
+* Uses a single-file publish configuration.
+* Stores settings in `settings.json` next to the application.
+* Windows Explorer context menu registration is written to the current user's registry hive.
+* NTFS MFT scanning requires administrator rights and an NTFS fixed drive.
+* Reparse points and junctions can optionally be skipped.
+* CSV export supports paths, sizes in GB and MB, and a configurable maximum export depth.
 
+
+## Roadmap
+
+* [ ] Clean up obsolete and unused code
+* [ ] Improve code comments and documentation
+* [ ] Consolidate duplicated logic and components
+* [ ] Refine and improve the user interface layout
+* [ ] Prepare the project for version `1.0`
 
 ## Acknowledgements
 
