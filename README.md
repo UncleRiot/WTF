@@ -1,20 +1,37 @@
 # WTF – Where’s The Filespace
 
-WTF is a lightweight Windows disk space analyzer for quickly finding where storage is used.
-Multilingual support comming, when requested - (Now: English/German)
+WTF is a lightweight Windows disk space analyzer for quickly finding where storage is used.  
+Multilingual support coming when requested — currently available in **English, German, and Spanish**.
+
+---
+
+> [!IMPORTANT]
+> ## ⚠️ Fastest mode = run as Administrator
+> **WTF shows its full strength when run as Administrator.**
+>
+> In this mode, WTF can use an **extremely fast MFT-based scan**, just like other tools in this category.
+>
+> Running without Administrator rights may result in:
+> - slower scans
+> - reduced access to some file system data
+> - less accurate results in certain cases
+>
+> **See the Wiki for details.**
+
+---
 
 
 # Main Window
 
 <br>
-<img width="1437" height="948" alt="grafik" src="https://github.com/user-attachments/assets/895e9169-f486-4d97-9348-0141c89ea485" />
+<img width="1234" height="902" alt="grafik" src="https://github.com/user-attachments/assets/3cdfcc45-f968-40e0-a074-052d9b0fd1c7" />
 <br>
 <br>
 
-# Storage History
+# Space History
 
 <br>
-<img width="1346" height="711" alt="grafik" src="https://github.com/user-attachments/assets/916c6caa-97e9-4b2f-8833-c6f3b088d9ce" />
+<img width="1624" height="902" alt="grafik" src="https://github.com/user-attachments/assets/4a1bd69e-9f41-4ed3-bfeb-3c1bd1d15ed3" />
 <br>
 <br>
 
@@ -50,14 +67,24 @@ Multilingual support comming, when requested - (Now: English/German)
 # Settings
 
 <br>
-<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/4e876b52-28b7-4adf-b63a-5193920d6ad2" />
+Default Languages: English, Spanish, German. New languagefiles addable.
+Dark/Lightmode.
+
+<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/c67e1d2c-1d43-4afd-beb8-8113391e30b1" />
 <br>
-<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/1af4979c-1a7a-461e-a4fd-8209893a5eb8" />
+<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/eeb0c6b5-4111-4768-9bcd-5d81a368d39b" />
 <br>
-<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/4d7da813-5483-47f8-b11b-88bb3ef4c4b0" />
+<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/ba43608a-f04d-40ba-a724-62b5331cd485" />
 <br>
-<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/47759978-996d-482b-ba0d-b4db02ebdd2a" />
 <br>
+SQlite file for Space-Comparisons. Highly optimized regarding details/occupied storage.
+<br>
+<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/3c3dd1e0-edc2-4c3b-80ac-b2236320b149" />
+<br>
+<br>
+Logging
+<br>
+<img width="522" height="493" alt="grafik" src="https://github.com/user-attachments/assets/74c51fc0-090d-482d-9b78-6a8c4103328a" />
 <br>
 
 
