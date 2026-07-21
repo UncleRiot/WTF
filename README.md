@@ -5,6 +5,24 @@ Multilingual support coming when requested — currently available in **English,
 
 ---
 
+---
+
+## ⚡ WTF C² — Coming Soon
+
+> **Where’s The Filespace — faster, cleaner, further.**
+
+WTF C² is the independently developed next generation of WTF, featuring a completely redesigned user interface and significantly improved performance.
+
+### ✨ Highlights
+
+* 🖥️ Completely redesigned UI
+* 🚀 Faster scanning and analysis
+* 🧪 Experimental next-generation build
+
+[**Explore WTF C² →**](https://github.com/UncleRiot/WTF-C2/tree/master)
+
+---
+
 > [!IMPORTANT]
 > ## ⚠️ Fastest mode = run as Administrator
 > **WTF shows its full strength when run as Administrator.**
